@@ -248,6 +248,32 @@ def test_lottery_rejects_bet_before_open_time(client):
         assert user.credit_balance == 100
 
 
+def test_lottery_skips_duplicate_entries_in_one_slip(client):
+    with app.app_context():
+        user = User(username='member-duplicate', full_name='Member', credit_balance=100)
+        user.set_password('test-password')
+        db.session.add(user)
+        room = LotteryRoom.query.filter_by(name='หวยรัฐบาลไทย').first()
+        period = ThaiLotteryPeriod(
+            room_id=room.id,
+            period_date='2026-09-16',
+            open_time=datetime.now() - timedelta(minutes=1),
+            close_time=datetime.now() + timedelta(minutes=30),
+            is_open=True,
+        )
+        db.session.add(period)
+        db.session.commit()
+
+        created = add_thai_lottery_bets(user, period, [
+            {'bet_type': '3up', 'number': '123', 'amount': 10},
+            {'bet_type': '3up', 'number': '123', 'amount': 10},
+        ])
+
+        assert created == 1
+        assert user.credit_balance == 90
+        assert ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id).count() == 1
+
+
 def test_settlement_pays_credit_and_cannot_repeat(client):
     with app.app_context():
         user = User(username='member-win', full_name='Member', credit_balance=100)

@@ -652,7 +652,7 @@ def add_thai_lottery_bets(user, period, entries):
             raise ValueError(f"จำนวนเงินเดิมพันต่อรายการต้องไม่เกิน {MAX_BET_AMOUNT:,} เครดิต")
         entry_key = (bet_type, raw_number)
         if entry_key in seen_entries:
-            raise ValueError(f"พบรายการแทงซ้ำ: {raw_number} ({bet_type})")
+            continue
         seen_entries.add(entry_key)
         validated_entries.append((bet_type, raw_number, amount))
         total_amount += amount

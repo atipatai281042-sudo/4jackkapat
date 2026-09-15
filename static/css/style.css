@@ -83,6 +83,13 @@ body.app-body::before {
 .brand-text-premium { font-size: 19px; }
 .brand-text-premium { text-shadow: 0 0 16px rgba(255, 217, 120, .24); }
 .brand-subtitle { color: #d9b85f; font-size: 9px; letter-spacing: .2em; font-weight: 700; text-shadow: 0 1px 5px rgba(243,182,63,.25); }
+.lottery-keypad-grid .keypad-num.is-pressed {
+  background: #2563eb !important;
+  border-color: #1d4ed8 !important;
+  color: #fff !important;
+  transform: translateY(2px) scale(.96);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, .18), 0 2px 0 #1e40af;
+}
 
 .main-nav { display: flex; flex: 1 1 auto; min-width: 0; justify-content: center; gap: 3px; margin-left: 4px; }
 .nav-link {

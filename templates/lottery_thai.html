@@ -159,6 +159,7 @@
             <div id="manual-number-entry">
         <label class="form-label" style="font-weight: 600; margin-bottom: 10px; display: block; text-align: center; color: #1e293b;">
           กดตัวเลขสำหรับประเภทที่เลือก (<span id="keypad-type-label" style="color: #2563eb;">กรุณาเลือกประเภทการแทง</span>)
+          <span id="keypad-action-status" aria-live="polite" style="display: block; min-height: 1.2em; margin-top: 4px; color: #16a34a; font-size: .82rem; font-weight: 700;"></span>
         </label>
         
         <!-- ช่องแสดงผลตัวเลข (Digit Boxes) -->
@@ -325,6 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const customBetCredit = document.getElementById('custom-bet-credit');
     const digitBoxesContainer = document.getElementById('digit-boxes-container');
     const keypadTypeLabel = document.getElementById('keypad-type-label');
+    const keypadActionStatus = document.getElementById('keypad-action-status');
     const specialModeButtons = document.querySelectorAll('.special-mode-btn');
     const numberPanel = document.getElementById('lottery-number-panel');
     const numberPanelGrid = document.getElementById('lottery-number-panel-grid');
@@ -561,12 +563,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.keypad-num').forEach(btn => {
         btn.addEventListener('click', function() {
+            this.classList.remove('is-pressed');
+            void this.offsetWidth;
+            this.classList.add('is-pressed');
+            window.setTimeout(() => this.classList.remove('is-pressed'), 260);
             const activeTypes = document.querySelectorAll('.bet-type-btn.active');
             if (activeTypes.length === 0) {
                 alert('กรุณาเลือกประเภทการแทงด้านบนอย่างน้อย 1 ประเภทก่อนกดตัวเลขครับ');
                 return;
             }
             const num = this.getAttribute('data-num');
+            keypadActionStatus.textContent = `กดเลข ${num} แล้ว`;
             let maxDigit = getMaxRequiredDigit();
             if (currentInputValues.length < maxDigit) {
                 currentInputValues.push(num);
