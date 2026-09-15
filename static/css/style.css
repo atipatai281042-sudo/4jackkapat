@@ -59,7 +59,7 @@ body.app-body::before {
 .header-inner { display: flex; align-items: center; gap: 14px; height: 74px; }
 .brand { display: flex; align-items: center; gap: 6px; text-decoration: none; color: var(--color-text); }
 .brand-mark {
-  width: 142px; height: 64px; border-radius: 0;
+  width: 64px; height: 64px; border-radius: 0;
   background: transparent;
   color: #1d1506;
   display: grid; place-items: center; font-weight: 800;
@@ -76,7 +76,7 @@ body.app-body::before {
   z-index: 0;
 }
 .brand-mark-premium { transform: none; }
-.brand-logo { width: 142px; height: 64px; object-fit: contain; display: block; position: relative; z-index: 1; }
+.brand-logo { width: 64px; height: 64px; object-fit: contain; display: block; position: relative; z-index: 1; }
 .brand-lockup { display: flex; flex-direction: column; justify-content: center; line-height: 1; gap: 5px; transform: translateY(1px); }
 .brand-text { font-size: 18px; font-weight: 800; color: #f7d477; letter-spacing: .01em; background: linear-gradient(180deg, #fff2b0 0%, #f7d477 42%, #b8791d 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 1px 1px rgba(0,0,0,.7)) drop-shadow(0 0 8px rgba(243,182,63,.22)); }
 .brand-text strong { color: #ffd978; text-shadow: 0 0 16px rgba(255,217,120,.35); }
@@ -907,8 +907,10 @@ select.form-input { color-scheme: dark; cursor: pointer; }
   .container { padding-left: 12px; padding-right: 12px; }
   .site-header { position: sticky; }
   .header-inner { padding-top: 8px; padding-bottom: 8px; gap: 8px; }
-  .brand-mark { width: 108px; height: 48px; border-radius: 0; }
-  .brand-mark img { width: 108px !important; height: 48px !important; }
+  .brand-mark { width: 48px; height: 48px; border-radius: 0; }
+  .brand-mark img { width: 48px !important; height: 48px !important; }
+  .brand-text, .brand-text-premium { font-size: 16px; }
+  .brand-subtitle { display: none; }
   .nav-toggle { width: 38px; height: 38px; }
   .header-actions { gap: 6px; overflow: hidden; flex-wrap: nowrap; justify-content: flex-start; }
   .header-actions .btn-sm { min-height: 34px; padding: 6px 10px; font-size: 12px; }

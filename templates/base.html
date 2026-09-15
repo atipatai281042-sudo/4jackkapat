@@ -23,6 +23,10 @@
         <span class="brand-mark brand-mark-premium">
           <img src="{{ url_for('static', filename='brand-logo.png', v='4') }}" alt="{{ brand_name }} {{ brand_tagline }}" class="brand-logo" onerror="this.src='{{ brand_icon_url }}';">
         </span>
+        <span class="brand-lockup">
+          <span class="brand-text brand-text-premium">{{ brand_name }}</span>
+          <small class="brand-subtitle">{{ brand_tagline }}</small>
+        </span>
       </a>
 
       <button class="nav-toggle" type="button" aria-label="เปิดเมนู" aria-expanded="false" aria-controls="main-navigation">
