@@ -46,8 +46,11 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 database_url = os.environ.get("DATABASE_URL", "").strip()
 if database_url.startswith("postgres://"):
     database_url = "postgresql+psycopg://" + database_url[len("postgres://"):]
+sqlite_filename = os.environ.get("SQLITE_FILENAME", "").strip()
+if not sqlite_filename:
+    sqlite_filename = "/data/loyalty.db" if os.path.isdir("/data") else "loyalty.db"
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url or (
-    "sqlite:///" + os.path.join(BASE_DIR, os.environ.get("SQLITE_FILENAME", "loyalty.db"))
+    "sqlite:///" + (sqlite_filename if os.path.isabs(sqlite_filename) else os.path.join(BASE_DIR, sqlite_filename))
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365)
@@ -66,7 +69,13 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def backup_database_before_startup():
     """Keep a small rolling backup before startup seeding or API sync."""
-    database_path = os.path.join(BASE_DIR, "loyalty.db")
+    database_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if database_uri.startswith("sqlite:///"):
+        database_path = database_uri[len("sqlite:///"):]
+        if not os.path.isabs(database_path):
+            database_path = os.path.join(BASE_DIR, database_path)
+    else:
+        database_path = os.path.join(BASE_DIR, "loyalty.db")
     if not os.path.isfile(database_path):
         return None
 
@@ -134,7 +143,7 @@ def inject_globals():
         ,"admin_contact_url": contact_setting.value if contact_setting and contact_setting.value else "",
         "brand_name": get_setting("brand_name", "mklotto"),
         "brand_tagline": get_setting("brand_tagline", "LOTTERY NETWORK"),
-        "brand_icon_url": get_setting("brand_icon_url", "/static/brand-icon.svg"),
+        "brand_icon_url": get_setting("brand_icon_url", "/static/brand-logo.png"),
         "points_rewards_enabled": app.config["POINTS_REWARDS_ENABLED"],
     }
 
@@ -2995,7 +3004,7 @@ def admin_branding():
     if request.method == "POST":
         save_setting("brand_name", request.form.get("brand_name", "").strip() or "mklotto")
         save_setting("brand_tagline", request.form.get("brand_tagline", "").strip() or "LOTTERY NETWORK")
-        save_setting("brand_icon_url", request.form.get("brand_icon_url", "").strip() or "/static/brand-icon.svg")
+        save_setting("brand_icon_url", request.form.get("brand_icon_url", "").strip() or "/static/brand-logo.png")
         audit_admin(current_user(), "update_branding", "system", None, "update brand settings")
         db.session.commit()
         flash("บันทึกการตั้งค่าแบรนด์แล้ว", "success")
@@ -3005,7 +3014,7 @@ def admin_branding():
         "admin_branding.html",
         brand_name=get_setting("brand_name", "mklotto"),
         brand_tagline=get_setting("brand_tagline", "LOTTERY NETWORK"),
-        brand_icon_url=get_setting("brand_icon_url", "/static/brand-icon.svg"),
+        brand_icon_url=get_setting("brand_icon_url", "/static/brand-logo.png"),
     )
 
 
@@ -3048,6 +3057,11 @@ def seed_data():
             db.session.add(SystemSetting(key="brand_tagline", value="LOTTERY NETWORK"))
         elif existing_tagline.value.strip() in {"", "PREMIUM LOTTERY NETWORK"}:
             existing_tagline.value = "LOTTERY NETWORK"
+        existing_icon = SystemSetting.query.filter_by(key="brand_icon_url").first()
+        if existing_icon is None:
+            db.session.add(SystemSetting(key="brand_icon_url", value="/static/brand-logo.png"))
+        elif existing_icon.value.strip() in {"", "/static/brand-icon.svg", "/static/brand-logo.png"}:
+            existing_icon.value = "/static/brand-logo.png"
         db.session.commit()
 
         inspector = inspect(db.engine)
