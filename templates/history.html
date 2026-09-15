@@ -22,17 +22,18 @@
             <tr><th>งวด</th><th>ห้อง</th><th>เลขล่าสุด</th><th>ยอดแทง</th><th>สถานะ</th><th></th></tr>
           </thead>
           <tbody>
-            {% set shown_periods = [] %}
+            {% set shown_tickets = [] %}
             {% for bet in thai_bets %}
-              {% if bet.period_id not in shown_periods %}
-              {% set _ = shown_periods.append(bet.period_id) %}
+              {% set ticket_key = bet.ticket_code or ('legacy-' ~ bet.period_id) %}
+              {% if ticket_key not in shown_tickets %}
+              {% set _ = shown_tickets.append(ticket_key) %}
               <tr>
                 <td>{{ bet.period.period_date }}</td>
                 <td>{{ bet.period.room.name if bet.period.room else '-' }}</td>
                 <td>{{ bet.number }} ({{ bet.bet_type }})</td>
                 <td class="text-negative">-{{ "{:,.2f}".format(bet.amount) }}</td>
                 <td><span class="status status-{{ bet.status }}">{{ bet.status }}</span></td>
-                <td><a class="btn btn-ghost btn-xs" href="{{ url_for('lottery_ticket', period_id=bet.period_id) }}">ดูใบโพย</a></td>
+                <td><a class="btn btn-ghost btn-xs" href="{{ url_for('lottery_ticket', period_id=bet.period_id, ticket_code=bet.ticket_code) if bet.ticket_code else url_for('lottery_ticket', period_id=bet.period_id) }}">ดูใบโพย</a></td>
               </tr>
               {% endif %}
             {% endfor %}

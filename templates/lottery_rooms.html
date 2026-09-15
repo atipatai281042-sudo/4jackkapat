@@ -20,13 +20,9 @@
                       {% if current_user.is_admin %}<a href="{{ url_for('wallet') }}"><i class="fas fa-wallet"></i> บัญชีการเงิน</a>{% endif %}
                     <a href="{{ url_for('lottery_results') }}"><i class="fas fa-square-poll-vertical"></i> ตรวจรางวัล</a>
                 </nav>
-                <details class="betting-slip-placeholder">
-                    <summary class="betting-slip-heading"><strong>โพยที่กำลังเลือก</strong><span>0 รายการ <i class="fas fa-chevron-down"></i></span></summary>
-                    <div class="betting-slip-content">
-                        <p>เลือกห้องหวยด้านขวาเพื่อเริ่มกรอกเลขและเพิ่มรายการลงโพย</p>
-                        <a href="{{ url_for('history') }}" class="btn btn-outline-light btn-sm w-100">ดูรายการย้อนหลัง</a>
-                    </div>
-                </details>
+                <a class="betting-slip-placeholder betting-slip-link" href="{{ url_for('history') }}">
+                    <strong>ดูโพยหวย</strong><i class="fas fa-chevron-right"></i>
+                </a>
             </aside>
             <main class="betting-catalog">
     <!-- ส่วนหัวข้อหน้า -->
@@ -235,13 +231,8 @@
     .betting-shortcuts a { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 7px; color: #cbd5e1; font-size: .82rem; text-decoration: none; }
     .betting-shortcuts a:hover, .betting-shortcuts a.is-active { background: #1d2939; color: #fff; }
     .betting-shortcuts i { width: 16px; color: #f5c85b; text-align: center; }
-    .betting-slip-heading { display: flex; justify-content: space-between; gap: 8px; font-size: .8rem; cursor: pointer; list-style: none; }
-    .betting-slip-heading::-webkit-details-marker { display: none; }
-    .betting-slip-heading i { margin-left: 5px; color: #f5c85b; transition: transform .2s ease; }
-    .betting-slip-placeholder[open] .betting-slip-heading i { transform: rotate(180deg); }
-    .betting-slip-content { padding-top: 4px; }
-    .betting-slip-heading span { color: #f5c85b; }
-    .betting-slip-placeholder p { min-height: 64px; margin: 10px 0; color: #94a3b8; font-size: .75rem; line-height: 1.5; }
+    .betting-slip-link { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #f8fafc; text-decoration: none; font-size: .82rem; }
+    .betting-slip-link i { color: #f5c85b; }
     .betting-catalog { min-width: 0; }
     .betting-catalog .room-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
     .betting-catalog .room-card { min-height: 245px; border-radius: 7px; }

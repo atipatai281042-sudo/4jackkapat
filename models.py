@@ -507,6 +507,7 @@ class ThaiLotteryBet(db.Model):
     number = db.Column(db.String(10), nullable=False)
     amount = db.Column(db.Integer, nullable=False)
     rate = db.Column(db.Float, nullable=False)
+    ticket_code = db.Column(db.String(40), nullable=True, index=True)
     
     status = db.Column(db.String(20), default="pending")
     reward_amount = db.Column(db.Integer, default=0)

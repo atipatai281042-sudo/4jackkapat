@@ -644,16 +644,11 @@ def add_thai_lottery_bets(user, period, entries):
     if user.partner_id:
         rates.update(get_partner_payout_rates(user.partner))
     validated_entries = []
-    seen_entries = set()
     total_amount = 0
     for item in entries:
         bet_type, raw_number, amount = validate_lottery_entry(item, rates)
         if amount > MAX_BET_AMOUNT:
             raise ValueError(f"จำนวนเงินเดิมพันต่อรายการต้องไม่เกิน {MAX_BET_AMOUNT:,} เครดิต")
-        entry_key = (bet_type, raw_number)
-        if entry_key in seen_entries:
-            continue
-        seen_entries.add(entry_key)
         validated_entries.append((bet_type, raw_number, amount))
         total_amount += amount
 
@@ -664,6 +659,7 @@ def add_thai_lottery_bets(user, period, entries):
     if user.credit_balance < total_amount:
         raise ValueError(f"เครดิตของคุณไม่พอ! (มีอยู่ {user.credit_balance:,.2f} เครดิต)")
 
+    ticket_code = f"TK-{app_now().strftime('%Y%m%d%H%M%S%f')}-{random.randint(100, 999)}"
     created = 0
     for bet_type, raw_number, amount in validated_entries:
 
@@ -698,6 +694,7 @@ def add_thai_lottery_bets(user, period, entries):
             number=raw_number,
             amount=amount,
             rate=rate,
+            ticket_code=ticket_code,
             reward_amount=total_reward,
             status="pending"
         )
@@ -1229,16 +1226,18 @@ def history():
 
 
 @app.route("/lottery/ticket/<int:period_id>")
+@app.route("/lottery/ticket/<int:period_id>/<string:ticket_code>")
 @login_required
-def lottery_ticket(period_id):
+def lottery_ticket(period_id, ticket_code=None):
     user = current_user()
     period = db.session.get(ThaiLotteryPeriod, period_id)
     if not period:
         abort(404)
 
-    bets = ThaiLotteryBet.query.filter_by(
-        user_id=user.id, period_id=period.id
-    ).order_by(ThaiLotteryBet.created_at.asc(), ThaiLotteryBet.id.asc()).all()
+    query = ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id)
+    if ticket_code:
+        query = query.filter_by(ticket_code=ticket_code)
+    bets = query.order_by(ThaiLotteryBet.created_at.asc(), ThaiLotteryBet.id.asc()).all()
     if not bets:
         abort(404)
 
@@ -1280,15 +1279,17 @@ def admin_lottery_tickets():
 
 
 @app.route("/admin/lottery-tickets/<int:period_id>/<int:user_id>")
+@app.route("/admin/lottery-tickets/<int:period_id>/<int:user_id>/<string:ticket_code>")
 @admin_required
-def admin_lottery_ticket(period_id, user_id):
+def admin_lottery_ticket(period_id, user_id, ticket_code=None):
     period = db.session.get(ThaiLotteryPeriod, period_id)
     user = db.session.get(User, user_id)
     if not period or not user:
         abort(404)
-    bets = ThaiLotteryBet.query.filter_by(
-        user_id=user.id, period_id=period.id
-    ).order_by(ThaiLotteryBet.created_at.asc(), ThaiLotteryBet.id.asc()).all()
+    query = ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id)
+    if ticket_code:
+        query = query.filter_by(ticket_code=ticket_code)
+    bets = query.order_by(ThaiLotteryBet.created_at.asc(), ThaiLotteryBet.id.asc()).all()
     if not bets:
         abort(404)
     return render_template(
@@ -3105,6 +3106,12 @@ def seed_data():
             db.session.commit()
         if "api_key" not in period_columns:
             db.session.execute(text("ALTER TABLE thai_lottery_periods ADD COLUMN api_key VARCHAR(80)"))
+            db.session.commit()
+
+        bet_columns = [col["name"] for col in inspect(db.engine).get_columns("thai_lottery_bets")]
+        if "ticket_code" not in bet_columns:
+            db.session.execute(text("ALTER TABLE thai_lottery_bets ADD COLUMN ticket_code VARCHAR(40)"))
+            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_thai_lottery_bets_ticket_code ON thai_lottery_bets (ticket_code)"))
             db.session.commit()
 
         for user in User.query.all():

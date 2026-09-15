@@ -248,7 +248,7 @@ def test_lottery_rejects_bet_before_open_time(client):
         assert user.credit_balance == 100
 
 
-def test_lottery_skips_duplicate_entries_in_one_slip(client):
+def test_lottery_preserves_duplicate_entries_in_one_slip(client):
     with app.app_context():
         user = User(username='member-duplicate', full_name='Member', credit_balance=100)
         user.set_password('test-password')
@@ -269,9 +269,11 @@ def test_lottery_skips_duplicate_entries_in_one_slip(client):
             {'bet_type': '3up', 'number': '123', 'amount': 10},
         ])
 
-        assert created == 1
-        assert user.credit_balance == 90
-        assert ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id).count() == 1
+        assert created == 2
+        assert user.credit_balance == 80
+        bets = ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id).all()
+        assert len(bets) == 2
+        assert bets[0].ticket_code == bets[1].ticket_code
 
 
 def test_settlement_pays_credit_and_cannot_repeat(client):
