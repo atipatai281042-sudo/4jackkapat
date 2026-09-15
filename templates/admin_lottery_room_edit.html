@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4" style="max-width: 700px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0"><i class="fas fa-edit text-warning me-2"></i> แก้ไขห้องหวย: {{ room.name }}</h2>
+        <a href="{{ url_for('admin_lottery_rooms') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> กลับ
+        </a>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <form action="{{ url_for('admin_edit_lottery_room', room_id=room.id) }}" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">ชื่อห้องหวย <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" value="{{ room.name }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">หมวดหวย</label>
+                    <select class="form-control" name="category_id">
+                        {% for category in categories %}
+                        <option value="{{ category.id }}" {% if room.category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">รายละเอียด</label>
+                    <textarea class="form-control" name="description" rows="3">{{ room.description }}</textarea>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">ตัวอักษรลายน้ำ (Badge)</label>
+                        <input type="text" class="form-control" name="badge_text" value="{{ room.badge_text }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">ลำดับการแสดงผล</label>
+                        <input type="number" class="form-control" name="sort_order" value="{{ room.sort_order }}">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">ข้อความปุ่ม</label>
+                    <input type="text" class="form-control" name="button_text" value="{{ room.button_text }}">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">เปลี่ยนรูปไอคอน (อัปโหลดไฟล์ใหม่)</label>
+                    <input type="file" class="form-control" name="image_file">
+                    {% if room.image_url %}
+                        <div class="mt-2">
+                            <span class="text-muted small">รูปปัจจุบัน:</span><br>
+                            <img src="{{ room.image_url }}" alt="" class="rounded mt-1" style="max-height: 80px;">
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">หรือแก้ไข URL รูปภาพ</label>
+                    <input type="text" class="form-control" name="image_url" value="{{ room.image_url }}">
+                </div>
+
+                <div class="mb-4 form-check">
+                    <input type="checkbox" class="form-check-input" name="is_active" id="is_active" {% if room.is_active %}checked{% endif %}>
+                    <label class="form-check-label fw-bold" for="is_active">เปิดใช้งานห้องนี้</label>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{{ url_for('admin_lottery_rooms') }}" class="btn btn-secondary px-4">ยกเลิก</a>
+                    <button type="submit" class="btn btn-primary px-4">บันทึกการเปลี่ยนแปลง</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}ฝากเงิน — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="page-section deposit-page"><div class="container deposit-page-container">
+  <header class="page-head"><div><span class="eyebrow">TREASURE DEPOSIT</span><h1 class="page-title"><i class="fas fa-arrow-down"></i> ฝากเงิน</h1><p class="section-desc">โปรดตรวจสอบเลขบัญชีทุกครั้งก่อนทำการโอนเงิน</p></div><a href="{{ url_for('index') }}" class="btn btn-ghost">กลับหน้าแรก</a></header>
+  <article class="panel wallet-deposit-panel">
+    <div class="deposit-bank-card" style="--deposit-bank-color: {{ deposit_bank_color }};"><span class="deposit-bank-label">บัญชีรับฝาก</span><strong>{{ deposit_bank_name }}</strong><div class="deposit-account-row"><code id="deposit-account-number">{{ deposit_account_number }}</code><button type="button" class="btn btn-ghost btn-xs" id="copy-deposit-account"><i class="fas fa-copy"></i> คัดลอก</button></div><span>ชื่อบัญชี: {{ deposit_account_name }}</span></div>
+    <form method="post" enctype="multipart/form-data" class="admin-form"><div class="form-group"><label class="form-label">จำนวนเงินที่โอน</label><input class="form-input" type="number" name="amount" min="1" step="0.01" required></div><div class="form-group"><label class="form-label">เลขอ้างอิง/เวลาโอน</label><input class="form-input" name="reference" placeholder="เช่น 14:30 หรือเลขอ้างอิง"></div><div class="form-group"><label class="form-label">อัปโหลดสลิป</label><input class="form-input" type="file" name="slip_file" accept="image/jpeg,image/png,image/webp" required><small class="form-hint">รองรับ JPG, PNG และ WEBP</small></div><button class="btn btn-success btn-block" type="submit">ส่งหลักฐานฝากเงิน</button></form>
+  </article>
+  <article class="panel"><h2 class="panel-title">ประวัติคำขอฝาก</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>จำนวน</th><th>อ้างอิง</th><th>สถานะ</th><th>เวลา</th></tr></thead><tbody>{% for item in deposits %}<tr><td>{{ "{:,.2f}".format(item.amount) }}</td><td>{{ item.reference or '-' }}</td><td><span class="status status-{{ item.status }}">{{ item.status }}</span></td><td>{{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</td></tr>{% else %}<tr><td colspan="4" class="empty-state-text">ยังไม่มีคำขอฝาก</td></tr>{% endfor %}</tbody></table></div></article>
+</div></section>
+<script>document.getElementById('copy-deposit-account')?.addEventListener('click', async function () { await navigator.clipboard.writeText(document.getElementById('deposit-account-number').textContent.trim()); this.innerHTML = '<i class="fas fa-check"></i> คัดลอกแล้ว'; });</script>
+{% endblock %}

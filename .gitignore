@@ -1,0 +1,10 @@
+database-backups/*.db
+loyalty.db
+loyalty.db.*
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+cloudflared-windows-amd64.exe

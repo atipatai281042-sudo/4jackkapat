@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1"><i class="fas fa-ship text-warning me-2"></i> จัดการห้องหวย</h2>
+            <p class="text-muted mb-0">เพิ่ม แก้ไข และจัดการห้องแทงหวยที่แสดงหน้าเว็บ</p>
+        </div>
+        <div>
+            <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> กลับหน้าแอดมินหลัก
+            </a>
+        </div>
+    </div>
+
+    <!-- แถวสำหรับฟอร์มเพิ่ม และ ตารางแสดงรายการ -->
+    <div class="row g-4">
+        <!-- ฟอร์มเพิ่มห้องหวย -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 sticky-top" style="top: 20px;">
+                <div class="card-header room-admin-header py-3">
+                    <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i> เพิ่มห้องหวยใหม่</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('admin_add_lottery_room') }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ชื่อห้องหวย <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="name" placeholder="เช่น หวยรัฐบาลไทย" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">หมวดหวย</label>
+                            <select class="form-control" name="category_id">
+                                {% for category in categories %}
+                                <option value="{{ category.id }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">รายละเอียด</label>
+                            <textarea class="form-control" name="description" rows="2" placeholder="รายละเอียดใต้ชื่อห้อง"></textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">ตัวอักษรลายน้ำ (Badge)</label>
+                                <input type="text" class="form-control" name="badge_text" placeholder="เช่น TH">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">ลำดับการแสดง</label>
+                                <input type="number" class="form-control" name="sort_order" value="0">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">ข้อความปุ่ม</label>
+                            <input type="text" class="form-control" name="button_text" value="เข้าสู่ห้อง">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">อัปโหลดรูปไอคอน</label>
+                            <input type="file" class="form-control" name="image_file">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">หรือใส่ URL รูปภาพ</label>
+                            <input type="text" class="form-control" name="image_url" placeholder="https://...">
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" name="is_active" id="is_active" checked>
+                            <label class="form-check-label" for="is_active">เปิดใช้งานทันที</label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 py-2">
+                            <i class="fas fa-save me-1"></i> บันทึกห้องหวย
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- รายการห้องหวยทั้งหมด -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold">รายการห้องหวยทั้งหมด ({{ rooms|length }})</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">ลำดับ</th>
+                                    <th>ข้อมูลห้อง</th>
+                                    <th>ลิงก์/ปุ่ม</th>
+                                    <th>สถานะ</th>
+                                    <th class="text-end pe-3">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for room in rooms %}
+                                <tr>
+                                    <td class="ps-3 fw-bold text-muted">#{{ room.sort_order }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            {% if room.image_url %}
+                                                <img src="{{ room.image_url }}" alt="" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="bg-light rounded d-flex align-items-center justify-content-center me-2 text-muted" style="width: 40px; height: 40px;">
+                                                    <i class="fas fa-compass"></i>
+                                                </div>
+                                            {% endif %}
+                                            <div>
+                                                <div class="fw-bold">{{ room.name }}</div>
+                                                <small class="text-muted">{{ room.description or '-' }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="small text-primary text-truncate" style="max-width: 150px;">{{ room.link_url }}</div>
+                                        <span class="badge bg-light text-dark border">{{ room.button_text }}</span>
+                                    </td>
+                                    <td>
+                                        {% if room.is_active %}
+                                            <span class="badge bg-success">เปิดใช้งาน</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">ปิด</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        <a href="{{ url_for('admin_edit_lottery_room', room_id=room.id) }}" class="btn btn-sm btn-outline-warning me-1" title="แก้ไข">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form action="{{ url_for('admin_delete_lottery_room', room_id=room.id) }}" method="POST" class="d-inline" onsubmit="return confirm('คุณต้องการลบห้องนี้ใช่หรือไม่?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="ลบ">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">ยังไม่มีข้อมูลห้องหวย</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

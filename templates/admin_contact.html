@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}ติดต่อแอดมิน — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container container-narrow">
+  <header class="page-head"><div><span class="eyebrow">CAPTAIN SUPPORT</span><h1 class="page-title"><i class="fas fa-headset"></i> ติดต่อแอดมิน</h1><p class="section-desc">กำหนดลิงก์ให้สมาชิกกดไปติดต่อ LINE หรือช่องทาง HTTPS ได้โดยตรง</p></div><a href="{{ url_for('admin') }}" class="btn btn-ghost">กลับศูนย์ควบคุม</a></header>
+  <article class="panel"><form method="post" class="admin-form">
+    <div class="form-group"><label class="form-label">ข้อความบนปุ่ม</label><input class="form-input" name="contact_label" value="{{ contact_label }}" maxlength="60" required></div>
+    <div class="form-group"><label class="form-label">ลิงก์ติดต่อ</label><input class="form-input" type="url" name="contact_url" value="{{ contact_url }}" placeholder="https://line.me/ti/p/xxxxx"><small class="form-hint">ตัวอย่าง: https://line.me/ti/p/xxxxx หรือ https://lin.ee/xxxxx</small></div>
+    <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-save"></i> บันทึกลิงก์ติดต่อ</button>
+  </form></article>
+  {% if contact_url %}<a class="contact-preview" href="{{ contact_url }}" target="_blank" rel="noopener"><i class="fab fa-line"></i> {{ contact_label }} <span>เปิดลิงก์ทดสอบ</span></a>{% endif %}
+</div></section>
+{% endblock %}

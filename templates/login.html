@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}เข้าสู่ระบบ — mklotto{% endblock %}
+
+{% block content %}
+<section class="auth-section">
+  <div class="auth-card">
+    <header class="auth-head">
+      <h1 class="auth-title">เข้าสู่ระบบ</h1>
+      <p class="auth-subtitle">ยินดีต้อนรับกลับมา</p>
+    </header>
+
+    <form method="post" class="auth-form">
+      <div class="form-group">
+        <label for="username" class="form-label">ชื่อผู้ใช้</label>
+        <input type="text" id="username" name="username" class="form-input" required autofocus pattern="[A-Za-z0-9!@#$%^&amp;*._+-]+" title="ใช้ภาษาอังกฤษ ตัวเลข หรืออักขระพิเศษเท่านั้น" />
+      </div>
+
+      <div class="form-group">
+        <label for="password" class="form-label">รหัสผ่าน</label>
+        <div class="password-input-wrap">
+          <input type="password" id="password" name="password" class="form-input password-input" required pattern="[A-Za-z0-9!@#$%^&amp;*._+-]+" title="ใช้ภาษาอังกฤษ ตัวเลข หรืออักขระพิเศษเท่านั้น" />
+          <button type="button" class="password-toggle" aria-label="แสดงรหัสผ่าน">
+            <i class="fa-regular fa-eye"></i>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">เข้าสู่ระบบ</button>
+    </form>
+
+    <footer class="auth-foot">
+      <p class="auth-foot-text">ยังไม่มีบัญชี? <a href="{{ url_for('register') }}" class="auth-link">สมัครสมาชิก</a></p>
+    </footer>
+  </div>
+</section>
+{% endblock %}

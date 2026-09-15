@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}ประวัติของฉัน — Yonko Rewards{% endblock %}
+
+{% block content %}
+<section class="page-section">
+  <div class="container">
+
+    <header class="page-head">
+      <h1 class="page-title">ประวัติของฉัน</h1>
+      <div class="points-summary points-summary-success">
+        <span class="points-summary-label">เครดิตคงเหลือ</span>
+        <span class="points-summary-value">{{ "{:,.2f}".format(current_user.credit_balance) }}</span>
+      </div>
+    </header>
+
+    <article class="panel">
+      <h2 class="panel-title">ประวัติการแทงหวย</h2>
+      {% if thai_bets %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>งวด</th><th>ห้อง</th><th>เลขล่าสุด</th><th>ยอดแทง</th><th>สถานะ</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% set shown_periods = [] %}
+            {% for bet in thai_bets %}
+              {% if bet.period_id not in shown_periods %}
+              {% set _ = shown_periods.append(bet.period_id) %}
+              <tr>
+                <td>{{ bet.period.period_date }}</td>
+                <td>{{ bet.period.room.name if bet.period.room else '-' }}</td>
+                <td>{{ bet.number }} ({{ bet.bet_type }})</td>
+                <td class="text-negative">-{{ "{:,.2f}".format(bet.amount) }}</td>
+                <td><span class="status status-{{ bet.status }}">{{ bet.status }}</span></td>
+                <td><a class="btn btn-ghost btn-xs" href="{{ url_for('lottery_ticket', period_id=bet.period_id) }}">ดูใบโพย</a></td>
+              </tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="empty-state-text">ยังไม่มีประวัติการแทงหวย</p>
+      {% endif %}
+    </article>
+
+  </div>
+</section>
+{% endblock %}

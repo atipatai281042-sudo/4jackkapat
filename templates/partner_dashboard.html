@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}กองเรือของฉัน — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="page-section partner-page">
+  <div class="container">
+    <div class="partner-dashboard-shell">
+      <aside class="partner-sidebar">
+        <div class="partner-profile-card">
+          <span class="partner-avatar"><i class="fas fa-anchor"></i></span>
+          <div><strong>{{ partner.full_name or partner.username }}</strong><small>PARTNER · {{ profile.status }}</small></div>
+        </div>
+        <nav class="partner-sidebar-nav" aria-label="เมนู Partner">
+          <a href="#partner-overview" class="is-active"><i class="fas fa-chart-pie"></i> ภาพรวม</a>
+          <a href="{{ url_for('partner_members') }}"><i class="fas fa-users"></i> จัดการสมาชิก <span>{{ members|length }}</span></a>
+          <a href="#partner-topup"><i class="fas fa-wallet"></i> เติมเครดิต</a>
+          <a href="{{ url_for('partner_finance') }}"><i class="fas fa-receipt"></i> ประวัติการเงิน</a>
+          <a href="{{ url_for('partner_reports') }}"><i class="fas fa-chart-line"></i> รายงานแพ้ชนะ</a>
+          <a href="{{ url_for('partner_online_members') }}"><i class="fas fa-circle"></i> สมาชิกออนไลน์</a>
+          <a href="{{ url_for('partner_settings') }}"><i class="fas fa-sliders"></i> อัตราจ่าย/กลุ่มหวย</a>
+          <a href="{{ url_for('partner_blocked_numbers') }}"><i class="fas fa-ban"></i> รายการเก็บของ/อั้น</a>
+          <a href="{{ url_for('lottery_rooms') }}"><i class="fas fa-dice"></i> กลับหน้าหวย</a>
+        </nav>
+        <div class="partner-invite-card">
+          <small>รหัสแนะนำของคุณ</small>
+          <code>{{ profile.invite_code }}</code>
+        </div>
+      </aside>
+
+      <main class="partner-dashboard-main">
+        <header class="partner-dashboard-head" id="partner-overview">
+          <div><span class="eyebrow">FLEET PARTNER</span><h1 class="page-title">ภาพรวม Partner</h1><p class="section-desc">จัดการสมาชิก เติมเครดิต และติดตามคอมมิชชันจากที่เดียว</p></div>
+          <div class="partner-balance"><span>คอมมิชชันสะสม</span><strong>{{ "{:,.2f}".format(profile.commission_balance) }}</strong></div>
+        </header>
+
+        <div class="partner-stat-grid">
+          <div class="partner-stat-card accent-gold"><span>สมาชิกในสาย</span><strong>{{ members|length }}</strong><small>สมาชิกทั้งหมด</small></div>
+          <div class="partner-stat-card accent-green"><span>เครดิตสำหรับเติม</span><strong>{{ "{:,.2f}".format(partner.credit_balance) }}</strong><small>ยอดคงเหลือ</small></div>
+          <div class="partner-stat-card accent-blue"><span>อัตราคอมมิชชัน</span><strong>{{ "{:,.2f}".format(profile.commission_rate) }}%</strong><small>อัตราปัจจุบัน</small></div>
+          <div class="partner-stat-card accent-red"><span>สมาชิกออนไลน์</span><strong>{{ online_count }}</strong><small>ออนไลน์ใน 10 นาทีล่าสุด</small></div>
+        </div>
+
+        <div class="partner-content-grid">
+          <article class="panel partner-topup-panel" id="partner-topup">
+            <div class="partner-panel-heading"><div><span class="eyebrow">CREDIT TRANSFER</span><h2 class="panel-title"><i class="fas fa-coins"></i> เติมเครดิตให้ลูกค้า</h2></div><span class="partner-panel-icon"><i class="fas fa-arrow-right-arrow-left"></i></span></div>
+            <p class="section-desc">โอนเครดิตจากยอดของ Partner ให้สมาชิกในสายของคุณ</p>
+            <form method="post" action="{{ url_for('partner_topup_member') }}" class="partner-topup-form">
+              <div class="form-group"><label class="form-label" for="partner-member-id">เลือกลูกค้า</label><select id="partner-member-id" class="form-input partner-member-select" name="member_id" required><option value="">เลือกสมาชิก</option>{% for member in members %}<option value="{{ member.id }}">{{ member.full_name or member.username }} · เครดิต {{ "{:,.2f}".format(member.credit_balance) }}</option>{% endfor %}</select><small class="form-hint">เลือกได้เฉพาะสมาชิกในสายของคุณ ({{ members|length }} คน)</small></div>
+              <div class="partner-form-row"><div class="form-group"><label class="form-label">จำนวนเครดิต</label><input class="form-input" type="number" name="amount" min="0.01" step="0.01" max="{{ partner.credit_balance }}" placeholder="0.00" required></div><div class="form-group"><label class="form-label">หมายเหตุ</label><input class="form-input" name="reason" maxlength="255" placeholder="เช่น เติมเครดิตรอบเช้า"></div></div>
+              <button class="btn btn-success btn-block" type="submit" {% if not members or partner.credit_balance <= 0 %}disabled{% endif %}><i class="fas fa-plus-circle"></i> เติมเครดิตให้ลูกค้า</button>
+            </form>
+          </article>
+
+          <article class="panel partner-commission-panel" id="partner-commission">
+            <div class="partner-panel-heading"><div><span class="eyebrow">RECENT COMMISSION</span><h2 class="panel-title">คอมมิชชันล่าสุด</h2></div><i class="fas fa-chart-line partner-muted-icon"></i></div>
+            <div class="activity-list">{% for entry in entries %}<div class="activity-item"><span class="activity-tag plus">+{{ "{:,.2f}".format(entry.commission_amount) }}</span><div><strong>{{ entry.reason }}</strong><small>{{ entry.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div></div>{% else %}<p class="empty-state-text">ยังไม่มีรายการคอมมิชชัน</p>{% endfor %}</div>
+          </article>
+        </div>
+
+        <article class="panel partner-members-panel" id="partner-members">
+          <div class="partner-panel-heading"><div><span class="eyebrow">MEMBER FLEET</span><h2 class="panel-title">สมาชิกในสาย</h2></div><span class="partner-count-chip">{{ members|length }} คน</span></div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>สมาชิก</th><th>วันที่เข้าร่วม</th><th>แต้ม</th><th>เครดิต</th><th>VIP</th></tr></thead><tbody>{% for member in members %}<tr><td><strong>{{ member.full_name or member.username }}</strong><small class="table-subtext">{{ member.username }}</small></td><td>{{ member.created_at.strftime('%d/%m/%Y') }}</td><td>{{ "{:,}".format(member.points) }}</td><td class="text-strong">{{ "{:,.2f}".format(member.credit_balance) }}</td><td>{{ member.vip_tier.name if member.vip_tier else '-' }}</td></tr>{% else %}<tr><td colspan="5" class="empty-state-text">ยังไม่มีสมาชิกในกองเรือ</td></tr>{% endfor %}</tbody></table></div>
+        </article>
+      </main>
+    </div>
+  </div>
+</section>
+{% endblock %}

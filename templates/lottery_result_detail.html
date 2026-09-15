@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}ผลหวย {{ room.name }} — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="page-section">
+  <div class="container">
+    <header class="page-head">
+      <div>
+        <h1 class="page-title">ผลหวย {{ room.name }}</h1>
+        <p class="section-desc">ดูผลล่าสุดและย้อนหลังของห้องนี้</p>
+      </div>
+      <a href="{{ url_for('lottery_results') }}" class="btn btn-ghost">กลับหน้าผลรวม</a>
+    </header>
+
+    {% if latest_period %}
+    <article class="panel" style="margin-bottom:18px;">
+      <h2 class="panel-title">งวดล่าสุด: {{ latest_period.period_date }}</h2>
+      <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+        <div class="dashboard-card accent-gold"><span class="dashboard-label">3 ตัวบน</span><strong>{{ latest_period.result_3up or '-' }}</strong></div>
+        <div class="dashboard-card accent-blue"><span class="dashboard-label">2 ตัวล่าง</span><strong>{{ latest_period.result_2down or '-' }}</strong></div>
+        <div class="dashboard-card accent-green"><span class="dashboard-label">3 ตัวหน้า</span><strong>{{ latest_period.result_3front or '-' }}</strong></div>
+        <div class="dashboard-card accent-red"><span class="dashboard-label">3 ตัวหลัง</span><strong>{{ latest_period.result_3back or '-' }}</strong></div>
+      </div>
+    </article>
+    {% endif %}
+
+    <article class="panel">
+      <h2 class="panel-title">ผลย้อนหลัง</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>งวด</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>3 ตัวหน้า</th><th>3 ตัวหลัง</th></tr></thead>
+          <tbody>
+            {% for period in periods %}
+            <tr>
+              <td>{{ period.period_date }}</td>
+              <td>{{ period.result_3up or '-' }}</td>
+              <td>{{ period.result_2down or '-' }}</td>
+              <td>{{ period.result_3front or '-' }}</td>
+              <td>{{ period.result_3back or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="empty-state-text">ยังไม่มีผลย้อนหลัง</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;">
+      {% if pagination.has_prev %}
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('lottery_result_detail', room_id=room.id, page=pagination.prev_num) }}">ย้อนหลัง</a>
+      {% endif %}
+      <span class="section-desc" style="align-self:center;">หน้า {{ pagination.page }} / {{ pagination.pages or 1 }}</span>
+      {% if pagination.has_next %}
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('lottery_result_detail', room_id=room.id, page=pagination.next_num) }}">ถัดไป</a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

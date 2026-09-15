@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}ใบโพยหวย {{ period.period_date }} — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="page-section">
+  <div class="container">
+    <header class="page-head">
+      <div>
+        <span class="eyebrow">LOTTERY TICKET</span>
+        <h1 class="page-title">ใบโพยหวย</h1>
+        <p class="section-desc">{{ period.room.name if period.room else '-' }} · งวด {{ period.period_date }}{% if ticket_user %} · สมาชิก {{ ticket_user.username }}{% endif %}</p>
+      </div>
+      {% if is_admin_view %}
+      <a href="{{ url_for('admin_lottery_tickets') }}" class="btn btn-ghost">กลับรายการโพย</a>
+      {% else %}
+      <a href="{{ url_for('history') }}" class="btn btn-ghost">กลับประวัติ</a>
+      {% endif %}
+    </header>
+
+    <article class="panel">
+      <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+        <div class="dashboard-card accent-gold"><span class="dashboard-label">ยอดเดิมพันรวม</span><strong>{{ "{:,.2f}".format(total_amount) }}</strong></div>
+        <div class="dashboard-card accent-blue"><span class="dashboard-label">รางวัลที่ได้รับ</span><strong>{{ "{:,.2f}".format(total_reward) }}</strong></div>
+        <div class="dashboard-card accent-green"><span class="dashboard-label">สถานะงวด</span><strong>{% if period.is_checked %}ตรวจผลแล้ว{% elif period.is_open %}รอตรวจผล{% else %}ปิดรับแทง{% endif %}</strong></div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h2 class="panel-title">รายการในโพย</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>ประเภท</th><th>เลข</th><th>ยอดแทง</th><th>อัตราจ่าย</th><th>รางวัล</th><th>สถานะ</th></tr></thead>
+          <tbody>
+            {% for bet in bets %}
+            <tr>
+              <td>{{ bet.bet_type }}</td>
+              <td><code class="code-chip">{{ bet.number }}</code></td>
+              <td>{{ "{:,.2f}".format(bet.amount) }}</td>
+              <td>{{ "{:,.2f}".format(bet.rate) }}x</td>
+              <td>{{ "{:,.2f}".format(bet.reward_amount) }}</td>
+              <td><span class="status status-{{ bet.status }}">{{ bet.status }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </div>
+</section>
+{% endblock %}

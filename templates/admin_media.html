@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container my-4" style="color: #fff;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📂 คลังภาพระบบ (Media Library)</h2>
+        <a href="{{ url_for('admin_banners') }}" class="btn btn-outline-warning">🖼️ กลับไปหน้าจัดการแบนเนอร์</a>
+    </div>
+
+    <!-- ฟอร์มสำหรับอัปโหลดรูปใหม่เข้าคลัง -->
+    <form method="POST" enctype="multipart/form-data" class="p-4 rounded mb-5" style="background-color: #1a1a2e; border: 1px solid #333;">
+        <div class="row g-3">
+            <div class="col-md-5">
+                <label class="form-label">เลือกรูปภาพจากเครื่อง</label>
+                <input type="file" name="image_file" class="form-control" accept="image/*" required>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">ชื่อรูป / คำอธิบาย (ถ้ามี)</label>
+                <input type="text" name="title" class="form-control" placeholder="เช่น แบนเนอร์โปรโมชั่น">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-warning w-100 fw-bold">อัปโหลด</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- แสดงรายการรูปทั้งหมดในคลัง -->
+    <div class="row g-4">
+        {% if images %}
+            {% for img in images %}
+            <div class="col-md-3 col-sm-6">
+                <div class="card bg-dark text-white border-secondary h-100">
+                    <img src="{{ url_for('static', filename='uploads/' + img.filename) }}" class="card-img-top" style="height: 150px; object-fit: cover;" alt="...">
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="card-title text-truncate" title="{{ img.title }}">{{ img.title or img.filename }}</h6>
+                        <div class="mt-auto">
+                            <button type="button" class="btn btn-sm btn-outline-info w-100 mb-2" onclick="copyLink('/static/uploads/{{ img.filename }}')">
+                                คัดลอกลิงก์รูป
+                            </button>
+                            <form action="{{ url_for('admin_delete_media', image_id=img.id) }}" method="POST" onsubmit="return confirm('ต้องการลบรูปนี้หรือไม่?');">
+                                <button type="submit" class="btn btn-sm btn-danger w-100">ลบ</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12 text-center text-muted py-5">
+                <h4>ยังไม่มีรูปภาพในคลัง</h4>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function copyLink(url) {
+    const fullUrl = window.location.origin + url;
+    navigator.clipboard.writeText(fullUrl).then(() => {
+        alert("คัดลอกลิงก์รูปสำเร็จ! นำไปวางในช่อง URL แบนเนอร์ได้เลย");
+    });
+}
+</script>
+{% endblock %}

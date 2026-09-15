@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container admin-banner-page" style="color: #fff;">
+    <div class="admin-banner-head">
+        <div>
+            <span class="eyebrow">BANNER CONTROL</span>
+            <h1 class="page-title">🖼️ จัดการรูปสไลด์แบนเนอร์หน้าแรก</h1>
+        </div>
+        <div class="admin-banner-actions">
+            <a href="{{ url_for('admin') }}" class="btn btn-ghost btn-sm"><i class="fas fa-arrow-left"></i> กลับศูนย์ควบคุม</a>
+            <a href="{{ url_for('admin_media') }}" class="btn btn-outline-info btn-sm">📂 คลังภาพระบบ</a>
+        </div>
+    </div>
+
+    <!-- ฟอร์มเพิ่มแบนเนอร์ (รองรับการอัปโหลดไฟล์และใส่ URL) -->
+    <form method="POST" enctype="multipart/form-data" class="admin-banner-form">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label text-warning fw-bold">📁 อัปโหลดรูปภาพจากเครื่อง</label>
+                <input type="file" name="image_file" class="form-control" accept="image/*">
+                <small class="text-info d-block mt-2">แนะนำ 1600 x 900 พิกเซล (16:9)</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">🔗 หรือใส่ลิงก์รูปภาพ (URL)</label>
+                <input type="text" name="image_url" class="form-control" placeholder="https://images.unsplash.com/...">
+            </div>
+            <div class="col-12">
+                <label class="form-label">หัวข้อ / คำอธิบาย (ไม่ใส่ก็ได้)</label>
+                <input type="text" name="title" class="form-control" placeholder="เช่น แคมเปญพิเศษประจำเดือน">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-warning fw-bold px-4">+ เพิ่มรูปสไลด์</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- ตารางแสดงรายการแบนเนอร์ทั้งหมด -->
+    <div class="table-responsive admin-banner-table-wrap">
+        <table class="table table-dark table-striped align-middle admin-banner-table">
+            <thead>
+                <tr>
+                    <th style="width: 20%;">รูปตัวอย่าง</th>
+                    <th style="width: 45%;">หัวข้อ</th>
+                    <th style="width: 15%;">สถานะ</th>
+                    <th style="width: 20%;">จัดการ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if banners or uploaded_banners %}
+                    {% for banner in banners %}
+                    <tr>
+                        <td>
+                            <img src="{{ banner.image_url }}" alt="Banner Preview" style="width: 120px; height: 60px; object-fit: cover; border-radius: 4px;">
+                        </td>
+                        <td>{{ banner.title or '-' }}</td>
+                        <td>
+                            <span class="badge bg-success">ใช้งานอยู่</span>
+                        </td>
+                        <td>
+                            <form action="{{ url_for('admin_delete_banner', banner_id=banner.id) }}" method="POST" onsubmit="return confirm('คุณต้องการลบรูปสไลด์นี้ใช่หรือไม่?');">
+                                <button type="submit" class="btn btn-danger btn-sm">ลบ</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% for banner in uploaded_banners %}
+                    <tr>
+                        <td>
+                            <img src="{{ banner.image_url }}" alt="Banner Preview" style="width: 120px; height: 60px; object-fit: cover; border-radius: 4px;">
+                        </td>
+                        <td>{{ banner.filename }}</td>
+                        <td>
+                            <span class="badge bg-success">ไฟล์อัปโหลด</span>
+                        </td>
+                        <td>
+                            <form action="{{ url_for('admin_delete_uploaded_banner', filename=banner.filename) }}" method="POST" onsubmit="return confirm('คุณต้องการลบไฟล์แบนเนอร์นี้ใช่หรือไม่?');">
+                                <button type="submit" class="btn btn-danger btn-sm">ลบ</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-4">ยังไม่มีรูปสไลด์แบนเนอร์ในระบบ</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

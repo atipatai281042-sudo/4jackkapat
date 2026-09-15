@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block title %}หน้าแรก — mklotto{% endblock %}
+
+{% block content %}
+
+<section class="hero-slider-section">
+  <div class="container">
+    {% if banners %}
+      <!-- ส่วนแสดงสไลด์แบนเนอร์เมื่อแอดมินอัปโหลดรูปแล้ว -->
+      <div class="hero-slider" id="heroSlider">
+        <div class="slider-wrapper">
+          {% for banner in banners %}
+          <div class="slide-item {% if loop.first %}active{% endif %}">
+            <img src="{{ banner.image_url }}" alt="Banner Image" class="slide-img" />
+            {% if banner.title %}
+            <div class="slide-caption">
+              <h2>{{ banner.title }}</h2>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        
+        {% if banners|length > 1 %}
+        <!-- ปุ่มกดเลื่อนสไลด์ (ซ้าย-ขวา) -->
+        <button class="slider-btn prev-btn" onclick="moveSlide(-1)">&#10094;</button>
+        <button class="slider-btn next-btn" onclick="moveSlide(1)">&#10095;</button>
+        
+        <!-- จุดบอกสถานะสไลด์ด้านล่าง -->
+        <div class="slider-dots">
+          {% for banner in banners %}
+          <span class="dot slide-dot" data-index="{{ loop.index0 }}"></span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    {% else %}
+      <!-- กรณีที่ยังไม่มีแบนเนอร์หลังบ้าน ให้แสดงหน้า Hero เดิมของคุณ -->
+      <div class="hero home-hero-fallback">
+        <div class="hero-inner">
+          <div class="hero-text">
+            <span class="hero-badge">PREMIUM LOTTERY NETWORK</span>
+            <h1 class="hero-title">mklotto<br />เว็บแทงหวยออนไลน์</h1>
+            <p class="hero-subtitle">ออกแบบเพื่อการแทงหวยโดยเฉพาะ ครบทุกห้อง ทุกงวด พร้อมระบบเครดิตและผลตอบแทนที่ชัดเจน</p>
+            {% if not current_user %}
+              <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">สมัครสมาชิกฟรี</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- สคริปต์ควบคุมการเลื่อนสไลด์อัตโนมัติและกดปุ่ม -->
+<script>
+  let slideIndex = 0;
+  let slides = document.querySelectorAll(".slide-item");
+  let dots = document.querySelectorAll(".dot");
+  let slideInterval;
+
+  function showSlides(n) {
+    if (slides.length === 0) return;
+    if (n >= slides.length) slideIndex = 0;
+    if (n < 0) slideIndex = slides.length - 1;
+
+    slides.forEach(slide => slide.classList.remove("active"));
+    dots.forEach(dot => dot.classList.remove("active"));
+
+    slides[slideIndex].classList.add("active");
+    if (dots.length > 0) {
+      dots[slideIndex].classList.add("active");
+    }
+  }
+
+  function moveSlide(n) {
+    clearInterval(slideInterval);
+    slideIndex += n;
+    showSlides(slideIndex);
+    startAutoSlide();
+  }
+
+  function currentSlide(n) {
+    clearInterval(slideInterval);
+    slideIndex = n;
+    showSlides(slideIndex);
+    startAutoSlide();
+  }
+
+  function startAutoSlide() {
+    if (slides.length > 1) {
+      slideInterval = setInterval(() => {
+        slideIndex++;
+        showSlides(slideIndex);
+      }, 5000);
+    }
+  }
+
+  if (slides.length > 1) {
+    startAutoSlide();
+  }
+  document.querySelectorAll('.slide-dot').forEach(function (dot, index) {
+    dot.addEventListener('click', function () {
+      currentSlide(index);
+    });
+  });
+</script>
+
+<!-- สไตล์ CSS สำหรับปุ่มห้องแทงหวยแบบเต็มแถวสีทองคุมโทน -->
+<style>
+  .hero-slider-section {
+    margin: 20px 0;
+  }
+  .hero-slider {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+  .slider-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    height: auto;
+  }
+  .slide-item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 0.8s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .slide-item.active {
+    opacity: 1;
+    z-index: 1;
+  }
+  .slide-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .slide-caption {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 6px;
+    z-index: 2;
+  }
+  .slider-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    padding: 12px 16px;
+    cursor: pointer;
+    z-index: 10;
+    font-size: 18px;
+    border-radius: 4px;
+    transition: background 0.3s;
+  }
+  .slider-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
+  .prev-btn { left: 15px; }
+  .next-btn { right: 15px; }
+  .slider-dots {
+    text-align: center;
+    position: absolute;
+    bottom: 15px;
+    width: 100%;
+    z-index: 10;
+  }
+  .dot {
+    cursor: pointer;
+    height: 12px;
+    width: 12px;
+    margin: 0 4px;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    display: inline-block;
+    transition: background-color 0.3s;
+  }
+  .dot.active, .dot:hover {
+    background-color: white;
+  }
+
+  .wallet-action i { width: 20px; text-align: center; font-size: 1.1rem; }
+  .wallet-action-small {
+    min-height: 36px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    box-shadow: none;
+  }
+  .lottery-action-main {
+    min-height: 58px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .compact-results {
+    padding: 10px 12px;
+    margin-top: 10px !important;
+    margin-bottom: 12px;
+  }
+  .compact-results .panel-title {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+  .compact-results .dashboard-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+    gap: 6px;
+    margin: 0 !important;
+  }
+  .compact-results .dashboard-card {
+    min-height: 0;
+    padding: 7px 9px;
+    border-radius: 8px;
+    box-shadow: none;
+  }
+  .compact-results .dashboard-card::before { width: 3px; }
+  .compact-results .dashboard-card strong {
+    font-size: .85rem;
+    line-height: 1.1;
+    margin-top: 2px;
+  }
+  .compact-results .dashboard-label { font-size: .62rem; }
+  .compact-results .dashboard-card > div {
+    margin-top: 3px !important;
+    font-size: 10px !important;
+    line-height: 1.25;
+  }
+  .compact-info {
+    padding: 10px 12px;
+    margin-top: 10px !important;
+    margin-bottom: 12px;
+  }
+  .compact-info .panel-title {
+    font-size: 14px;
+    margin-bottom: 3px;
+  }
+  .compact-info .section-desc {
+    font-size: 11px;
+    line-height: 1.35;
+    margin-bottom: 6px;
+  }
+  .compact-info .info-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 0 !important;
+  }
+  .compact-info .info-actions .btn {
+    padding: 5px 10px;
+    min-height: 30px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  @media (max-width: 640px) {
+    .hero-slider-section { margin: 12px 0; }
+    .hero-slider { border-radius: 14px; }
+    .slider-wrapper { aspect-ratio: 16 / 9; height: auto; }
+    .slide-caption { left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; }
+    .slide-caption h2 { font-size: 16px; margin: 0; }
+    .slider-btn { padding: 8px 11px; font-size: 14px; }
+    .lottery-action-row { grid-template-columns: 1fr; gap: 10px; }
+    .lottery-action-row > .btn-primary { order: -1; width: 100%; }
+    .wallet-action-small { min-height: 36px; padding: 6px 10px; font-size: 13px; }
+    .lottery-action-main { min-height: 52px; padding: 10px 14px; }
+  }
+</style>
+
+<section class="catalog-section">
+  <div class="container">
+
+    <!-- ปุ่มเข้าสู่ห้องหวยแบบเต็มแถว ไม่มีอีโมจิ -->
+    {% if current_user %}
+    <div class="lottery-action-row">
+      <a href="{{ url_for('deposit_page') }}" class="wallet-action wallet-action-small wallet-action-deposit"><i class="fas fa-circle-arrow-down"></i> ฝากเงิน</a>
+      <a href="{{ url_for('lottery_rooms') }}" class="btn btn-primary lottery-action-main"><i class="fas fa-dice"></i> เข้าห้องแทงหวย</a>
+      <a href="{{ url_for('withdraw_page') }}" class="wallet-action wallet-action-small wallet-action-withdraw"><i class="fas fa-circle-arrow-up"></i> ถอนเงิน</a>
+    </div>
+
+    <div class="section-head-actions" style="margin: 6px 0 10px;">
+      <a href="{{ url_for('history') }}" class="btn btn-ghost btn-xs"><i class="fas fa-receipt"></i> ตรวจประวัติโพย</a>
+    </div>
+    {% endif %}
+
+    <div class="panel compact-results">
+      <h3 class="panel-title">ผลล่าสุดแบบเร็ว</h3>
+      <div class="dashboard-grid">
+        {% for room in featured_rooms %}
+        {% set period = featured_periods.get(room.id) %}
+        <article class="dashboard-card accent-gold">
+          <span class="dashboard-label">{{ room.name }}</span>
+          <strong>{{ period.period_date if period else '-' }}</strong>
+          <div style="margin-top:8px;color:var(--color-text-muted);font-size:13px;">
+            {% if period %}
+              3 ตัวบน: <strong style="color:#ffd978;">{{ period.result_3up or '-' }}</strong><br>
+              2 ตัวล่าง: <strong style="color:#ffd978;">{{ period.result_2down or '-' }}</strong>
+            {% else %}
+              ยังไม่มีข้อมูลงวด
+            {% endif %}
+          </div>
+        </article>
+        {% else %}
+        <article class="dashboard-card accent-blue"><span class="dashboard-label">สถานะ</span><strong>ยังไม่มีห้องหวย</strong></article>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="panel compact-info">
+      <h3 class="panel-title">ดูผลล่าสุดและข้อมูลหวย</h3>
+      <p class="section-desc">ตรวจผลหวยล่าสุดรายห้อง อัตราการจ่าย และข้อมูลการเล่นเพิ่มเติมได้จากเมนูด้านบน หรือจากหน้าเว็บสาธารณะที่เราเตรียมไว้ให้ครบถ้วน</p>
+      <div class="info-actions">
+        <a href="{{ url_for('lottery_results') }}" class="btn btn-ghost">ผลหวยล่าสุด</a>
+        <a href="{{ url_for('payout_rates_page') }}" class="btn btn-ghost">อัตราการจ่าย</a>
+        <a href="{{ url_for('rules_page') }}" class="btn btn-ghost">กฎกติกา</a>
+        <a href="{{ url_for('contact_page') }}" class="btn btn-ghost">ติดต่อเรา</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section class="voyage-strip" aria-label="จุดเด่นของระบบ">
+  <div class="container voyage-strip-inner">
+    <div class="voyage-item"><i class="fas fa-dice"></i><span><strong>ห้องหวยหลายประเภท</strong><small>เลือกห้องและรอบเวลาได้ง่าย</small></span></div>
+    <div class="voyage-item"><i class="fas fa-coins"></i><span><strong>เครดิตแยกสำหรับแทง</strong><small>ใช้เครดิตแทงหวยโดยเฉพาะ</small></span></div>
+    <div class="voyage-item"><i class="fas fa-receipt"></i><span><strong>ตรวจผลและประวัติโพย</strong><small>ติดตามโพยและผลหวยได้ครบ</small></span></div>
+  </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}ตั้งค่าแบรนด์เว็บ — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="admin-section">
+  <div class="container container-narrow">
+    <header class="page-head">
+      <div>
+        <h1 class="page-title">ตั้งค่าแบรนด์เว็บ</h1>
+        <p class="section-desc">ปรับชื่อเว็บ คำโปรย และไอคอนหลักของระบบจากหลังบ้าน</p>
+      </div>
+      <a href="{{ url_for('admin') }}" class="btn btn-ghost">กลับศูนย์ควบคุม</a>
+    </header>
+
+    <article class="panel">
+      <form method="post" class="admin-form">
+        <div class="form-group">
+          <label class="form-label">ชื่อเว็บ</label>
+          <input class="form-input" name="brand_name" value="{{ brand_name }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">คำโปรยใต้ชื่อ</label>
+          <input class="form-input" name="brand_tagline" value="{{ brand_tagline }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">URL โลโก้/ไอคอนแบรนด์</label>
+          <input class="form-input" name="brand_icon_url" value="{{ brand_icon_url }}" placeholder="/static/brand-icon.svg">
+          <small class="form-hint">ถ้าเว้นว่าง ระบบจะใช้ไอคอนเริ่มต้น</small>
+        </div>
+        <button class="btn btn-primary" type="submit">บันทึกการตั้งค่าแบรนด์</button>
+      </form>
+    </article>
+  </div>
+</section>
+{% endblock %}

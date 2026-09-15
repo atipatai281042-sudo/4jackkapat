@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}ผลหวยล่าสุด — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="page-section">
+  <div class="container">
+    <header class="page-head">
+      <div>
+        <h1 class="page-title">ผลหวยล่าสุด</h1>
+        <p class="section-desc">สรุปผลรางวัลล่าสุดของแต่ละห้องแทงหวย</p>
+      </div>
+    </header>
+
+    {% for category, rooms_in_category in grouped_results.items() %}
+    <h2 class="section-title" style="margin: 1rem 0;">{{ category }}</h2>
+    <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+      {% for room in rooms_in_category %}
+      {% set period = latest_periods.get(room.id) %}
+      <article class="dashboard-card accent-gold lottery-result-card">
+        <div class="lottery-result-heading">
+          <span class="lottery-result-icon">
+            {% if room.image_url %}<img src="{{ room.image_url }}" alt="{{ room.name }}">{% else %}<i class="fas fa-compass"></i>{% endif %}
+          </span>
+          <span class="dashboard-label">{{ room.name }}</span>
+        </div>
+        <strong>{{ period.period_date if period else '-' }}</strong>
+        <div style="margin-top:10px;color:var(--color-text-muted);font-size:13px;">
+          {% if period %}
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+              <span>3 ตัวบน</span>
+              <strong style="color:#ffd978;font-size:18px;">{{ period.result_3up or '-' }}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:6px;">
+              <span>2 ตัวล่าง</span>
+              <strong style="color:#ffd978;font-size:18px;">{{ period.result_2down or '-' }}</strong>
+            </div>
+          {% else %}
+            ยังไม่มีข้อมูลงวด
+          {% endif %}
+        </div>
+        <div style="margin-top:10px;">
+          <a href="{{ url_for('lottery_result_detail', room_id=room.id) }}" class="btn btn-ghost btn-xs">ดูผลย้อนหลัง</a>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <article class="dashboard-card accent-blue"><span class="dashboard-label">สถานะ</span><strong>ยังไม่มีห้องหวย</strong></article>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

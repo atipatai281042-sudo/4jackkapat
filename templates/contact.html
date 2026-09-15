@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}ติดต่อเรา — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="page-section"><div class="container">
+  <article class="panel">
+    <h1 class="page-title">ติดต่อเรา</h1>
+    <p class="section-desc">ต้องการความช่วยเหลือ ติดต่อทีมงานได้ผ่านช่องทางด้านล่าง</p>
+    {% if admin_contact_url %}<a class="btn btn-primary" href="{{ admin_contact_url }}" target="_blank" rel="noopener">ติดต่อแอดมิน</a>{% else %}<p class="section-desc">ยังไม่ได้ตั้งค่าช่องทางติดต่อ</p>{% endif %}
+  </article>
+</div></section>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}เปิดหีบสมบัติ — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="treasure-page">
+  <div class="container treasure-shell">
+    <header class="treasure-intro">
+      <span class="eyebrow"><i class="fas fa-sparkles"></i> DEMO EXPERIENCE</span>
+      <h1 class="treasure-title">เปิดหีบสมบัติ</h1>
+      <p class="treasure-subtitle">เลือกหีบหนึ่งใบ แล้วค้นพบรางวัลแห่งค่ำคืนนี้</p>
+      <span class="treasure-note"><i class="fas fa-shield-halved"></i> โหมดทดลอง ไม่เกี่ยวกับเครดิตหรือการถอนเงิน</span>
+    </header>
+
+    <div class="treasure-stage" id="treasure-stage">
+      <div class="treasure-stars" aria-hidden="true"></div>
+      <div class="chest-grid" role="group" aria-label="เลือกหีบสมบัติ">
+        {% for index in range(3) %}
+        <button class="treasure-chest" type="button" data-chest="{{ index }}" aria-label="เลือกหีบสมบัติใบที่ {{ index + 1 }}">
+          <span class="chest-aura"></span>
+          <span class="chest-lid"><span class="lid-wood"></span><span class="lid-band lid-band-left"></span><span class="lid-band lid-band-right"></span></span>
+          <span class="chest-body"><span class="body-wood"></span><span class="body-band body-band-left"></span><span class="body-band body-band-right"></span><span class="chest-lock"><i class="fas fa-lock"></i></span><span class="chest-shine"></span></span>
+          <span class="chest-floor-shadow"></span>
+          <span class="chest-number">0{{ index + 1 }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      <p class="treasure-hint" id="treasure-hint">เลือกหีบหนึ่งใบเพื่อเริ่มการค้นหา</p>
+      <div class="treasure-result" id="treasure-result" aria-live="polite" hidden>
+        <div class="result-icon" id="result-icon"><i class="fas fa-gem"></i></div>
+        <span class="result-tier" id="result-tier"></span>
+        <h2 id="result-name"></h2>
+        <button class="btn btn-primary" type="button" id="play-again"><i class="fas fa-rotate-right"></i> เปิดอีกครั้ง</button>
+      </div>
+    </div>
+
+    <article class="panel treasure-history-panel">
+      <div class="treasure-history-head"><h2 class="panel-title"><i class="fas fa-scroll"></i> บันทึกการค้นพบ</h2><span class="treasure-demo-label">DEMO</span></div>
+      <div class="treasure-history" id="treasure-history">
+        {% for item in game_history|reverse %}
+        <div class="history-prize"><span class="tier-{{ item.tier|lower }}">{{ item.tier }}</span><strong>{{ item.name }}</strong></div>
+        {% else %}
+        <p class="empty-state-text">ยังไม่มีการค้นพบ เปิดหีบใบแรกได้เลย</p>
+        {% endfor %}
+      </div>
+    </article>
+  </div>
+</section>
+<script>
+(() => {
+  const stage = document.querySelector('#treasure-stage');
+  const chests = [...document.querySelectorAll('.treasure-chest')];
+  const hint = document.querySelector('#treasure-hint');
+  const result = document.querySelector('#treasure-result');
+  const icon = document.querySelector('#result-icon');
+  const tier = document.querySelector('#result-tier');
+  const name = document.querySelector('#result-name');
+  const history = document.querySelector('#treasure-history');
+  const playAgain = document.querySelector('#play-again');
+  let busy = false;
+
+  function resetGame() {
+    busy = false;
+    result.hidden = true;
+    hint.hidden = false;
+    chests.forEach(chest => chest.classList.remove('is-open', 'is-dimmed', 'is-selected'));
+  }
+
+  async function openChest(chest) {
+    if (busy) return;
+    busy = true;
+    const chestIndex = Number(chest.dataset.chest);
+    chests.forEach(item => item.classList.toggle('is-dimmed', item !== chest));
+    chest.classList.add('is-selected');
+    hint.textContent = 'กำลังเปิดผนึกสมบัติ...';
+    try {
+      const response = await fetch('{{ url_for("open_treasure_chest") }}', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({chest: chestIndex})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'เปิดหีบไม่สำเร็จ');
+      chest.classList.add('is-open');
+      stage.classList.add('has-reveal');
+      window.setTimeout(() => {
+        icon.className = `result-icon result-${data.prize.color}`;
+        icon.innerHTML = `<i class="fas ${data.prize.icon}"></i>`;
+        tier.className = `result-tier tier-${data.prize.tier.toLowerCase()}`;
+        tier.textContent = data.prize.tier;
+        name.textContent = data.prize.name;
+        hint.hidden = true;
+        result.hidden = false;
+        const item = document.createElement('div');
+        item.className = 'history-prize history-prize-new';
+        item.innerHTML = `<span class="tier-${data.prize.tier.toLowerCase()}">${data.prize.tier}</span><strong>${data.prize.name}</strong>`;
+        history.querySelector('.empty-state-text')?.remove();
+        history.prepend(item);
+      }, 700);
+    } catch (error) {
+      hint.textContent = error.message;
+      chests.forEach(item => item.classList.remove('is-dimmed', 'is-selected'));
+      busy = false;
+    }
+  }
+  chests.forEach(chest => chest.addEventListener('click', () => openChest(chest)));
+  playAgain.addEventListener('click', () => { stage.classList.remove('has-reveal'); resetGame(); });
+})();
+</script>
+{% endblock %}

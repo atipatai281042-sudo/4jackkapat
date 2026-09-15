@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}แทงหวย — mklotto{% endblock %}
+{% block content %}
+<div class="rooms-page container">
+        <div class="betting-shell">
+            <aside class="betting-sidebar" aria-label="สรุปบัญชีและเมนูแทงหวย">
+                <div class="betting-user-card">
+                    <span class="betting-kicker">MKLOTTO MEMBER</span>
+                    <strong>{{ current_user.full_name or current_user.username }}</strong>
+                      <span class="betting-user-role">{{ 'ADMIN' if current_user.is_admin else ('PARTNER' if current_user.is_partner else 'MEMBER') }}</span>
+                </div>
+                <div class="betting-balance">
+                    <span>เครดิตคงเหลือ</span>
+                    <strong>{{ "{:,.2f}".format(current_user.credit_balance) }}</strong>
+                    <small>เครดิตสำหรับใช้แทงหวย</small>
+                </div>
+                <nav class="betting-shortcuts" aria-label="เมนูการแทงหวย">
+                    <a class="is-active" href="{{ url_for('lottery_rooms') }}"><i class="fas fa-ticket"></i> แทงหวย</a>
+                    <a href="{{ url_for('history') }}"><i class="fas fa-list-check"></i> รายการแทงของฉัน</a>
+                      {% if current_user.is_admin %}<a href="{{ url_for('wallet') }}"><i class="fas fa-wallet"></i> บัญชีการเงิน</a>{% endif %}
+                    <a href="{{ url_for('lottery_results') }}"><i class="fas fa-square-poll-vertical"></i> ตรวจรางวัล</a>
+                </nav>
+                <details class="betting-slip-placeholder">
+                    <summary class="betting-slip-heading"><strong>โพยที่กำลังเลือก</strong><span>0 รายการ <i class="fas fa-chevron-down"></i></span></summary>
+                    <div class="betting-slip-content">
+                        <p>เลือกห้องหวยด้านขวาเพื่อเริ่มกรอกเลขและเพิ่มรายการลงโพย</p>
+                        <a href="{{ url_for('history') }}" class="btn btn-outline-light btn-sm w-100">ดูรายการย้อนหลัง</a>
+                    </div>
+                </details>
+            </aside>
+            <main class="betting-catalog">
+    <!-- ส่วนหัวข้อหน้า -->
+    <div class="rooms-heading text-center mb-5">
+        <span class="eyebrow">TREASURE LOTTERY FLEET</span>
+        <h1 class="fw-bold mb-2">เลือกห้องหวย สู่ขุมทรัพย์แห่งโชค</h1>
+        <p class="text-muted">เลือกห้องแทงหวยที่ต้องการ ตรวจเวลาเปิดรับ และออกเดินทางไปลุ้นโชคในแต่ละงวด</p>
+    </div>
+
+    <!-- แสดงรายการห้องหวยแบบจัดกลุ่มหมวดหมู่ -->
+    {% for category, grouped_rooms in room_groups.items() %}
+    <section class="lottery-category-section">
+    <div class="lottery-category-heading">
+        <span class="category-kicker"><i class="fas fa-layer-group"></i> LOTTERY CATEGORY</span>
+        <h2 class="section-title">{{ category }}</h2>
+        <span class="category-count">{{ grouped_rooms|length }} ห้อง</span>
+    </div>
+    <div class="room-grid">
+        {% for room in grouped_rooms %}
+        {% set period = room_schedules.get(room.id) %}
+        {% set is_upcoming = period and period.open_time and period.open_time > now %}
+        {% set can_bet = room.is_active and period and not is_upcoming %}
+        <div>
+            <div class="room-card card h-100 shadow-sm border-0 position-relative overflow-hidden category-{{ room.api_category or 'default' }} {% if room.image_url %}has-room-image{% endif %} {% if not can_bet %}is-closed{% endif %}" data-bg-color="{{ room.bg_color }}" {% if room.image_url %}style="--room-image: url('{{ room.image_url }}');"{% endif %}>
+                <div class="room-visual" aria-hidden="true">
+                    {% if room.image_url %}
+                        <img class="room-image-backdrop" src="{{ room.image_url }}" alt="">
+                        <span class="room-image-frame"><img class="room-image" src="{{ room.image_url }}" alt=""></span>
+                    {% else %}
+                        <span class="room-image-frame"><i class="fas fa-compass"></i></span>
+                    {% endif %}
+                    <span class="room-visual-shine"></span>
+                </div>
+                
+                <!-- ตัวอักษรลายน้ำจางๆ ด้านหลังการ์ด (ถ้ามี) -->
+                {% if room.badge_text %}
+                <div class="position-absolute text-black-50 fw-bold" style="right: 15px; bottom: 5px; font-size: 5rem; opacity: 0.05; line-height: 1; pointer-events: none; z-index: 0;">
+                    {{ room.badge_text }}
+                </div>
+                {% endif %}
+
+                <div class="card-body p-4 d-flex flex-column position-relative" style="z-index: 1;">
+                    <!-- ส่วนหัวการ์ด: ไอคอนและสถานะ -->
+                    <div class="d-flex align-items-center mb-3">
+                        <div>
+                            <h4 class="fw-bold mb-0 text-dark">{{ room.name }}</h4>
+                            {% if can_bet %}
+                                <span class="badge bg-success bg-opacity-10 text-success mt-1">เปิดให้บริการ</span>
+                            {% elif is_upcoming %}
+                                <span class="badge bg-warning bg-opacity-10 text-warning mt-1">รอเปิดรับ</span>
+                            {% else %}
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary mt-1">ปิดรับแทง</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- รายละเอียดห้อง -->
+                    <p class="text-muted flex-grow-1 mb-3" style="font-size: 0.88rem;">
+                        {{ room.description or 'ห้องแทงหวยออนไลน์ ลุ้นรับรางวัลใหญ่ได้ทุกงวด สมัครง่าย จ่ายจริง' }}
+                    </p>
+
+                    {% if period %}
+                        <div class="room-countdown" data-target="{{ (period.open_time if is_upcoming else period.close_time).isoformat() }}" data-mode="{{ 'open' if is_upcoming else 'close' }}"
+                             style="background: rgba(15, 23, 42, 0.9); color: #fff; border: 1px solid rgba(255,255,255,0.25); border-radius: 10px; padding: 0.8rem 1rem; margin-bottom: 1rem; text-align: center;">
+                            <div style="font-size: 0.78rem; opacity: 0.8;">{{ 'เริ่มเปิดรับใน' if is_upcoming else 'ปิดรับใน' }}</div>
+                            <strong class="room-countdown-value" style="display: block; font-size: 1.35rem; letter-spacing: 0.04em;">กำลังคำนวณ...</strong>
+                            <small style="opacity: 0.75;">งวด {{ period.period_date }}</small>
+                        </div>
+                    {% else %}
+                        <div class="room-closed-note">
+                            ปิดรับแทงชั่วคราว
+                        </div>
+                    {% endif %}
+
+                    <!-- ปุ่มกดเข้าสู่ห้อง -->
+                    <div>
+                        {% if can_bet %}
+                            <a href="{{ url_for('lottery_thai', room_id=room.id) }}" class="btn btn-primary room-action w-100 py-2 fw-bold shadow-sm">
+                                <i class="fas fa-sign-in-alt me-1"></i> {{ room.button_text or 'เข้าสู่ห้อง' }}
+                            </a>
+                        {% else %}
+                            <button class="btn btn-secondary room-action room-action-disabled w-100 py-2 fw-bold" disabled aria-disabled="true">
+                                <i class="fas fa-lock me-1"></i> {{ 'รอเปิดรับ' if is_upcoming else 'ปิดรับแทง' }}
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    </section>
+    {% endfor %}
+
+    <!-- ปุ่มกลับหน้าแรก -->
+    <div class="text-center mt-5">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary px-4 py-2">
+            <i class="fas fa-arrow-left me-1"></i> กลับสู่หน้าแรก
+        </a>
+    </div>
+      </main>
+    </div>
+</div>
+
+<!-- เพิ่ม CSS เล็กน้อยสำหรับเอฟเฟกต์ Hover การ์ด -->
+<style>
+    .rooms-page { padding-top: 4px; padding-bottom: 70px; }
+    .eyebrow { display: inline-block; color: #a87921; font-size: .75rem; letter-spacing: .14em; font-weight: 700; margin-bottom: 8px; }
+    .rooms-heading h1 { color: #f3c969; letter-spacing: -.02em; text-shadow: 0 1px 10px rgba(243, 182, 63, .2); }
+    .rooms-title-icon { color: #f3b63f; }
+    .rooms-heading p { max-width: 520px; margin-left: auto; margin-right: auto; }
+    .lottery-category-section { margin: 0 0 24px; padding: 16px; border: 1px solid rgba(243,182,63,.16); border-radius: 16px; background: rgba(10,18,34,.48); }
+    .lottery-category-heading { display: flex; align-items: end; gap: 12px; margin: 0 0 18px; padding: 0 4px 13px; border-bottom: 1px solid rgba(243,182,63,.18); }
+    .lottery-category-heading .section-title { margin: 0; }
+    .category-kicker { color: #f3b63f; font-size: .68rem; font-weight: 700; letter-spacing: .14em; margin-right: auto; }
+    .category-count { color: #a8b8cf; font-size: .8rem; }
+    .room-card {
+        border-radius: 10px; transition: transform .2s, box-shadow .2s, filter .2s;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, .12) !important;
+        min-height: 286px; background: linear-gradient(160deg, #233d5a 0%, #14243a 52%, #101a2c 100%) !important;
+    }
+    .room-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 38px rgba(15, 23, 42, .18) !important;
+    }
+    .room-visual { position: absolute; inset: 0 0 auto; height: 112px; overflow: hidden; background: linear-gradient(135deg, #b77b20, #172337); z-index: 0; isolation: isolate; }
+    .category-lottothaihot .room-visual { background: linear-gradient(135deg, #176b48 0%, #102b30 55%, #091522 100%); }
+    .category-lottoforeign .room-visual { background: linear-gradient(135deg, #2459a9 0%, #273266 55%, #111b35 100%); }
+    .category-maekhong .room-visual { background: linear-gradient(135deg, #0a9aa5 0%, #14506b 55%, #10243f 100%); }
+    .category-stock .room-visual { background: linear-gradient(135deg, #b66a25 0%, #56372b 55%, #1e2337 100%); }
+    .room-visual::after { content: ''; position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, rgba(4,10,22,.05) 0%, rgba(4,10,22,.16) 48%, rgba(4,10,22,.82) 100%); pointer-events: none; }
+    .room-image-backdrop { position: absolute; inset: -22px; width: calc(100% + 44px); height: calc(100% + 44px); object-fit: cover; opacity: .23; filter: blur(15px) saturate(1.35); transform: scale(1.08); }
+    .room-image-frame { position: absolute; z-index: 3; left: 50%; top: 50%; display: grid; place-items: center; width: 76px; height: 76px; transform: translate(-50%, -50%); border: 2px solid rgba(255,240,190,.92); border-radius: 20px; background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(244,210,124,.94)); box-shadow: 0 8px 20px rgba(0,0,0,.3), 0 0 0 6px rgba(255,255,255,.12), 0 0 28px rgba(255,209,94,.32); overflow: hidden; }
+    .room-image { width: 57px !important; height: 57px !important; object-fit: contain !important; opacity: 1 !important; filter: none !important; }
+    .room-image-frame i { color: #9a6816; font-size: 28px; text-shadow: none; }
+    .room-visual-shine { position: absolute; z-index: 4; left: -15%; top: -65%; width: 55%; height: 220%; transform: rotate(24deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent); pointer-events: none; }
+    .room-card .card-body { padding-top: 82px !important; }
+    .room-card .room-countdown { margin-top: auto; }
+    .room-card .text-dark { color: #f8fafc !important; }
+    .room-card .text-muted { color: rgba(239,246,255,.82) !important; }
+    .room-card h4 { color: #ffffff !important; text-shadow: 0 1px 8px rgba(0,0,0,.32); }
+    .room-icon { width: 60px; height: 60px; flex: 0 0 60px; border-radius: 16px; background: linear-gradient(145deg, #f3c969, #b8791d); color: #172337; }
+    .room-action { min-height: 42px; border-radius: 7px !important; }
+    .room-action-disabled { background: #64748b !important; border-color: #64748b !important; color: #e2e8f0 !important; opacity: .9; }
+    .room-closed-note { background: rgba(100, 116, 139, .2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .3); border-radius: 8px; padding: .65rem .75rem; margin-bottom: .7rem; text-align: center; font-size: .82rem; }
+    .room-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .room-grid > div { min-width: 0; }
+    .room-card.is-closed { filter: grayscale(.75); }
+    @media (max-width: 640px) {
+        .rooms-page { padding: 4px 12px 42px; }
+        .rooms-heading { margin-bottom: 24px !important; }
+        .rooms-heading h1 { font-size: 1.55rem; line-height: 1.25; }
+        .rooms-heading p { font-size: .86rem; }
+        .lottery-category-section { padding: 10px; border-radius: 12px; }
+        .lottery-category-heading { margin-bottom: 10px; padding-bottom: 9px; }
+        .lottery-category-heading .section-title { font-size: 1.2rem; }
+        .room-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .lottery-category-heading { align-items: flex-start; flex-wrap: wrap; }
+        .category-kicker { flex-basis: 100%; }
+        .room-card { min-height: 250px; border-radius: 10px; }
+        .room-card .card-body { padding: 14px !important; padding-top: 72px !important; }
+        .room-card .room-visual { height: 92px; }
+        .room-image-frame { width: 60px; height: 60px; border-radius: 16px; }
+        .room-image { width: 45px !important; height: 45px !important; }
+        .room-card h4 { font-size: 1rem; }
+        .room-card .room-icon { width: 42px; height: 42px; flex-basis: 42px; border-radius: 11px; }
+        .room-card .room-countdown { padding: .55rem .65rem !important; margin-bottom: .65rem !important; }
+        .room-card .room-countdown-value { font-size: 1rem !important; }
+        .room-card .room-action { min-height: 38px; padding: 7px 9px !important; font-size: .85rem; }
+    }
+    @media (max-width: 420px) {
+        .room-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .room-card { min-height: 238px; }
+        .room-card .card-body { padding-left: 8px !important; padding-right: 8px !important; }
+        .room-card .room-icon { width: 30px; height: 30px; flex-basis: 30px; border-radius: 8px; }
+        .room-card h4 { font-size: .78rem; }
+        .room-card .badge { font-size: .62rem; }
+        .room-card p { font-size: .68rem !important; }
+        .room-card .room-countdown-value { font-size: .76rem !important; }
+        .room-card .room-action { font-size: .68rem; }
+    }
+    @media (max-width: 359px) {
+        .room-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Keep the catalog header compact so the rooms get the visual priority. */
+    .rooms-heading { margin-bottom: 8px !important; }
+    .rooms-heading h1 { font-size: 1.25rem; line-height: 1.2; margin-bottom: 0 !important; }
+    .rooms-heading p, .rooms-heading .eyebrow, .category-kicker { display: none; }
+    .lottery-category-section { margin-bottom: 14px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+    .lottery-category-heading { margin-bottom: 8px; padding: 0 2px 6px; border-bottom-color: rgba(243,182,63,.22); }
+    .lottery-category-heading .section-title { font-size: 1rem; }
+    .category-count { font-size: .72rem; }
+
+    .betting-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
+    .betting-sidebar { position: sticky; top: 18px; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px; background: #090d14; color: #f8fafc; box-shadow: 0 12px 28px rgba(2, 6, 23, .24); }
+    .betting-user-card, .betting-balance, .betting-slip-placeholder { padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(255,255,255,.045); }
+    .betting-user-card { display: grid; gap: 4px; }
+    .betting-user-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .betting-kicker { color: #f5c85b; font-size: .65rem; letter-spacing: .12em; font-weight: 700; }
+    .betting-user-role, .betting-balance small { color: #94a3b8; font-size: .72rem; }
+    .betting-balance { display: grid; gap: 3px; }
+    .betting-balance span { color: #cbd5e1; font-size: .75rem; }
+    .betting-balance strong { color: #f5c85b; font-size: 1.45rem; line-height: 1.1; }
+    .betting-shortcuts { display: grid; gap: 3px; }
+    .betting-shortcuts a { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 7px; color: #cbd5e1; font-size: .82rem; text-decoration: none; }
+    .betting-shortcuts a:hover, .betting-shortcuts a.is-active { background: #1d2939; color: #fff; }
+    .betting-shortcuts i { width: 16px; color: #f5c85b; text-align: center; }
+    .betting-slip-heading { display: flex; justify-content: space-between; gap: 8px; font-size: .8rem; cursor: pointer; list-style: none; }
+    .betting-slip-heading::-webkit-details-marker { display: none; }
+    .betting-slip-heading i { margin-left: 5px; color: #f5c85b; transition: transform .2s ease; }
+    .betting-slip-placeholder[open] .betting-slip-heading i { transform: rotate(180deg); }
+    .betting-slip-content { padding-top: 4px; }
+    .betting-slip-heading span { color: #f5c85b; }
+    .betting-slip-placeholder p { min-height: 64px; margin: 10px 0; color: #94a3b8; font-size: .75rem; line-height: 1.5; }
+    .betting-catalog { min-width: 0; }
+    .betting-catalog .room-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .betting-catalog .room-card { min-height: 245px; border-radius: 7px; }
+    .betting-catalog .room-card .card-body { padding: 10px !important; padding-top: 72px !important; }
+    .betting-catalog .room-card .room-visual { height: 82px; }
+    .betting-catalog .room-image-frame { width: 58px; height: 58px; border-radius: 8px; }
+    .betting-catalog .room-image { width: 44px !important; height: 44px !important; }
+    .betting-catalog .room-card h4 { font-size: .98rem; }
+    .betting-catalog .room-card p { display: none; }
+    .betting-catalog .room-countdown { padding: .5rem .55rem !important; border-radius: 6px !important; }
+    .betting-catalog .room-countdown-value { font-size: .9rem !important; }
+    .betting-catalog .room-action { min-height: 34px; padding: 6px 8px !important; font-size: .78rem; }
+    @media (max-width: 1100px) {
+        .betting-catalog .room-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+        .betting-shell { grid-template-columns: 1fr; gap: 12px; }
+        .betting-sidebar { position: static; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .betting-shortcuts { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .betting-slip-placeholder { grid-column: 1 / -1; }
+        .betting-catalog .room-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 359px) {
+        .betting-catalog .room-grid { grid-template-columns: 1fr; }
+    }
+</style>
+<script>
+document.querySelectorAll('.room-card').forEach(function (card) {
+    const color = card.dataset.bgColor;
+    if (color) {
+        card.style.backgroundColor = color;
+    }
+});
+document.querySelectorAll('.room-countdown').forEach(function (counter) {
+    const target = new Date(counter.dataset.target);
+    const value = counter.querySelector('.room-countdown-value');
+    let countdownInterval = null;
+
+    function updateRoomCountdown() {
+        const remaining = target.getTime() - Date.now();
+        if (remaining <= 0) {
+            value.textContent = counter.dataset.mode === 'open' ? 'กำลังเปิดรับ...' : 'กำลังปิดรับ...';
+            if (countdownInterval) {
+                window.clearInterval(countdownInterval);
+            }
+            return;
+        }
+        const totalSeconds = Math.floor(remaining / 1000);
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        value.textContent = (days ? days + ' วัน ' : '') + [hours, minutes, seconds]
+            .map(function (part) { return String(part).padStart(2, '0'); }).join(':');
+    }
+
+    updateRoomCountdown();
+    countdownInterval = window.setInterval(updateRoomCountdown, 1000);
+});
+</script>
+{% endblock %}

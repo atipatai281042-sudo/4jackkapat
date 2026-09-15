@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}บัญชีรับฝาก — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container container-narrow">
+  <header class="page-head"><div><span class="eyebrow">DEPOSIT CONTROL</span><h1 class="page-title">ตั้งค่าบัญชีรับฝาก</h1><p class="section-desc">บัญชีนี้จะแสดงในหน้าฝากเงินของสมาชิก</p></div><a href="{{ url_for('admin') }}" class="btn btn-ghost">กลับศูนย์ควบคุม</a></header>
+  <article class="panel"><form method="post" class="admin-form"><div class="form-group"><label class="form-label">ชื่อธนาคาร</label><input class="form-input" name="bank_name" value="{{ bank_name }}" required><small class="form-hint">กสิกรไทย: เขียว · ไทยพาณิชย์: ม่วง · กรุงเทพ: ฟ้า</small></div><div class="form-group"><label class="form-label">เลขบัญชี</label><input class="form-input" name="account_number" value="{{ account_number }}" inputmode="numeric" pattern="[0-9]+" required></div><div class="form-group"><label class="form-label">ชื่อบัญชี</label><input class="form-input" name="account_name" value="{{ account_name }}" required></div><div class="form-group"><label class="form-label">สีประจำบัญชี</label><div style="display:flex;align-items:center;gap:12px;"><input type="color" name="bank_color" value="{{ bank_color }}" style="width:64px;height:44px;padding:3px;border:1px solid var(--color-border);border-radius:8px;background:transparent;"><code>{{ bank_color }}</code></div><small class="form-hint">เลือกสีให้ตรงกับสีของธนาคาร การ์ดฝากเงินจะเปลี่ยนสีตามค่านี้</small></div><button class="btn btn-success btn-block" type="submit"><i class="fas fa-save"></i> บันทึกบัญชีรับฝาก</button></form></article>
+</div></section>
+{% endblock %}

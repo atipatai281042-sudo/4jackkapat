@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}จัดการ VIP — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="admin-section">
+  <div class="container">
+    <header class="page-head"><div><span class="eyebrow">TREASURE RANK</span><h1 class="page-title">จัดการระดับ VIP</h1><p class="section-desc">กำหนดเกณฑ์แต้มและสิทธิ์ของสมาชิกแต่ละระดับ</p></div><a href="{{ url_for('admin') }}" class="btn btn-ghost">กลับศูนย์ควบคุม</a></header>
+    <div class="dashboard-layout">
+      <article class="panel"><h2 class="panel-title">เพิ่มระดับ VIP</h2><form method="post" class="admin-form">
+        <div class="form-group"><label class="form-label">ชื่อระดับ</label><input class="form-input" name="name" placeholder="เช่น กัปตัน" required></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">ลำดับ</label><input class="form-input" type="number" name="rank" min="1" value="1" required></div><div class="form-group"><label class="form-label">แต้มขั้นต่ำ</label><input class="form-input" type="number" name="min_points" min="0" value="0" required></div></div>
+        <div class="form-group"><label class="form-label">ข้อความบนป้าย</label><input class="form-input" name="badge_text" placeholder="CAPTAIN"></div>
+        <div class="form-group"><label class="form-label">สิทธิ์/คำอธิบาย</label><textarea class="form-input" name="benefits" rows="4" placeholder="เช่น แลกของรางวัลพิเศษ..."></textarea></div>
+        <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-crown"></i> เพิ่มระดับ VIP</button>
+      </form></article>
+      <article class="panel"><h2 class="panel-title">ลำดับ Treasure Rank</h2><div class="vip-tier-list">
+        {% for tier in tiers %}<div class="vip-tier-row"><div class="vip-tier-badge">{{ tier.badge_text or 'VIP' }}</div><div><strong>{{ tier.name }}</strong><small>ตั้งแต่ {{ "{:,}".format(tier.min_points) }} แต้ม</small><p>{{ tier.benefits or 'ยังไม่ได้กำหนดสิทธิ์' }}</p></div></div>{% else %}<p class="empty-state-text">ยังไม่มีระดับ VIP</p>{% endfor %}
+      </div></article>
+    </div>
+  </div>
+</section>
+{% endblock %}

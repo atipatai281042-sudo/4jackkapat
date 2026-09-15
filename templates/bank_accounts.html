@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}จัดการบัญชีธนาคาร — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="page-section">
+  <div class="container">
+    <header class="page-head">
+      <div>
+        <h1 class="page-title">บัญชีธนาคารของฉัน</h1>
+        <p class="section-desc">ผูกบัญชีไว้สำหรับถอนเครดิตเท่านั้น (ถอนได้เฉพาะบัญชีที่ผูก)</p>
+      </div>
+      <a href="{{ url_for('wallet') }}" class="btn btn-ghost">กลับกระเป๋าเครดิต</a>
+    </header>
+
+    <div class="dashboard-layout">
+      <article class="panel">
+        <h2 class="panel-title">เพิ่มบัญชีธนาคาร</h2>
+        <form method="post" class="admin-form">
+          <div class="form-group">
+            <label class="form-label">ธนาคาร</label>
+            <select name="bank_code" class="form-input" required style="background: #111a2c; color: #f8fbff; border: 1px solid var(--color-border);">
+              <option value="">เลือกธนาคาร</option>
+              {% for code, bank in bank_catalog.items() %}
+              <option value="{{ code }}">{{ bank.name }}</option>
+              {% endfor %}
+            </select>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+              {% for code, bank in bank_catalog.items() %}
+              <span style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--color-border);background:rgba(255,255,255,.03);font-size:12px;">
+                <img src="{{ bank.logo }}" alt="{{ bank.name }}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;" onerror="this.style.display='none'" />
+                {{ bank.name }}
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">เลขบัญชี</label>
+            <input class="form-input" name="account_number" required placeholder="เช่น 1234567890" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">ชื่อบัญชี</label>
+            <input class="form-input" name="account_name" required placeholder="ชื่อ-นามสกุลตามบัญชี" />
+          </div>
+          <button class="btn btn-primary" type="submit">ผูกบัญชี</button>
+        </form>
+      </article>
+
+      <article class="panel">
+        <h2 class="panel-title">บัญชีที่ผูกไว้</h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>ธนาคาร</th><th>เลขบัญชี</th><th>ชื่อบัญชี</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+            <tbody>
+              {% for account in accounts %}
+              <tr>
+                <td>
+                  <img src="{{ account.logo_url }}" alt="{{ account.bank_name }}" style="width:28px;height:28px;vertical-align:middle;margin-right:8px;border-radius:6px;object-fit:cover;" onerror="this.style.display='none'" />
+                  {{ account.bank_name }}
+                </td>
+                <td>{{ account.account_number }}</td>
+                <td>{{ account.account_name }}</td>
+                <td><span class="status {{ 'status-completed' if account.is_active else 'status-cancelled' }}">{{ 'ใช้งาน' if account.is_active else 'ปิด' }}</span></td>
+                <td>
+                  <form method="post" action="{{ url_for('delete_bank_account', account_id=account.id) }}" onsubmit="return confirm('ลบบัญชีนี้?');">
+                    <button class="btn btn-danger btn-xs" type="submit">ลบ</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="empty-state-text">ยังไม่มีบัญชีธนาคารที่ผูกไว้</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+{% endblock %}

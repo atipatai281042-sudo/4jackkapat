@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}นำเข้าข้อมูล — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="admin-section">
+  <div class="container container-narrow">
+    <header class="page-head">
+      <div>
+        <h1 class="page-title">นำเข้าข้อมูล</h1>
+        <p class="section-desc">อัปโหลดไฟล์ JSON ที่ export ไว้ เพื่อนำข้อมูลบางส่วนกลับเข้าระบบ (ห้องหวยและงวดหวย)</p>
+      </div>
+      <a href="{{ url_for('admin') }}" class="btn btn-ghost">กลับศูนย์ควบคุม</a>
+    </header>
+
+    <article class="panel">
+      <form method="post" enctype="multipart/form-data" class="admin-form">
+        <div class="form-group">
+          <label class="form-label">ไฟล์ JSON</label>
+          <input class="form-input" type="file" name="import_file" accept=".json" required>
+        </div>
+        <button class="btn btn-primary" type="submit">นำเข้าข้อมูล</button>
+      </form>
+      <p class="section-desc" style="margin-top:12px;">หมายเหตุ: เวอร์ชันนี้รองรับการนำเข้า rooms และ periods แบบพื้นฐานเท่านั้น</p>
+    </article>
+  </div>
+</section>
+{% endblock %}

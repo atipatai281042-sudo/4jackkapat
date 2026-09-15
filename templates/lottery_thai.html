@@ -1,0 +1,992 @@
+{% extends "base.html" %}
+
+{% block head %}
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+{% endblock %}
+
+{% block title %}กรอกข้อมูลโพยหวย - สมบัติสี่จักรพรรดิ{% endblock %}
+
+{% block content %}
+<style>
+    .lottery-page .page-title { font-size: 1.55rem; }
+    .lottery-page .panel { box-shadow: 0 3px 10px rgba(0,0,0,.06) !important; }
+    .lottery-page .lottery-type-grid .bet-type-btn { min-height: 48px; }
+    .lottery-page .lottery-summary-panel { position: static; }
+
+    @media (max-width: 640px) {
+        .lottery-page { padding: 8px 8px 24px !important; }
+        .lottery-page .page-header { margin-bottom: 8px !important; }
+        .lottery-page .page-header .btn { margin-bottom: 6px !important; }
+        .lottery-page .page-title { font-size: 1.15rem; line-height: 1.25; }
+        .lottery-page .page-header .section-desc { font-size: .76rem; margin: 3px 0 0; }
+        .lottery-info-panel,
+        .lottery-type-panel,
+        .lottery-workspace,
+        .lottery-summary-panel { padding: 8px !important; margin-bottom: 8px !important; border-radius: 9px !important; }
+        .lottery-info-panel .panel-title { font-size: .9rem; margin-bottom: 4px; }
+        .lottery-info-panel .section-desc { font-size: .68rem; line-height: 1.3; margin-bottom: 3px; }
+        .lottery-countdown { padding: 6px 8px !important; margin-bottom: 8px !important; font-size: .75rem; }
+        .lottery-type-panel > .form-label { font-size: .76rem; margin-bottom: 5px !important; }
+        .lottery-type-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 4px !important; }
+        .lottery-type-grid .bet-type-btn { min-height: 38px; padding: 4px 2px !important; font-size: .72rem; line-height: 1.1; }
+        .lottery-type-grid .bet-type-btn small { font-size: .58rem; }
+        .lottery-keypad { padding: 8px !important; margin-bottom: 8px !important; }
+        .lottery-keypad > label { font-size: .72rem; margin-bottom: 5px !important; }
+        #digit-boxes-container { gap: 5px !important; margin-bottom: 7px !important; }
+        #digit-boxes-container > div { width: 36px !important; height: 42px !important; font-size: 1.15rem !important; }
+        .lottery-keypad-grid { max-width: 220px !important; margin-bottom: 8px !important; gap: 4px !important; }
+        .lottery-keypad-grid button { padding: 7px !important; font-size: .95rem !important; border-radius: 6px !important; }
+        .lottery-special-modes { gap: 4px !important; margin-bottom: 8px !important; }
+        .lottery-special-modes button { padding: 4px 6px !important; font-size: .65rem !important; }
+        .lottery-number-panel { padding: 8px !important; margin-top: 8px !important; }
+        .lottery-number-panel-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 3px !important; }
+        .lottery-number-panel-grid button { padding: 6px 2px !important; font-size: .72rem !important; }
+        #toggle-number-panel { padding: 5px 8px !important; font-size: .7rem !important; }
+        #number-panel-ranges { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 4px !important; }
+        #number-panel-ranges button { width: 100%; padding: 6px 2px !important; font-size: .68rem !important; }
+        #add-panel-numbers { padding: 7px !important; font-size: .75rem !important; }
+        .lottery-amount-row { gap: 5px !important; max-width: none !important; }
+        .lottery-amount-row input { padding: 6px !important; font-size: .8rem; }
+        .lottery-amount-row button { padding: 6px 8px !important; font-size: .72rem; white-space: nowrap; }
+        .lottery-slip-head { margin-bottom: 6px !important; gap: 5px !important; }
+        .lottery-slip-head h3 { font-size: .78rem !important; }
+        .lottery-slip-head .btn { padding: 3px 5px !important; font-size: .58rem !important; }
+        .lottery-slip-table { margin: 0 -2px; }
+        .lottery-slip-table table { font-size: .65rem; min-width: 0 !important; }
+        .lottery-slip-table th, .lottery-slip-table td { padding: 4px 3px !important; white-space: nowrap; }
+        .lottery-slip-table .item-amount-input { width: 48px !important; padding: 3px !important; font-size: .68rem; }
+        .lottery-slip-table .btn-remove-item { padding: 3px 5px !important; font-size: .6rem; }
+        .lottery-summary-panel > .form-label { font-size: .7rem; margin-bottom: 4px !important; }
+        .lottery-quick-prices { gap: 3px !important; margin-bottom: 7px !important; }
+        .lottery-quick-prices button { padding: 5px 2px !important; font-size: .68rem; }
+        .lottery-custom-price { margin-bottom: 7px !important; }
+        .lottery-custom-price label { font-size: .7rem !important; }
+        .lottery-custom-price input { padding: 6px !important; font-size: .8rem; }
+        .lottery-total-box { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 4px !important; padding: 5px !important; margin-bottom: 5px !important; }
+        .lottery-total-box > div { font-size: .68rem !important; }
+        .lottery-total-box > div:last-child { grid-column: 1 / -1; text-align: left !important; }
+        .lottery-total-box span { font-size: .62rem !important; }
+        .lottery-total-box .lottery-total-value { font-size: .95rem !important; }
+        #submit-ticket-hint { font-size: .68rem !important; margin: 0 0 5px !important; }
+        #btn-submit-ticket { position: sticky; bottom: 8px; z-index: 5; padding: 9px !important; font-size: .82rem !important; box-shadow: 0 3px 12px rgba(15, 23, 42, .2); }
+    }
+</style>
+<div class="container lottery-page" style="max-width: 850px; padding-top: 2rem; padding-bottom: 3rem;">
+  
+  <!-- หัวข้อหน้าจอ -->
+  <div class="page-header" style="margin-bottom: 1.5rem;">
+    <a href="{{ url_for('lottery_rooms') }}" class="btn btn-ghost btn-sm" style="margin-bottom: 1rem; color: #cbd5e1;">← กลับไปหน้าห้องหวย</a>
+    <h1 class="page-title" style="color: #fff;"><i class="fas fa-pen-to-square"></i> กรอกข้อมูลโพยหวย {{ room.name }}</h1>
+    <p class="section-desc">เช็กเวลาเปิดรับ เลือกประเภท เพิ่มตัวเลข และยืนยันส่งโพยได้ในหน้าเดียว</p>
+  </div>
+
+    <div class="panel lottery-info-panel" style="margin-bottom: 1.5rem;">
+    <h2 class="panel-title">ข้อมูลงวดและอัตราจ่าย</h2>
+    <p class="section-desc">
+      {% if active_period %}
+        งวด: <strong>{{ active_period.period_date }}</strong> |
+        เปิดรับ: {{ active_period.open_time.strftime('%d/%m/%Y %H:%M') if active_period.open_time else '-' }} |
+        ปิดรับ: {{ active_period.close_time.strftime('%d/%m/%Y %H:%M') }}
+      {% else %}
+        ยังไม่มีงวดที่เปิดรับในขณะนี้
+      {% endif %}
+    </p>
+    <p class="section-desc">
+      อัตราจ่ายหลัก: 3 ตัวบน {{ payout_rates['3up'] }} / 3 ตัวโต๊ด {{ payout_rates['3toad'] }} / 2 ตัวบน {{ payout_rates['2up'] }} / 2 ตัวล่าง {{ payout_rates['2down'] }} / วิ่งบน {{ payout_rates['runup'] }} / วิ่งล่าง {{ payout_rates['rundown'] }}
+    </p>
+  </div>
+
+    <div id="period-countdown" class="lottery-countdown" data-close-time="{{ active_period.close_time.isoformat() if active_period else '' }}"
+             style="background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 10px; padding: 0.9rem 1rem; margin-bottom: 1.5rem; text-align: center; font-weight: 600;">
+        {% if active_period %}
+            ปิดรับแทงใน <span id="countdown-value">กำลังคำนวณ...</span>
+        {% else %}
+            ขณะนี้ยังไม่มีงวดเปิดรับแทงในห้องนี้
+        {% endif %}
+    </div>
+
+  <!-- 1. แถบเลือกประเภทการแทง -->
+    <div class="panel lottery-type-panel" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+    <label class="form-label" style="font-weight: 600; margin-bottom: 10px; display: block; color: #1e293b;">เลือกประเภทการแทง (เลือกพร้อมกันได้มากกว่า 1 ประเภท):</label>
+    <div class="lottery-type-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+      
+            <button type="button" class="btn btn-ghost bet-type-btn" data-type="3 ตัวบน" data-rate="{{ payout_rates['3up'] }}" data-digit="3" style="border: 1px solid #cbd5e1; text-align: center; padding: 10px; color: #1e293b; font-weight: 600; background: #f8fafc;">
+                3 ตัวบน <br><small style="color: #d97706; font-weight: bold;">จ่าย {{ payout_rates['3up'] }}</small>
+      </button>
+            <button type="button" class="btn btn-ghost bet-type-btn" data-type="3 ตัวโต๊ด" data-rate="{{ payout_rates['3toad'] }}" data-digit="3" style="border: 1px solid #cbd5e1; text-align: center; padding: 10px; color: #1e293b; font-weight: 600; background: #f8fafc;">
+                3 ตัวโต๊ด <br><small style="color: #d97706; font-weight: bold;">จ่าย {{ payout_rates['3toad'] }}</small>
+      </button>
+            <button type="button" class="btn btn-ghost bet-type-btn" data-type="2 ตัวบน" data-rate="{{ payout_rates['2up'] }}" data-digit="2" style="border: 1px solid #cbd5e1; text-align: center; padding: 10px; color: #1e293b; font-weight: 600; background: #f8fafc;">
+                2 ตัวบน <br><small style="color: #d97706; font-weight: bold;">จ่าย {{ payout_rates['2up'] }}</small>
+      </button>
+            <button type="button" class="btn btn-ghost bet-type-btn" data-type="2 ตัวล่าง" data-rate="{{ payout_rates['2down'] }}" data-digit="2" style="border: 1px solid #cbd5e1; text-align: center; padding: 10px; color: #1e293b; font-weight: 600; background: #f8fafc;">
+                2 ตัวล่าง <br><small style="color: #d97706; font-weight: bold;">จ่าย {{ payout_rates['2down'] }}</small>
+      </button>
+            <button type="button" class="btn btn-ghost bet-type-btn" data-type="วิ่งบน" data-rate="{{ payout_rates['runup'] }}" data-digit="1" style="border: 1px solid #cbd5e1; text-align: center; padding: 10px; color: #1e293b; font-weight: 600; background: #f8fafc;">
+                วิ่งบน <br><small style="color: #d97706; font-weight: bold;">จ่าย {{ payout_rates['runup'] }}</small>
+      </button>
+            <button type="button" class="btn btn-ghost bet-type-btn" data-type="วิ่งล่าง" data-rate="{{ payout_rates['rundown'] }}" data-digit="1" style="border: 1px solid #cbd5e1; text-align: center; padding: 10px; color: #1e293b; font-weight: 600; background: #f8fafc;">
+                วิ่งล่าง <br><small style="color: #d97706; font-weight: bold;">จ่าย {{ payout_rates['rundown'] }}</small>
+      </button>
+
+    </div>
+        <div class="lottery-special-modes" style="display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-outline-secondary btn-sm special-mode-btn" data-mode="rev2" style="border: 1px solid #64748b; background: #fff; color: #334155; font-weight: 600; padding: 6px 12px; border-radius: 6px;">🔄 2 ตัวกลับ</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm special-mode-btn" data-mode="rev3" style="border: 1px solid #64748b; background: #fff; color: #334155; font-weight: 600; padding: 6px 12px; border-radius: 6px;">🔄 3 ตัวกลับ</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm special-mode-btn" data-mode="gate19" style="border: 1px solid #64748b; background: #fff; color: #334155; font-weight: 600; padding: 6px 12px; border-radius: 6px;">🚪 19 ประตู</button>
+        </div>
+        <button type="button" id="toggle-number-panel" class="btn btn-outline-secondary btn-sm" style="display: block; margin: 8px auto 0; border: 1px solid #64748b; background: #fff; color: #334155; font-weight: 600; padding: 6px 12px; border-radius: 6px;">เปิดแผงเลือกเลข</button>
+        <div id="lottery-number-panel" class="lottery-number-panel" style="display: none; margin-top: 12px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <strong id="number-panel-title" style="color: #1e293b; font-size: .85rem;">เลือกเลขจากแผง</strong>
+                <span id="panel-selected-count" style="color: #64748b; font-size: .75rem;">เลือกแล้ว 0 เลข</span>
+            </div>
+            <div id="number-panel-ranges" style="display: none; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-bottom: 8px;"></div>
+            <div id="lottery-number-panel-grid" class="lottery-number-panel-grid" style="display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px;"></div>
+            <button type="button" id="add-panel-numbers" class="btn btn-primary" style="width: 100%; margin-top: 8px; padding: 7px; font-size: .85rem;" disabled>เพิ่มเลขที่เลือกลงรายการ</button>
+        </div>
+  </div>
+
+  <!-- ฟอร์มส่งโพยหลัก -->
+    <form method="POST" action="{{ url_for('lottery_thai', room_id=room.id) }}" id="lotto-form">
+        <input type="hidden" name="room_id" value="{{ room.id }}">
+    
+    <!-- 2. ส่วนกรอกตัวเลขด้วย Keypad, ตัวช่วยพิเศษ และรายการแทง -->
+    <div class="panel lottery-workspace" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+      
+      <!-- ระบบกรอกตัวเลขแบบแป้นพิมพ์ (Keypad UI) -->
+        <div class="lottery-keypad" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
+            <div id="manual-number-entry">
+        <label class="form-label" style="font-weight: 600; margin-bottom: 10px; display: block; text-align: center; color: #1e293b;">
+          กดตัวเลขสำหรับประเภทที่เลือก (<span id="keypad-type-label" style="color: #2563eb;">กรุณาเลือกประเภทการแทง</span>)
+        </label>
+        
+        <!-- ช่องแสดงผลตัวเลข (Digit Boxes) -->
+        <div id="digit-boxes-container" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;"></div>
+        <input type="text" id="input-number" style="display: none;" autocomplete="off">
+
+        <!-- แป้นพิมพ์ตัวเลข (Keypad Grid) -->
+        <div class="lottery-keypad-grid" style="max-width: 320px; margin: 0 auto 15px auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+          <button type="button" class="btn btn-ghost keypad-num" data-num="1" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">1</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="2" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">2</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="3" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">3</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="4" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">4</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="5" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">5</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="6" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">6</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="7" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">7</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="8" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">8</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="9" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">9</button>
+          <button type="button" class="btn btn-ghost" id="keypad-clear" style="background: #e2e8f0; border: 1px solid #cbd5e1; padding: 10px; font-size: 0.9rem; border-radius: 8px; color: #1e293b;">ล้างค่า</button>
+          <button type="button" class="btn btn-ghost keypad-num" data-num="0" style="background: #fff; border: 1px solid #cbd5e1; padding: 12px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; color: #1e293b;">0</button>
+          <button type="button" class="btn btn-ghost" id="keypad-delete" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; font-size: 0.9rem; border-radius: 8px; color: #ef4444; font-weight: bold;">ลบ</button>
+        </div>
+            </div>
+
+                <!-- ช่องใส่ราคาสำหรับรายการอัตโนมัติ -->
+        <div class="lottery-amount-row" style="display: flex; gap: 10px; max-width: 400px; margin: 0 auto;">
+          <input type="number" id="input-amount" class="form-control" placeholder="ราคา (บาท)" style="flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 16px;" min="1" value="10" inputmode="numeric">
+        </div>
+      </div>
+
+      <!-- หัวข้อตารางรายการที่เลือก -->
+    <div class="lottery-slip-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #1e293b;"><i class="fas fa-list-ol"></i> รายการตัวเลขที่เลือก</h3>
+        <div style="display: flex; gap: 5px;">
+          <button type="button" class="btn btn-ghost btn-xs" id="btn-check-dup" style="font-size: 0.8rem; padding: 4px 8px; border: 1px solid #cbd5e1; color: #1e293b;">แสดงเลขซ้ำ</button>
+          <button type="button" class="btn btn-success btn-xs" id="btn-clear-dup" style="font-size: 0.8rem; padding: 4px 8px; background: #10b981; color: white; border: none;">ตัดเลขซ้ำ</button>
+          <button type="button" class="btn btn-danger btn-xs" id="btn-clear-all" style="font-size: 0.8rem; padding: 4px 8px; background: #ef4444; color: white; border: none;">ลบทั้งหมด</button>
+        </div>
+      </div>
+
+      <!-- ตารางแสดงรายการที่เลือก -->
+    <div class="table-wrap lottery-slip-table" style="overflow-x: auto;">
+        <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left; color: #1e293b;">
+          <thead>
+            <tr style="border-bottom: 2px solid #e2e8f0; color: #64748b; font-size: 0.85rem;">
+              <th style="padding: 8px; width: 50px;">#</th>
+              <th style="padding: 8px;">ประเภท</th>
+              <th style="padding: 8px;">เลขที่แทง</th>
+              <th style="padding: 8px;">อัตราจ่าย</th>
+              <th style="padding: 8px;">จำนวนเงิน (฿)</th>
+              <th style="padding: 8px; width: 60px;">ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="items-tbody">
+            <tr id="empty-row">
+              <td colspan="6" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 3. แผงปุ่มใส่ราคาด่วน & สรุปยอด -->
+    <div class="panel lottery-summary-panel" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+      <label class="form-label" style="font-weight: 600; margin-bottom: 10px; display: block; color: #1e293b;">ใส่ราคาเท่ากันทุกรายการในตารางด่วน:</label>
+    <div class="lottery-quick-prices" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 20px;">
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="5" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">5</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="10" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">10</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="20" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">20</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="50" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">50</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="100" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">100</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="200" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">200</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="300" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">300</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="500" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">500</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="800" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">800</button>
+        <button type="button" class="btn btn-ghost btn-quick-price" data-price="1000" style="border: 1px solid #cbd5e1; padding: 6px; color: #1e293b; background: #f8fafc;">1000</button>
+      </div>
+            <div class="lottery-custom-price" style="max-width: 320px; margin: 0 auto 20px;">
+                <label for="custom-bet-credit" class="form-label" style="font-weight: 600; margin-bottom: 6px; display: block; color: #1e293b;">หรือพิมพ์เครดิตที่แทงเอง:</label>
+                <input type="number" id="custom-bet-credit" class="form-control" min="1" step="1" inputmode="numeric" placeholder="จำนวนเครดิตต่อรายการ" style="padding: 0.65rem; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 16px;">
+            </div>
+
+      <!-- สรุปยอด -->
+    <div class="lottery-total-box" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; background: #f8fafc; padding: 15px; border-radius: 8px; align-items: center; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+        <div>
+          <span style="color: #64748b; font-size: 0.9rem;">เครดิตคงเหลือของคุณ:</span>
+                      <div class="lottery-total-value" style="font-size: 1rem; font-weight: bold; color: #10b981;"><span id="user-credit">{{ "{:,.2f}".format(current_user.credit_balance) if current_user.is_authenticated else "0.00" }}</span> เครดิต</div>
+        </div>
+        <div>
+          <span style="color: #64748b; font-size: 0.9rem;">ยอดเดิมพันรวมทั้งสิ้น:</span>
+          <div class="lottery-total-value" style="font-size: 1.05rem; font-weight: bold; color: #d97706;"><span id="grand-total">0.00</span> เครดิต</div>
+        </div>
+        <div style="text-align: right;">
+          <span style="color: #64748b; font-size: 0.78rem;"><i class="fas fa-trophy"></i> เครดิตสูงสุดที่จะได้รับ:</span>
+          <div class="lottery-total-value" style="font-size: 1.1rem; font-weight: bold; color: #2563eb;"><span id="max-payout-total">0.00</span> เครดิต</div>
+        </div>
+      </div>
+
+    <p id="submit-ticket-hint" style="margin: 0 0 8px; text-align: center; color: #64748b; font-size: .82rem;">เลือกประเภทและกดตัวเลขก่อนยืนยันส่งโพย</p>
+    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.9rem; font-size: 1.1rem; font-weight: bold;" id="btn-submit-ticket" disabled>
+        ยืนยันส่งโพยหวย
+      </button>
+    </div>
+
+  </form>
+
+</div>
+
+<!-- JavaScript ควบคุมระบบ -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentInputValues = [];
+    let pendingSpecialMode = null;
+    const blockedNumbers = JSON.parse('{{ blocked_rates|tojson|safe }}');
+
+    const countdownPanel = document.getElementById('period-countdown');
+    const countdownValue = document.getElementById('countdown-value');
+    const closeTimeText = countdownPanel ? countdownPanel.dataset.closeTime : '';
+    const closeTime = closeTimeText ? new Date(closeTimeText) : null;
+    let periodClosed = false;
+
+    function closeBettingForm() {
+        if (periodClosed) return;
+        periodClosed = true;
+        if (countdownValue) countdownValue.textContent = 'ปิดรับแทงแล้ว';
+        if (countdownPanel) {
+            countdownPanel.style.background = '#fef2f2';
+            countdownPanel.style.borderColor = '#fecaca';
+            countdownPanel.style.color = '#b91c1c';
+        }
+        document.querySelectorAll('#lotto-form input, #lotto-form button').forEach(element => {
+            if (element.name !== 'room_id') element.disabled = true;
+        });
+        if (!document.body.dataset.reloadScheduled) {
+            document.body.dataset.reloadScheduled = 'true';
+            window.setTimeout(() => window.location.reload(), 800);
+        }
+    }
+
+    function updateCountdown() {
+        if (!closeTime || !countdownValue) return;
+        const remaining = closeTime.getTime() - Date.now();
+        if (remaining <= 0) {
+            closeBettingForm();
+            return;
+        }
+        const totalSeconds = Math.floor(remaining / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        countdownValue.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    updateCountdown();
+    window.setInterval(updateCountdown, 1000);
+
+    const typeButtons = document.querySelectorAll('.bet-type-btn');
+    const inputNumber = document.getElementById('input-number');
+    const inputAmount = document.getElementById('input-amount');
+    const itemsTbody = document.getElementById('items-tbody');
+    const grandTotalSpan = document.getElementById('grand-total');
+    const maxPayoutTotalSpan = document.getElementById('max-payout-total');
+    const btnSubmitTicket = document.getElementById('btn-submit-ticket');
+    const submitTicketHint = document.getElementById('submit-ticket-hint');
+    const customBetCredit = document.getElementById('custom-bet-credit');
+    const digitBoxesContainer = document.getElementById('digit-boxes-container');
+    const keypadTypeLabel = document.getElementById('keypad-type-label');
+    const specialModeButtons = document.querySelectorAll('.special-mode-btn');
+    const numberPanel = document.getElementById('lottery-number-panel');
+    const numberPanelGrid = document.getElementById('lottery-number-panel-grid');
+    const numberPanelRanges = document.getElementById('number-panel-ranges');
+    const panelSelectedCount = document.getElementById('panel-selected-count');
+    const addPanelNumbersButton = document.getElementById('add-panel-numbers');
+    const toggleNumberPanelButton = document.getElementById('toggle-number-panel');
+    const manualNumberEntry = document.getElementById('manual-number-entry');
+    const numberPanelTitle = document.getElementById('number-panel-title');
+    const selectedPanelNumbers = new Set();
+    let numberPanelOpen = false;
+    let renderedPanelDigit = null;
+    let currentPanelRange = null;
+
+    function getSelectedDigit() {
+        const activeButton = document.querySelector('.bet-type-btn.active');
+        return activeButton ? parseInt(activeButton.getAttribute('data-digit'), 10) : null;
+    }
+
+    function updateSpecialModes() {
+        const selectedDigit = getSelectedDigit();
+        specialModeButtons.forEach(button => {
+            const mode = button.getAttribute('data-mode');
+            const isAvailable = (mode === 'rev2' || mode === 'gate19')
+                ? selectedDigit === 2
+                : mode === 'rev3' && selectedDigit === 3;
+            button.style.display = isAvailable ? 'inline-flex' : 'none';
+        });
+    }
+
+    function updateNumberPanel() {
+        const panelModeAllowed = !pendingSpecialMode || pendingSpecialMode === 'rev2' || pendingSpecialMode === 'gate19' || pendingSpecialMode === 'rev3';
+        const selectedDigit = getSelectedDigit();
+        const panelAvailable = (selectedDigit === 2 || selectedDigit === 3) && panelModeAllowed;
+        const digitLabel = selectedDigit === 3 ? '3 ตัว' : '2 ตัว';
+        if (panelAvailable && renderedPanelDigit !== selectedDigit) {
+            currentPanelRange = getPanelRanges(selectedDigit)[0];
+            renderPanelRanges(selectedDigit);
+            renderNumberPanel(selectedDigit, currentPanelRange);
+        }
+        numberPanel.style.display = panelAvailable && numberPanelOpen ? 'block' : 'none';
+        manualNumberEntry.style.display = panelAvailable && numberPanelOpen ? 'none' : 'block';
+        toggleNumberPanelButton.style.display = panelAvailable ? 'block' : 'none';
+        toggleNumberPanelButton.disabled = !panelAvailable;
+        toggleNumberPanelButton.textContent = panelAvailable && numberPanelOpen
+            ? `ซ่อนแผงเลือกเลข ${digitLabel}`
+            : `เปิดแผงเลือกเลข ${digitLabel}`;
+        numberPanelTitle.textContent = `เลือกเลข ${digitLabel} จากแผง`;
+    }
+
+    function updatePanelSelection() {
+        panelSelectedCount.textContent = `เลือกแล้ว ${selectedPanelNumbers.size} เลข`;
+        addPanelNumbersButton.disabled = selectedPanelNumbers.size === 0;
+        numberPanelGrid.querySelectorAll('.panel-number-btn').forEach(button => {
+            const isSelected = selectedPanelNumbers.has(button.dataset.number);
+            button.style.background = isSelected ? '#2563eb' : '#fff';
+            button.style.color = isSelected ? '#fff' : '#1e293b';
+            button.style.borderColor = isSelected ? '#1d4ed8' : '#cbd5e1';
+        });
+    }
+
+    function switchToManualEntry() {
+        numberPanelOpen = false;
+        pendingSpecialMode = null;
+        selectedPanelNumbers.clear();
+        specialModeButtons.forEach(button => { button.style.boxShadow = 'none'; });
+        updatePanelSelection();
+        updateKeypadLabel();
+        renderDigitBoxes();
+        updateNumberPanel();
+    }
+
+    function getPanelRanges(digit) {
+        if (digit === 2) return [{ label: '00-99', start: 0, end: 99 }];
+        return [
+            { label: '000-100', start: 0, end: 100 },
+            { label: '101-200', start: 101, end: 200 },
+            { label: '201-300', start: 201, end: 300 },
+            { label: '301-400', start: 301, end: 400 },
+            { label: '401-500', start: 401, end: 500 },
+            { label: '501-600', start: 501, end: 600 },
+            { label: '601-700', start: 601, end: 700 },
+            { label: '701-800', start: 701, end: 800 },
+            { label: '801-900', start: 801, end: 900 },
+            { label: '901-999', start: 901, end: 999 },
+        ];
+    }
+
+    function renderPanelRanges(digit) {
+        const ranges = getPanelRanges(digit);
+        numberPanelRanges.innerHTML = '';
+        numberPanelRanges.style.display = digit === 3 ? 'grid' : 'none';
+        ranges.forEach(range => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-ghost panel-range-btn';
+            button.textContent = range.label;
+            button.style.cssText = 'padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1e293b; font-size: .72rem;';
+            if (currentPanelRange && currentPanelRange.label === range.label) {
+                button.style.background = '#2563eb';
+                button.style.borderColor = '#1d4ed8';
+                button.style.color = '#fff';
+            }
+            button.addEventListener('click', function() {
+                currentPanelRange = range;
+                renderNumberPanel(digit, range);
+                renderPanelRanges(digit);
+            });
+            numberPanelRanges.appendChild(button);
+        });
+    }
+
+    function renderNumberPanel(digit, range) {
+        renderedPanelDigit = digit;
+        numberPanelGrid.innerHTML = '';
+        selectedPanelNumbers.clear();
+        updatePanelSelection();
+        const start = range ? range.start : 0;
+        const end = range ? range.end : (digit === 3 ? 999 : 99);
+        for (let number = start; number <= end; number++) {
+            const value = String(number).padStart(digit, '0');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-ghost panel-number-btn';
+            button.dataset.number = value;
+            button.textContent = value;
+            button.style.cssText = 'padding: 7px 2px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1e293b; font-weight: 600;';
+            button.addEventListener('click', function() {
+                if (selectedPanelNumbers.has(value)) {
+                    selectedPanelNumbers.delete(value);
+                } else {
+                    selectedPanelNumbers.add(value);
+                }
+                updatePanelSelection();
+            });
+            numberPanelGrid.appendChild(button);
+        }
+    }
+
+    function getMaxRequiredDigit() {
+        if (pendingSpecialMode === 'gate19') return 1;
+        if (pendingSpecialMode === 'rev2') return 2;
+        if (pendingSpecialMode === 'rev3') return 3;
+        let max = 1;
+        let activeBtns = document.querySelectorAll('.bet-type-btn.active');
+        if (activeBtns.length === 0) return 2; 
+        activeBtns.forEach(btn => {
+            let d = parseInt(btn.getAttribute('data-digit'));
+            if (d > max) max = d;
+        });
+        return max;
+    }
+
+    function updateKeypadLabel() {
+        let activeTypes = [];
+        document.querySelectorAll('.bet-type-btn.active').forEach(btn => {
+            activeTypes.push(btn.getAttribute('data-type'));
+        });
+        if (activeTypes.length === 0) {
+            keypadTypeLabel.innerText = "กรุณาเลือกประเภทการแทงอย่างน้อย 1 ช่อง";
+        } else {
+            const modeLabels = { rev2: '2 ตัวกลับ', rev3: '3 ตัวกลับ', gate19: '19 ประตู' };
+            const modeLabel = pendingSpecialMode ? ` - ${modeLabels[pendingSpecialMode]}: กดเลข` : '';
+            keypadTypeLabel.innerText = activeTypes.join(', ') + modeLabel;
+        }
+    }
+
+    function renderDigitBoxes() {
+        let requiredDigit = getMaxRequiredDigit();
+        digitBoxesContainer.innerHTML = '';
+        for (let i = 0; i < requiredDigit; i++) {
+            const box = document.createElement('div');
+            box.style.width = '45px';
+            box.style.height = '55px';
+            box.style.background = '#fff';
+            box.style.border = '2px solid #cbd5e1';
+            box.style.borderRadius = '8px';
+            box.style.display = 'flex';
+            box.style.alignItems = 'center';
+            box.style.justifyContent = 'center';
+            box.style.fontSize = '1.5rem';
+            box.style.fontWeight = 'bold';
+            box.style.color = '#1e293b';
+            
+            if (currentInputValues[i] !== undefined) {
+                box.textContent = currentInputValues[i];
+                box.style.borderColor = '#2563eb';
+            } else if (i === currentInputValues.length) {
+                box.style.borderColor = '#f59e0b';
+            }
+            digitBoxesContainer.appendChild(box);
+        }
+        inputNumber.value = currentInputValues.join('');
+    }
+
+    typeButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const selectedDigit = getSelectedDigit();
+            const buttonDigit = parseInt(this.getAttribute('data-digit'), 10);
+            if (!this.classList.contains('active') && selectedDigit !== null && selectedDigit !== buttonDigit) {
+                alert('เลือกได้เฉพาะประเภทที่มีจำนวนหลักเดียวกัน เช่น 2 ตัวบนร่วมกับ 2 ตัวล่างครับ');
+                return;
+            }
+
+            switchToManualEntry();
+
+            if (this.classList.contains('active')) {
+                this.classList.remove('active');
+                this.style.border = '1px solid #cbd5e1';
+                this.style.background = '#f8fafc';
+            } else {
+                this.classList.add('active');
+                this.style.border = '2px solid #2563eb';
+                this.style.background = 'rgba(37, 99, 235, 0.08)';
+            }
+            
+            let maxDigit = getMaxRequiredDigit();
+            if (currentInputValues.length > maxDigit) {
+                currentInputValues = currentInputValues.slice(0, maxDigit);
+            }
+            updateKeypadLabel();
+            renderDigitBoxes();
+            updateSpecialModes();
+            if (buttonDigit !== 2 && buttonDigit !== 3) numberPanelOpen = false;
+            updateNumberPanel();
+        });
+    });
+
+    toggleNumberPanelButton.addEventListener('click', function() {
+        if (getSelectedDigit() !== 2 && getSelectedDigit() !== 3) return;
+        numberPanelOpen = !numberPanelOpen;
+        updateNumberPanel();
+    });
+
+    document.querySelectorAll('.keypad-num').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const activeTypes = document.querySelectorAll('.bet-type-btn.active');
+            if (activeTypes.length === 0) {
+                alert('กรุณาเลือกประเภทการแทงด้านบนอย่างน้อย 1 ประเภทก่อนกดตัวเลขครับ');
+                return;
+            }
+            const num = this.getAttribute('data-num');
+            let maxDigit = getMaxRequiredDigit();
+            if (currentInputValues.length < maxDigit) {
+                currentInputValues.push(num);
+                renderDigitBoxes();
+                if (currentInputValues.length === maxDigit) {
+                    if (pendingSpecialMode) {
+                        const selectedModeButton = document.querySelector(`.special-mode-btn[data-mode="${pendingSpecialMode}"]`);
+                        if (selectedModeButton) selectedModeButton.click();
+                    } else {
+                        addNumberItem();
+                    }
+                }
+            }
+        });
+    });
+
+    document.getElementById('keypad-delete').addEventListener('click', function() {
+        currentInputValues.pop();
+        renderDigitBoxes();
+    });
+
+    document.getElementById('keypad-clear').addEventListener('click', function() {
+        currentInputValues = [];
+        renderDigitBoxes();
+    });
+
+    function generatePermutations(str) {
+        if (str.length <= 1) return [str];
+        let set = new Set();
+        for (let i = 0; i < str.length; i++) {
+            let char = str[i];
+            let remaining = str.slice(0, i) + str.slice(i + 1);
+            for (let sub of generatePermutations(remaining)) {
+                set.add(char + sub);
+            }
+        }
+        return Array.from(set);
+    }
+
+    function generate19GateNumbers(digitChar) {
+        let set = new Set();
+        for (let i = 0; i <= 9; i++) {
+            set.add(digitChar + i.toString());
+            set.add(i.toString() + digitChar);
+        }
+        return Array.from(set);
+    }
+
+    // ฟังก์ชันตรวจสอบและปรับเรทอัตราจ่ายตามเลขอั้น
+    function getFinalRateAndNote(type, number, defaultRate) {
+        if (blockedNumbers[type] && blockedNumbers[type][number] !== undefined) {
+            let customRate = blockedNumbers[type][number];
+            if (customRate > 0) {
+                return { rate: customRate, note: ` (เลขอั้น จ่าย ${customRate})` };
+            }
+        }
+        return { rate: defaultRate, note: '' };
+    }
+
+    specialModeButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const mode = this.getAttribute('data-mode');
+            const numFullVal = inputNumber.value.trim();
+            const amtVal = parseFloat(inputAmount.value) || 10;
+            const activeTypes = document.querySelectorAll('.bet-type-btn.active');
+            const selectedDigit = getSelectedDigit();
+
+            if (activeTypes.length === 0) {
+                alert('กรุณาเลือกประเภทการแทงอย่างน้อย 1 ประเภท');
+                return;
+            }
+            if ((mode === 'rev2' || mode === 'gate19') && selectedDigit !== 2) {
+                alert('โหมดนี้ใช้ได้เฉพาะเมื่อเลือกประเภท 2 ตัวครับ');
+                return;
+            }
+            if (mode === 'rev3' && selectedDigit !== 3) {
+                alert('3 ตัวกลับใช้ได้เฉพาะเมื่อเลือกประเภท 3 ตัวครับ');
+                return;
+            }
+            if (numberPanelOpen && selectedPanelNumbers.size === 0) {
+                switchToManualEntry();
+            }
+            if (!numberPanelOpen && !numFullVal) {
+                pendingSpecialMode = mode;
+                specialModeButtons.forEach(button => {
+                    button.style.boxShadow = button === this ? '0 0 0 2px #2563eb' : 'none';
+                });
+                updateKeypadLabel();
+                renderDigitBoxes();
+                updateNumberPanel();
+                return;
+            }
+
+            let numbersToAdd = [];
+            if (numberPanelOpen) {
+                if (mode === 'rev2' || mode === 'rev3') {
+                    selectedPanelNumbers.forEach(number => {
+                        numbersToAdd.push(...generatePermutations(number));
+                    });
+                } else if (mode === 'gate19') {
+                    const digits = new Set();
+                    selectedPanelNumbers.forEach(number => number.split('').forEach(digit => digits.add(digit)));
+                    digits.forEach(digit => numbersToAdd.push(...generate19GateNumbers(digit)));
+                }
+                numbersToAdd = Array.from(new Set(numbersToAdd));
+            } else if (mode === 'rev2') {
+                if (numFullVal.length < 2) { alert('กรุณากดตัวเลขอย่างน้อย 2 หลักสำหรับ 2 ตัวกลับ'); return; }
+                numbersToAdd = generatePermutations(numFullVal.slice(-2));
+            } else if (mode === 'rev3') {
+                if (numFullVal.length < 3) { alert('กรุณากดตัวเลขให้ครบ 3 หลักสำหรับ 3 ตัวกลับ'); return; }
+                numbersToAdd = generatePermutations(numFullVal.slice(-3));
+            } else if (mode === 'gate19') {
+                if (numFullVal.length < 1) { alert('กรุณากดตัวเลขเดี่ยว 1 หลักสำหรับทำ 19 ประตู'); return; }
+                numbersToAdd = generate19GateNumbers(numFullVal.slice(-1));
+            }
+
+            let addedCount = 0;
+            activeTypes.forEach(btnType => {
+                const type = btnType.getAttribute('data-type');
+                const defaultRate = parseFloat(btnType.getAttribute('data-rate'));
+                const digitReq = parseInt(btnType.getAttribute('data-digit'));
+
+                numbersToAdd.forEach(num => {
+                    if (num.length === digitReq) {
+                        const emptyRow = document.getElementById('empty-row');
+                        if (emptyRow) emptyRow.remove();
+
+                        let rateInfo = getFinalRateAndNote(type, num, defaultRate);
+                        const rowCount = itemsTbody.querySelectorAll('tr:not([data-group-header])').length + 1;
+                        const tr = document.createElement('tr');
+                        tr.style.borderBottom = '1px solid #f1f5f9';
+                        tr.innerHTML = `
+                            <td style="padding: 10px 8px; color: #1e293b;">${rowCount}</td>
+                            <td style="padding: 10px 8px; color: #1e293b;">
+                                ${type}${rateInfo.note ? '<br><small style="color:#ef4444; font-weight:bold;">'+rateInfo.note+'</small>' : ''}
+                                <input type="hidden" name="bet_types[]" value="${type}">
+                                <input type="hidden" name="rates[]" value="${rateInfo.rate}">
+                            </td>
+                            <td style="padding: 10px 8px;">
+                                <span style="font-weight: bold; color: #2563eb; font-size: 1.1rem;">${num}</span>
+                                <input type="hidden" name="numbers[]" value="${num}">
+                            </td>
+                            <td style="padding: 10px 8px; color: #1e293b; font-weight: bold;">${rateInfo.rate}</td>
+                            <td style="padding: 10px 8px;">
+                                <input type="number" name="amounts[]" class="form-control item-amount-input" value="${amtVal}" min="1" style="width: 90px; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 16px;" required inputmode="numeric">
+                            </td>
+                            <td style="padding: 10px 8px;">
+                                <button type="button" class="btn btn-danger btn-xs btn-remove-item" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">ลบ</button>
+                            </td>
+                        `;
+                        itemsTbody.appendChild(tr);
+                        addedCount++;
+                    }
+                });
+            });
+
+            if (addedCount > 0) {
+                pendingSpecialMode = null;
+                specialModeButtons.forEach(button => { button.style.boxShadow = 'none'; });
+                selectedPanelNumbers.clear();
+                updatePanelSelection();
+                currentInputValues = [];
+                renderDigitBoxes();
+                groupSlipRows();
+                updateGrandTotal();
+                bindItemEvents();
+                updateNumberPanel();
+            } else {
+                alert('ไม่สามารถเพิ่มรายการได้ (ตัวเลขตรงกับเลขอั้นปิดรับ หรือไม่ตรงจำนวนหลัก)');
+            }
+        });
+    });
+
+    function addNumberItem(numberOverride = null) {
+        const numFullVal = numberOverride !== null ? numberOverride : inputNumber.value.trim();
+        const amtVal = parseFloat(inputAmount.value) || 10;
+        const activeTypes = document.querySelectorAll('.bet-type-btn.active');
+
+        if (activeTypes.length === 0) {
+            alert('กรุณาเลือกประเภทการแทงอย่างน้อย 1 ประเภท');
+            return;
+        }
+
+        let addedCount = 0;
+        activeTypes.forEach(btn => {
+            const type = btn.getAttribute('data-type');
+            const defaultRate = parseFloat(btn.getAttribute('data-rate'));
+            const digitReq = parseInt(btn.getAttribute('data-digit'));
+
+            let numVal = numFullVal.slice(-digitReq);
+            if (numVal.length !== digitReq || isNaN(numVal)) return;
+
+            let rateInfo = getFinalRateAndNote(type, numVal, defaultRate);
+            const emptyRow = document.getElementById('empty-row');
+            if (emptyRow) emptyRow.remove();
+
+            const rowCount = itemsTbody.querySelectorAll('tr:not([data-group-header])').length + 1;
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #f1f5f9';
+            tr.innerHTML = `
+                <td style="padding: 10px 8px; color: #1e293b;">${rowCount}</td>
+                <td style="padding: 10px 8px; color: #1e293b;">
+                    ${type}${rateInfo.note ? '<br><small style="color:#ef4444; font-weight:bold;">'+rateInfo.note+'</small>' : ''}
+                    <input type="hidden" name="bet_types[]" value="${type}">
+                    <input type="hidden" name="rates[]" value="${rateInfo.rate}">
+                </td>
+                <td style="padding: 10px 8px;">
+                    <span style="font-weight: bold; color: #2563eb; font-size: 1.1rem;">${numVal}</span>
+                    <input type="hidden" name="numbers[]" value="${numVal}">
+                </td>
+                <td style="padding: 10px 8px; color: #1e293b; font-weight: bold;">${rateInfo.rate}</td>
+                <td style="padding: 10px 8px;">
+                    <input type="number" name="amounts[]" class="form-control item-amount-input" value="${amtVal}" min="1" style="width: 90px; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 16px;" required inputmode="numeric">
+                </td>
+                <td style="padding: 10px 8px;">
+                    <button type="button" class="btn btn-danger btn-xs btn-remove-item" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">ลบ</button>
+                </td>
+            `;
+            itemsTbody.appendChild(tr);
+            addedCount++;
+        });
+
+        if (addedCount > 0) {
+            currentInputValues = [];
+            renderDigitBoxes();
+            groupSlipRows();
+            updateGrandTotal();
+            bindItemEvents();
+        } else {
+            alert('กรุณากดตัวเลขให้ครบตามจำนวนหลักครับ');
+        }
+    }
+
+    addPanelNumbersButton.addEventListener('click', function() {
+        if (getSelectedDigit() !== 2 && getSelectedDigit() !== 3) return;
+        if (pendingSpecialMode === 'rev2' || pendingSpecialMode === 'gate19' || pendingSpecialMode === 'rev3') {
+            const selectedModeButton = document.querySelector(`.special-mode-btn[data-mode="${pendingSpecialMode}"]`);
+            if (selectedModeButton) selectedModeButton.click();
+            return;
+        }
+        if (pendingSpecialMode) return;
+        Array.from(selectedPanelNumbers).forEach(number => addNumberItem(number));
+        selectedPanelNumbers.clear();
+        updatePanelSelection();
+    });
+
+    function groupSlipRows() {
+        const rows = Array.from(itemsTbody.querySelectorAll('tr:not([data-group-header])'))
+            .filter(row => row.id !== 'empty-row');
+        itemsTbody.querySelectorAll('tr[data-group-header]').forEach(row => row.remove());
+
+        const groups = new Map();
+        rows.forEach(row => {
+            const type = row.querySelector('input[name="bet_types[]"]')?.value || 'อื่นๆ';
+            if (!groups.has(type)) groups.set(type, []);
+            groups.get(type).push(row);
+        });
+
+        const preferredOrder = ['3 ตัวบน', '3 ตัวโต๊ด', '3 ตัวกลับ', '2 ตัวบน', '2 ตัวล่าง', '2 ตัวกลับ', 'วิ่งบน', 'วิ่งล่าง'];
+        const orderedTypes = Array.from(groups.keys()).sort((left, right) => {
+            const leftIndex = preferredOrder.indexOf(left);
+            const rightIndex = preferredOrder.indexOf(right);
+            return (leftIndex < 0 ? 999 : leftIndex) - (rightIndex < 0 ? 999 : rightIndex);
+        });
+
+        orderedTypes.forEach(type => {
+            const header = document.createElement('tr');
+            header.dataset.groupHeader = 'true';
+            header.innerHTML = `<td colspan="6" style="padding: 6px 8px; background: #3b82f6; color: #fff; font-weight: 700; border-radius: 6px;">${type}</td>`;
+            itemsTbody.appendChild(header);
+            groups.get(type).forEach(row => itemsTbody.appendChild(row));
+        });
+        reindexRows();
+    }
+
+    function bindItemEvents() {
+        document.querySelectorAll('.btn-remove-item').forEach(btn => {
+            btn.onclick = function() {
+                this.closest('tr').remove();
+                groupSlipRows();
+                reindexRows();
+                updateGrandTotal();
+                if (itemsTbody.querySelectorAll('tr:not([data-group-header])').length === 0) {
+                    itemsTbody.innerHTML = `<tr id="empty-row"><td colspan="6" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td></tr>`;
+                    btnSubmitTicket.disabled = true;
+                }
+            };
+        });
+
+        document.querySelectorAll('.item-amount-input').forEach(input => {
+            input.oninput = updateGrandTotal;
+        });
+    }
+
+    function reindexRows() {
+        const rows = itemsTbody.querySelectorAll('tr:not([data-group-header])');
+        rows.forEach((row, index) => {
+            const firstCell = row.querySelector('td');
+            if (firstCell) firstCell.innerText = index + 1;
+        });
+    }
+
+    // คำนวณยอดรวม และ คำนวณเงินรางวัลสูงสุดที่จะได้รับ
+    function updateGrandTotal() {
+        let totalBet = 0;
+        let maxPayout = 0;
+
+        const rows = itemsTbody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const amountInput = row.querySelector('.item-amount-input');
+            const rateInput = row.querySelector('input[name="rates[]"]');
+            
+            if (amountInput && rateInput) {
+                let amt = parseFloat(amountInput.value) || 0;
+                let rate = parseFloat(rateInput.value) || 0;
+                totalBet += amt;
+                maxPayout += (amt * rate);
+            }
+        });
+
+        grandTotalSpan.innerText = totalBet.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        maxPayoutTotalSpan.innerText = maxPayout.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        if (rows.length > 0 && !document.getElementById('empty-row')) {
+            btnSubmitTicket.disabled = false;
+            submitTicketHint.textContent = 'ตรวจสอบยอดแล้วกดยืนยันส่งโพยได้เลย';
+            submitTicketHint.style.color = '#15803d';
+        } else {
+            btnSubmitTicket.disabled = true;
+            submitTicketHint.textContent = 'เลือกประเภทและกดตัวเลขก่อนยืนยันส่งโพย';
+            submitTicketHint.style.color = '#64748b';
+        }
+    }
+
+    document.querySelectorAll('.btn-quick-price').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const price = this.getAttribute('data-price');
+            customBetCredit.value = price;
+            document.querySelectorAll('.item-amount-input').forEach(input => {
+                input.value = price;
+            });
+            updateGrandTotal();
+        });
+    });
+
+    customBetCredit.addEventListener('input', function() {
+        const price = this.value;
+        if (!price || Number(price) < 1) return;
+        document.querySelectorAll('.item-amount-input').forEach(input => {
+            input.value = price;
+        });
+        updateGrandTotal();
+    });
+
+    document.getElementById('btn-clear-all').addEventListener('click', function() {
+        if (confirm('ต้องการลบรายการทั้งหมดใช่หรือไม่?')) {
+            itemsTbody.innerHTML = `<tr id="empty-row"><td colspan="6" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td></tr>`;
+            updateGrandTotal();
+        }
+    });
+
+    document.getElementById('btn-clear-dup').addEventListener('click', function() {
+        const rows = itemsTbody.querySelectorAll('tr');
+        const seen = new Set();
+        rows.forEach(row => {
+            const numInput = row.querySelector('input[name="numbers[]"]');
+            const typeInput = row.querySelector('input[name="bet_types[]"]');
+            if (numInput && typeInput) {
+                const key = typeInput.value + '-' + numInput.value;
+                if (seen.has(key)) {
+                    row.remove();
+                } else {
+                    seen.add(key);
+                }
+            }
+        });
+        groupSlipRows();
+        reindexRows();
+        updateGrandTotal();
+        alert('ตัดเลขซ้ำเรียบร้อยแล้ว!');
+    });
+
+    document.getElementById('btn-check-dup').addEventListener('click', function() {
+        const rows = itemsTbody.querySelectorAll('tr');
+        const counts = {};
+        rows.forEach(row => {
+            const numInput = row.querySelector('input[name="numbers[]"]');
+            const typeInput = row.querySelector('input[name="bet_types[]"]');
+            if (numInput && typeInput) {
+                const key = typeInput.value + '-' + numInput.value;
+                counts[key] = (counts[key] || 0) + 1;
+            }
+        });
+
+        let dupFound = false;
+        rows.forEach(row => {
+            const numInput = row.querySelector('input[name="numbers[]"]');
+            const typeInput = row.querySelector('input[name="bet_types[]"]');
+            if (numInput && typeInput) {
+                const key = typeInput.value + '-' + numInput.value;
+                if (counts[key] > 1) {
+                    row.style.background = 'rgba(239, 68, 68, 0.1)';
+                    dupFound = true;
+                } else {
+                    row.style.background = 'transparent';
+                }
+            }
+        });
+
+        if (dupFound) {
+            alert('พบรายการเลขซ้ำ! แถวที่มีสีแดงคือเลขที่กรอกซ้ำกันครับ');
+        } else {
+            alert('ไม่พบเลขซ้ำในรายการของคุณครับ');
+        }
+    });
+
+    updateKeypadLabel();
+    renderDigitBoxes();
+    updateSpecialModes();
+    updateNumberPanel();
+});
+</script>
+{% endblock %}

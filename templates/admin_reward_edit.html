@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}แก้ไขของรางวัล — Yonko Rewards{% endblock %}
+
+{% block content %}
+<section class="page-section">
+  <div class="container container-narrow">
+
+    <header class="page-head">
+      <h1 class="page-title">แก้ไขของรางวัล</h1>
+      <a href="{{ url_for('admin') }}" class="btn btn-ghost btn-sm">← กลับหลังบ้าน</a>
+    </header>
+
+    <article class="panel">
+      <form method="post" class="admin-form">
+        <div class="form-group">
+          <label class="form-label">ชื่อของรางวัล</label>
+          <input type="text" name="name" class="form-input" value="{{ reward.name }}" required />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">แต้มที่ใช้แลก</label>
+            <input type="number" name="points_required" class="form-input"
+                   value="{{ reward.points_required }}" min="1" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">จำนวนสต็อก</label>
+            <input type="number" name="stock" class="form-input" value="{{ reward.stock }}" min="0" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ลิงก์รูปภาพ (URL)</label>
+          <input type="url" name="image_url" class="form-input" value="{{ reward.image_url }}" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">รายละเอียด</label>
+          <textarea name="description" class="form-textarea" rows="3">{{ reward.description }}</textarea>
+        </div>
+
+        <div class="form-check">
+          <input type="checkbox" id="is_active" name="is_active" class="form-checkbox"
+                 {% if reward.is_active %}checked{% endif %} />
+          <label for="is_active" class="form-check-label">แสดงของรางวัลนี้ในหน้าร้าน</label>
+        </div>
+
+        <button type="submit" class="btn btn-primary">บันทึกการแก้ไข</button>
+      </form>
+    </article>
+
+  </div>
+</section>
+{% endblock %}

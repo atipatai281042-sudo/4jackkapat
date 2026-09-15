@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  {% block head %}{% endblock %}
+  <title>{% block title %}mklotto — ระบบแทงหวยออนไลน์{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="icon" href="{{ url_for('static', filename='brand-logo.png', v='3') }}" type="image/png" />
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- เพิ่ม FontAwesome สำหรับแสดงไอคอนต่างๆ -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- เพิ่ม Bootstrap CSS เพื่อให้คลาสต่างๆ ที่เราใช้ทำงานร่วมกันได้สมบูรณ์ -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body class="app-body">
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="{{ url_for('index') }}" class="brand">
+        <span class="brand-mark brand-mark-premium">
+          <img src="{{ url_for('static', filename='brand-logo.png', v='3') }}" alt="mklotto" class="brand-logo" onerror="this.src='{{ brand_icon_url }}';">
+        </span>
+        <span class="brand-lockup">
+          <span class="brand-text brand-text-premium">{{ brand_name }}</span>
+          <small class="brand-subtitle">{{ brand_tagline }}</small>
+        </span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-label="เปิดเมนู" aria-expanded="false" aria-controls="main-navigation">
+        <i class="fas fa-bars"></i>
+      </button>
+
+      <nav class="main-nav" id="main-navigation">
+        <a href="{{ url_for('index') }}" class="nav-link"><i class="fas fa-home me-1"></i> หน้าแรก</a>
+        <a href="{{ url_for('lottery_rooms') }}" class="nav-link"><i class="fas fa-dice me-1"></i> ห้องแทงหวย</a>
+        <a href="{{ url_for('lottery_results') }}" class="nav-link"><i class="fas fa-square-poll-vertical me-1"></i> ผลหวย</a>
+        <a href="{{ url_for('payout_rates_page') }}" class="nav-link"><i class="fas fa-sack-dollar me-1"></i> อัตราจ่าย</a>
+        {% if current_user %}
+          <a href="{{ url_for('dashboard') }}" class="nav-link"><i class="fas fa-chart-line me-1"></i> แดชบอร์ด</a>
+          <a href="{{ url_for('history') }}" class="nav-link"><i class="fas fa-receipt me-1"></i> ประวัติโพย</a>
+          {% if points_rewards_enabled %}<a href="{{ url_for('treasure_chest') }}" class="nav-link nav-link-treasure"><i class="fas fa-box-open me-1"></i> เปิดหีบสมบัติ</a>{% endif %}
+          <a href="{{ url_for('notifications') }}" class="nav-link"><i class="fas fa-bell me-1"></i> แจ้งเตือน{% if unread_notifications %}<span class="notification-count">{{ unread_notifications }}</span>{% endif %}</a>
+          {% if admin_contact_url %}<a href="{{ admin_contact_url }}" class="nav-link nav-link-contact" target="_blank" rel="noopener"><i class="fab fa-line me-1"></i> ติดต่อแอดมิน</a>{% endif %}
+          <a href="{{ url_for('responsible_play') }}" class="nav-link"><i class="fas fa-shield-heart me-1"></i> ตั้งค่าการเล่น</a>
+          {% if current_user.is_partner %}
+            <a href="{{ url_for('partner_dashboard') }}" class="nav-link nav-link-partner"><i class="fas fa-users me-1"></i> ระบบ Partner</a>
+          {% endif %}
+          {% if current_user.is_admin %}
+            <a href="{{ url_for('admin') }}" class="nav-link nav-link-admin"><i class="fas fa-compass me-1"></i> หลังบ้าน</a>
+          {% endif %}
+        {% endif %}
+      </nav>
+
+      <div class="header-actions">
+        {% if current_user %}
+          {% if points_rewards_enabled %}<div class="points-chip">
+            <span class="points-chip-label">แต้ม</span>
+            <span class="points-chip-value">{{ "{:,}".format(current_user.points) }}</span>
+          </div>{% endif %}
+          <div class="points-chip credit-chip">
+            <span class="points-chip-label">เครดิต</span>
+            <span class="points-chip-value">{{ "{:,.2f}".format(current_user.credit_balance) }}</span>
+          </div>
+          {% if current_user.vip_tier %}
+            <span class="vip-mini-badge" title="ระดับสมาชิก {{ current_user.vip_tier.name }}">VIP: {{ current_user.vip_tier.badge_text or current_user.vip_tier.name }}</span>
+          {% endif %}
+          <span class="user-name">
+            {{ current_user.username }}
+            <span class="role-badge {{ 'role-badge-admin' if current_user.is_admin else ('role-badge-partner' if current_user.is_partner else 'role-badge-member') }}">
+              {% if current_user.is_admin %}ADMIN{% elif current_user.is_partner %}PARTNER{% else %}MEMBER{% endif %}
+            </span>
+          </span>
+          <a href="{{ url_for('change_password') }}" class="btn btn-ghost btn-sm"><i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน</a>
+          <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">ออกจากระบบ</a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="btn btn-ghost btn-sm">เข้าสู่ระบบ</a>
+          <a href="{{ url_for('register') }}" class="btn btn-primary btn-sm">สมัครสมาชิก</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="container flash-area mt-3">
+        {% for category, message in messages %}
+          {% set normalized = category if category in ['success', 'warning', 'danger', 'info'] else ('danger' if category == 'error' else 'info') %}
+          <div class="alert alert-{{ normalized }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="site-main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p class="footer-text">© {{ now.year }} mklotto — ระบบทายผลตัวเลข</p>
+      <p class="footer-text footer-muted">พัฒนาด้วย Flask + SQLAlchemy</p>
+    </div>
+  </footer>
+
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+  const navToggle = document.querySelector('.nav-toggle');
+  const mainNavigation = document.querySelector('#main-navigation');
+  if (navToggle && mainNavigation) {
+    navToggle.addEventListener('click', () => {
+      const expanded = navToggle.getAttribute('aria-expanded') === 'true';
+      navToggle.setAttribute('aria-expanded', String(!expanded));
+      mainNavigation.classList.toggle('is-open', !expanded);
+    });
+  }
+
+  document.querySelectorAll('.password-toggle').forEach((button) => {
+    button.addEventListener('click', () => {
+      const input = button.parentElement.querySelector('input');
+      const icon = button.querySelector('i');
+      if (!input || !icon) return;
+
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      icon.classList.toggle('fa-eye', !isPassword);
+      icon.classList.toggle('fa-eye-slash', isPassword);
+      button.setAttribute('aria-label', isPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน');
+    });
+  });
+
+  document.querySelectorAll('.alert').forEach((alertEl) => {
+    if (alertEl.dataset.autoDismissReady === 'true') return;
+    alertEl.dataset.autoDismissReady = 'true';
+    window.setTimeout(() => {
+      alertEl.remove();
+    }, 3500);
+  });
+
+  document.querySelectorAll('.admin-collapsible-panel').forEach((panel) => {
+    const key = `admin-panel:${panel.id || panel.querySelector('.panel-title')?.textContent.trim()}`;
+    if (sessionStorage.getItem(key) === 'open') panel.open = true;
+    panel.addEventListener('toggle', () => {
+      sessionStorage.setItem(key, panel.open ? 'open' : 'closed');
+    });
+    panel.querySelectorAll('form').forEach((form) => {
+      form.addEventListener('submit', () => {
+        sessionStorage.setItem(key, 'open');
+        sessionStorage.setItem('admin-scroll-target', panel.id || '');
+      });
+    });
+  });
+  const adminScrollTarget = sessionStorage.getItem('admin-scroll-target');
+  if (adminScrollTarget) {
+    sessionStorage.removeItem('admin-scroll-target');
+    window.setTimeout(() => document.getElementById(adminScrollTarget)?.scrollIntoView({block: 'start'}), 0);
+  }
+</script>
+</body>
+</html>

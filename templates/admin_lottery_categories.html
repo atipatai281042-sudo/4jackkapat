@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}จัดการหมวดหวย — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="admin-section">
+  <div class="container">
+    <header class="page-head">
+      <div>
+        <h1 class="page-title">จัดการหมวดหวย</h1>
+        <p class="section-desc">ตั้งชื่อหมวดสำหรับจัดกลุ่มห้องหวย เช่น หวยรัฐบาล / ฮานอย / ลาว / หุ้นต่างประเทศ</p>
+      </div>
+      <a href="{{ url_for('admin_lottery_rooms') }}" class="btn btn-ghost">กลับไปจัดการห้องหวย</a>
+    </header>
+
+    <div class="dashboard-layout">
+      <article class="panel">
+        <h2 class="panel-title">เพิ่มหมวดหวย</h2>
+        <form method="post" class="admin-form">
+          <div class="form-group">
+            <label class="form-label">ชื่อหมวดหวย</label>
+            <input class="form-input" name="category_name" placeholder="เช่น หวยฮานอย" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">รายละเอียด</label>
+            <input class="form-input" name="description" placeholder="คำอธิบายหมวดหวย">
+          </div>
+          <div class="form-group">
+            <label class="form-label">ลำดับการแสดง</label>
+            <input class="form-input" type="number" name="sort_order" value="0">
+          </div>
+          <button class="btn btn-primary" type="submit">เพิ่มหมวด</button>
+        </form>
+      </article>
+
+      <article class="panel">
+        <h2 class="panel-title">หมวดหวยทั้งหมด</h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>ชื่อหมวด</th><th>จำนวนห้อง</th><th>จัดการ</th></tr></thead>
+            <tbody>
+              {% for category in categories %}
+              <tr>
+                <td>{{ category.name }}</td>
+                <td>{{ category.rooms|length }}</td>
+                <td>
+                  <form method="post" action="{{ url_for('admin_rename_lottery_category') }}" class="inline-form" style="margin-bottom:6px;">
+                    <input type="hidden" name="old_name" value="{{ category.name }}">
+                    <input class="form-input form-input-sm" name="new_name" value="{{ category.name }}">
+                    <button class="btn btn-ghost btn-xs" type="submit">เปลี่ยนชื่อ</button>
+                  </form>
+                  <form method="post" action="{{ url_for('admin_delete_lottery_category') }}" onsubmit="return confirm('ย้ายห้องในหมวดนี้ไปหมวดไม่ระบุใช่ไหม?');">
+                    <input type="hidden" name="name" value="{{ category.name }}">
+                    <button class="btn btn-danger btn-xs" type="submit">ลบหมวด</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" class="empty-state-text">ยังไม่มีหมวดหวย</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+{% endblock %}

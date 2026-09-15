@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}ตั้งค่าอัตราจ่ายหวย{% endblock %}
+
+{% block content %}
+<section class="admin-section">
+  <div class="container">
+    <header class="page-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 class="page-title"><i class="fas fa-sliders-h"></i> ตั้งค่าอัตราจ่ายหวย</h1>
+        <p class="page-subtitle">กำหนดค่าจ่ายต่อบิลและเครดิตที่สมาชิกจะได้รับเมื่อถูกรางวัล</p>
+      </div>
+      <a href="{{ url_for('admin') }}" class="btn btn-ghost">← กลับหน้าแอดมิน</a>
+    </header>
+
+    <div class="panel" style="margin-bottom:24px;">
+      <h2 class="panel-title">กำหนดอัตราจ่ายแต่ละประเภท</h2>
+      <form method="post" action="{{ url_for('admin_thai_lottery') }}" class="admin-form" style="margin-bottom:18px;">
+        <input type="hidden" name="action" value="sync_api">
+        <div class="form-row">
+          <div class="form-group" style="flex:1; min-width:180px;">
+            <label class="form-label">วันที่ข้อมูลจาก API</label>
+            <input type="date" name="api_date" class="form-input">
+          </div>
+          <div class="form-group" style="flex:1; min-width:220px; display:flex; align-items:flex-end;">
+            <button type="submit" class="btn btn-primary" style="width:100%;"><i class="fas fa-cloud-arrow-down"></i> ดึงผลหวยจาก API</button>
+          </div>
+        </div>
+        <p class="section-desc">ดึงเฉพาะผลที่ออกแล้วมาให้ตรวจสอบก่อน ระบบจะไม่จ่ายเครดิตจนกว่าจะกดยืนยัน</p>
+      </form>
+      {% if pending_api_periods %}
+      <div class="panel api-result-review" style="margin-top:16px; border:1px solid #f5c85b; background:#fffaf0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div><h3 class="panel-title" style="margin-bottom:4px;">ผลหวยรอตรวจสอบ {{ pending_api_periods|length }} งวด</h3><p class="section-desc" style="margin:0;">ตรวจชื่อหวยและตัวเลขให้ถูกต้อง แล้วกดยืนยันครั้งเดียว ระบบจะตรวจโพยและจ่ายเครดิตทุกงวด</p></div>
+          <form method="post" action="{{ url_for('admin_thai_lottery') }}" onsubmit="return confirm('ยืนยันผลหวยทั้งหมดที่แสดงอยู่ใช่หรือไม่?');"><input type="hidden" name="action" value="confirm_api_results"><button type="submit" class="btn btn-success"><i class="fas fa-check-double"></i> ยืนยันผลทั้งหมด</button></form>
+        </div>
+        <div class="table-wrap" style="margin-top:12px;"><table class="data-table"><thead><tr><th>หวย</th><th>งวด</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>3 ตัวหลัง</th></tr></thead><tbody>
+          {% for period in pending_api_periods %}<tr><td class="text-strong">{{ period.room.name if period.room else '-' }}</td><td>{{ period.period_date }}</td><td><strong>{{ period.result_3up or '-' }}</strong></td><td><strong>{{ period.result_2down or '-' }}</strong></td><td>{{ period.result_3back or '-' }}</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div>
+      {% endif %}
+      <form method="post" action="{{ url_for('admin_thai_lottery') }}" class="admin-form">
+        <input type="hidden" name="action" value="set_rule">
+        <div class="form-row">
+          <div class="form-group" style="flex:1; min-width:180px;">
+            <label class="form-label">ประเภทการแทง</label>
+            <select name="bet_type" class="form-input" required>
+              <option value="3up">3 ตัวบน</option>
+              <option value="3toad">3 ตัวโต๊ด</option>
+              <option value="2up">2 ตัวบน</option>
+              <option value="2down">2 ตัวล่าง</option>
+              <option value="runup">วิ่งบน</option>
+              <option value="rundown">วิ่งล่าง</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1; min-width:180px;">
+            <label class="form-label">อัตราจ่าย (x)</label>
+            <input type="number" step="0.1" min="0" name="payout_multiplier" class="form-input" value="900" required>
+          </div>
+          <div class="form-group" style="flex:1; min-width:180px; display:flex; align-items:flex-end;">
+            <button type="submit" class="btn btn-primary" style="width:100%;">บันทึกอัตราจ่าย</button>
+          </div>
+        </div>
+      </form>
+
+      {% if rules %}
+      <div class="table-wrap" style="margin-top:16px;">
+        <table class="data-table">
+          <thead>
+            <tr><th>ประเภท</th><th>อัตราจ่าย</th><th>คำอธิบาย</th></tr>
+          </thead>
+          <tbody>
+            {% for rule in rules %}
+            <tr>
+              <td class="text-strong">{{ rule.bet_type }}</td>
+              <td>{{ '{:,.2f}'.format(rule.payout_multiplier) }}x</td>
+              <td>{{ rule.description or '-' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+      {% if periods %}
+      <div class="table-wrap" style="margin-top:16px;">
+        <table class="data-table">
+          <thead>
+            <tr><th>ห้อง</th><th>งวด</th><th>เปิดรับ</th><th>ปิดรับ</th><th>สถานะ</th><th>ผล</th></tr>
+          </thead>
+          <tbody>
+            {% for period in periods %}
+            <tr>
+              <td class="text-strong">{{ period.room.name if period.room else '-' }}</td>
+              <td class="text-strong">{{ period.period_date }}</td>
+              <td>{{ period.open_time.strftime('%Y-%m-%d %H:%M') if period.open_time else 'ทันที' }}</td>
+              <td>{{ period.close_time.strftime('%Y-%m-%d %H:%M') if period.close_time else '-' }}</td>
+              <td>
+                <span class="status {{ 'status-completed' if period.is_open and (not period.open_time or period.open_time <= now) else 'status-cancelled' }}">
+                  {% if not period.is_open %}ปิดรับแทง{% elif period.open_time and period.open_time > now %}รอเวลาเปิด{% else %}เปิดรับแทง{% endif %}
+                </span>
+              </td>
+              <td>
+                {{ period.result_3up or '-' }}
+                {% if period.is_checked %}
+                <form method="post" action="{{ url_for('admin_thai_lottery') }}" style="margin-top:6px;">
+                  <input type="hidden" name="action" value="reverse_result">
+                  <input type="hidden" name="period_id" value="{{ period.id }}">
+                  <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('ย้อนผลและหักเครดิตรางวัลคืนใช่หรือไม่?');">ย้อนผล</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+  </div>
+</section>
+<style>
+  .api-result-review { color: #172033; }
+  .api-result-review .panel-title,
+  .api-result-review .section-desc { color: #172033 !important; }
+  .api-result-review .data-table { color: #172033 !important; background: #fff; }
+  .api-result-review .data-table thead th { color: #334155 !important; background: #f1f5f9; }
+  .api-result-review .data-table tbody td { color: #172033 !important; border-color: #e2e8f0; }
+  .api-result-review .data-table tbody tr:nth-child(even) { background: #f8fafc; }
+  .api-result-review .data-table strong { color: #b45309 !important; font-size: 1.05em; }
+</style>
+{% endblock %}

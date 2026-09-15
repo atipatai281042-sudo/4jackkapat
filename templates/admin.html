@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — Yonko Rewards{% endblock %}
+
+{% block content %}
+<section class="admin-section">
+  <div class="container">
+
+    <header class="page-head" style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h1 class="page-title">ศูนย์ควบคุมระบบ</h1>
+        <p class="page-subtitle">จัดการสมาชิก ห้องหวย และเวลารับโพยจากที่เดียว</p>
+      </div>
+      <details class="admin-quick-actions">
+        <summary><i class="fas fa-sliders"></i> เมนูจัดการเพิ่มเติม <span>12 รายการ</span></summary>
+        <div class="admin-quick-actions-grid">
+          <a href="#member-management" class="btn btn-ghost"><i class="fas fa-users-gear"></i> จัดการสมาชิก</a>
+          <a href="{{ url_for('admin_media') }}" class="btn btn-ghost"><i class="fas fa-images"></i> คลังภาพระบบ</a>
+          <a href="{{ url_for('admin_contact') }}" class="btn btn-ghost"><i class="fas fa-headset"></i> ติดต่อแอดมิน</a>
+          <a href="{{ url_for('admin_branding') }}" class="btn btn-ghost"><i class="fas fa-crown"></i> ตั้งค่าแบรนด์</a>
+          <a href="{{ url_for('admin_lottery_categories') }}" class="btn btn-ghost"><i class="fas fa-layer-group"></i> หมวดหวย</a>
+          <a href="{{ url_for('admin_export_data') }}" class="btn btn-ghost"><i class="fas fa-download"></i> Export ข้อมูล</a>
+          <a href="{{ url_for('admin_import_data') }}" class="btn btn-ghost"><i class="fas fa-upload"></i> Import ข้อมูล</a>
+          <a href="{{ url_for('admin_deposit_account') }}" class="btn btn-ghost"><i class="fas fa-building-columns"></i> บัญชีรับฝาก</a>
+          <a href="{{ url_for('admin_partners') }}" class="btn btn-ghost"><i class="fas fa-users"></i> Partner</a>
+          <a href="{{ url_for('admin_reports') }}" class="btn btn-ghost"><i class="fas fa-chart-pie"></i> รายงาน</a>
+          <a href="{{ url_for('admin_audit') }}" class="btn btn-ghost"><i class="fas fa-clipboard-list"></i> Audit</a>
+          <a href="{{ url_for('admin_lottery_tickets') }}" class="btn btn-ghost"><i class="fas fa-receipt"></i> โพยสมาชิก</a>
+        </div>
+      </details>
+    </header>
+
+    <div class="admin-top-actions">
+      <a href="{{ url_for('admin_thai_lottery') }}#lottery-results" class="btn btn-primary"><i class="fas fa-trophy"></i> ตั้งค่าอัตราจ่ายหวย - บันทึกผลหวย</a>
+    </div>
+
+    <!-- ===== สรุปตัวเลข ===== -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <span class="stat-label">สมาชิกทั้งหมด</span>
+        <span class="stat-value">{{ stats.total_users }}</span>
+      </div>
+    </div>
+
+    <!-- ===== จัดการสมาชิก + ปรับแต้มและเครดิต ===== -->
+    <details class="panel admin-collapsible-panel" id="member-management" {% if username %}open{% endif %}>
+      <summary class="admin-collapsible-summary"><h2 class="panel-title">จัดการสมาชิก แต้มสะสม และเครดิตเดิมพัน</h2><span><i class="fas fa-chevron-down"></i> เปิดจัดการ</span></summary>
+      <form method="get" action="{{ url_for('admin', _anchor='member-management') }}" class="admin-member-search">
+        <label for="member-username" class="admin-credit-label">ค้นหาด้วยชื่อผู้ใช้</label>
+        <div class="admin-member-search-row">
+          <input id="member-username" type="search" name="username" value="{{ username }}" class="form-input form-input-sm" placeholder="พิมพ์ username" autocomplete="off" />
+          <button type="submit" class="btn btn-primary btn-xs"><i class="fas fa-search"></i> ค้นหา</button>
+          {% if username %}<a href="{{ url_for('admin') }}#member-management" class="btn btn-ghost btn-xs">ล้าง</a>{% endif %}
+        </div>
+      </form>
+      <div class="table-wrap member-table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>ชื่อผู้ใช้</th><th>ชื่อ-นามสกุล</th>{% if points_rewards_enabled %}<th>แต้ม</th>{% endif %}<th>เครดิต</th><th>สถานะ</th><th>บัญชีธนาคาร</th><th>ปรับยอด</th></tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td class="text-strong">
+                {{ u.username }}
+                {% if u.is_admin %}<span class="role-badge">ADMIN</span>{% endif %}
+                {% if u.is_partner %}<span class="role-badge role-badge-partner">PARTNER</span>{% endif %}
+              </td>
+              <td>{{ u.full_name or '-' }}</td>
+              {% if points_rewards_enabled %}<td class="text-strong">{{ "{:,}".format(u.points) }}</td>{% endif %}
+              <td class="text-strong">{{ "{:,.2f}".format(u.credit_balance) }}</td>
+              <td>
+                <span class="status {{ 'status-completed' if u.is_active else 'status-cancelled' }}">
+                  {{ 'ใช้งาน' if u.is_active else 'ระงับ' }}
+                </span>
+              </td>
+              <td>
+                {% if u.bank_accounts %}
+                  {% for account in u.bank_accounts %}
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                      <img src="{{ account.logo_url }}" alt="{{ account.bank_name }}" style="width:24px;height:24px;border-radius:6px;object-fit:cover;" />
+                      <span>{{ account.bank_name }} {{ account.account_number }} ({{ account.account_name }})</span>
+                      <span class="status {{ 'status-completed' if account.is_active else 'status-cancelled' }}">{{ 'ใช้งาน' if account.is_active else 'ระงับ' }}</span>
+                      <form method="post" action="{{ url_for('admin_toggle_bank_account', account_id=account.id) }}" style="margin:0;">
+                        <button type="submit" class="btn btn-ghost btn-xs">{{ 'ระงับ' if account.is_active else 'เปิด' }}</button>
+                      </form>
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <span class="text-muted">ยังไม่ผูกบัญชี</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="admin-credit-column">
+                  <form method="post" action="{{ url_for('admin_adjust_credits', user_id=u.id) }}" class="admin-credit-form">
+                    <input type="hidden" name="username" value="{{ username }}" />
+                    <div class="admin-credit-input-wrap">
+                      <label class="admin-credit-label">ปรับเครดิต</label>
+                      <input type="number" name="amount" class="form-input form-input-sm admin-credit-input" placeholder="จำนวนเครดิต" min="0.01" step="0.01" required />
+                    </div>
+                    <div class="admin-credit-actions">
+                      <button type="submit" name="action" value="add" class="btn btn-success btn-xs admin-credit-btn">
+                        <i class="fas fa-plus-circle"></i> เพิ่ม
+                      </button>
+                      <button type="submit" name="action" value="deduct" class="btn btn-danger btn-xs admin-credit-btn">
+                        <i class="fas fa-minus-circle"></i> ลด
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <!-- ===== จัดการห้องแทงหวย (Lottery Rooms) แบบออโต้ ===== -->
+    <details class="panel admin-collapsible-panel" id="lottery-room-management">
+      <summary class="admin-collapsible-summary"><h2 class="panel-title"><i class="fas fa-ship"></i> จัดการห้องแทงหวย</h2><span><i class="fas fa-chevron-down"></i> เปิดจัดการ</span></summary>
+      
+      <!-- ฟอร์มเพิ่มห้องหวยใหม่ -->
+      <form method="post" action="{{ url_for('admin_lottery_rooms') }}" enctype="multipart/form-data" class="admin-form" style="margin-bottom: 24px;">
+        <div class="form-row">
+          <div class="form-group" style="flex: 2;">
+            <label class="form-label">ชื่อห้องหวย <span class="form-required">*</span></label>
+            <input type="text" name="name" class="form-input" placeholder="เช่น หวยรัฐบาล, หวยฮานอย" required />
+          </div>
+          <div class="form-group" style="flex: 2;">
+            <label class="form-label">คำอธิบายห้อง</label>
+            <input type="text" name="description" class="form-input" placeholder="รายละเอียดสั้นๆ เกี่ยวกับห้องหวยนี้" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="flex: 2;">
+            <label class="form-label">📁 อัปโหลดไอคอน/รูปห้องจากเครื่อง</label>
+            <input type="file" name="image_file" class="form-input" accept="image/*" />
+          </div>
+          <div class="form-group" style="flex: 2;">
+            <label class="form-label">🔗 หรือใส่ลิงก์รูปไอคอน (URL)</label>
+            <input type="url" name="image_url" class="form-input" placeholder="https://..." />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">สีพื้นหลังการ์ด (Bg Color)</label>
+            <input type="color" name="bg_color" class="form-input" value="#ffffff" style="height: 40px; padding: 4px;" />
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">ข้อความปุ่ม</label>
+            <input type="text" name="button_text" class="form-input" value="เข้าสู่ห้อง" />
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">ตัวอักษรลายน้ำจางๆ</label>
+            <input type="text" name="badge_text" class="form-input" placeholder="เช่น GOV" maxlength="10" />
+          </div>
+          <div class="form-group" style="flex: 1; display: flex; align-items: flex-end;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 10px;">
+              <input type="checkbox" name="is_active" value="y" checked style="width: 18px; height: 18px;" /> เปิดให้บริการ
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">+ เพิ่มห้องหวยใหม่</button>
+      </form>
+
+      <!-- ตารางแสดงรายการห้องหวยที่มีอยู่ -->
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>ไอคอน</th><th>ชื่อห้อง</th><th>สถานะ</th><th>จัดการ</th></tr>
+          </thead>
+          <tbody>
+            {% set rooms = LotteryRoom.query.all() %}
+            {% if rooms %}
+              {% for room in rooms %}
+              <tr>
+                <td>
+                  {% if room.image_url %}
+                    <img src="{{ room.image_url }}" alt="" class="table-thumb" style="object-fit: contain; width: 40px; height: 40px; background: #eee; border-radius: 4px;" />
+                  {% else %}
+                    <div class="table-thumb table-thumb-empty"></div>
+                  {% endif %}
+                </td>
+                <td class="text-strong">{{ room.name }}</td>
+                <td>
+                  <span class="status {{ 'status-completed' if room.is_active else 'status-cancelled' }}">
+                    {{ 'เปิด' if room.is_active else 'ปิด' }}
+                  </span>
+                </td>
+                <td class="table-actions" style="display: flex; gap: 6px; align-items: center;">
+                  <!-- 🎯 เพิ่มปุ่มจัดการเลตรงนี้ -->
+                  <a href="{{ url_for('admin_blocked_numbers', room_id=room.id) }}" class="btn btn-xs" style="background: #d97706; color: white; text-decoration: none; padding: 4px 8px; border-radius: 4px; font-weight: bold;">เลขอั้น</a>
+                  <a href="{{ url_for('admin_thai_lottery') }}" class="btn btn-ghost btn-xs">ตั้งเวลา</a>
+                  
+                  <a href="{{ url_for('admin_lottery_room_edit', room_id=room.id) }}" class="btn btn-ghost btn-xs">แก้ไข</a>
+                  <form method="post" action="{{ url_for('admin_delete_lottery_room', room_id=room.id) }}"
+                        onsubmit="return confirm('ต้องการลบห้องหวยนี้ใช่หรือไม่?');" style="margin: 0;">
+                    <button type="submit" class="btn btn-danger btn-xs">ลบ</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="4" style="text-align: center; color: #888; padding: 20px;">ยังไม่มีห้องหวยในระบบ</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <!-- ===== จัดการรูปสไลด์แบนเนอร์หน้าแรก ===== -->
+    <details class="panel admin-collapsible-panel" id="banner-management">
+      <summary class="admin-collapsible-summary"><h2 class="panel-title"><i class="fas fa-images"></i> จัดการรูปสไลด์แบนเนอร์หน้าแรก</h2><span><i class="fas fa-chevron-down"></i> เปิดจัดการ</span></summary>
+      
+      <form method="post" action="{{ url_for('admin_banners') }}" enctype="multipart/form-data" class="admin-form" style="margin-bottom: 24px;">
+        <div class="form-row">
+          <div class="form-group" style="flex: 2;">
+            <label class="form-label" style="color: #f1c40f; font-weight: bold;">📁 อัปโหลดรูปภาพจากเครื่อง</label>
+            <input type="file" name="image_file" class="form-input" accept="image/*" />
+            <small style="color: #7dd3fc; display: block; margin-top: 6px;">แนะนำ 1600 x 900 พิกเซล (16:9)</small>
+          </div>
+          <div class="form-group" style="flex: 2;">
+            <label class="form-label">🔗 หรือใส่ลิงก์รูปภาพ (URL)</label>
+            <input type="url" name="image_url" class="form-input" placeholder="https://images.unsplash.com/..." />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex: 4;">
+            <label class="form-label">หัวข้อ / คำอธิบาย (ไม่ใส่ก็ได้)</label>
+            <input type="text" name="title" class="form-input" placeholder="เช่น แคมเปญพิเศษประจำเดือน" />
+          </div>
+          <div class="form-group" style="flex: 1; display: flex; align-items: flex-end;">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">+ เพิ่มรูปสไลด์</button>
+          </div>
+        </div>
+      </form>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>รูปตัวอย่าง</th><th>หัวข้อ</th><th>สถานะ</th><th>จัดการ</th></tr>
+          </thead>
+          <tbody>
+            {% if banners or uploaded_banners %}
+              {% for banner in banners %}
+              <tr>
+                <td>
+                  <img src="{{ banner.image_url }}" alt="" class="table-thumb" style="object-fit: cover; width: 80px; height: 40px; border-radius: 4px;" />
+                </td>
+                <td class="text-strong">{{ banner.title or '-' }}</td>
+                <td>
+                  <span class="status status-completed">แสดงผลอยู่</span>
+                </td>
+                <td class="table-actions">
+                  <form method="post" action="{{ url_for('admin_delete_banner', banner_id=banner.id) }}"
+                        onsubmit="return confirm('ต้องการลบรูปสไลด์นี้ใช่หรือไม่?');">
+                    <button type="submit" class="btn btn-danger btn-xs">ลบ</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+              {% for banner in uploaded_banners %}
+              <tr>
+                <td>
+                  <img src="{{ banner.image_url }}" alt="" class="table-thumb" style="object-fit: cover; width: 80px; height: 40px; border-radius: 4px;" />
+                </td>
+                <td class="text-strong">{{ banner.filename }}</td>
+                <td><span class="status status-completed">ไฟล์อัปโหลด</span></td>
+                <td class="table-actions">
+                  <form method="post" action="{{ url_for('admin_delete_uploaded_banner', filename=banner.filename) }}"
+                        onsubmit="return confirm('ต้องการลบไฟล์แบนเนอร์นี้ใช่หรือไม่?');">
+                    <button type="submit" class="btn btn-danger btn-xs">ลบ</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="4" style="text-align: center; color: #888; padding: 20px;">ยังไม่มีรูปสไลด์แบนเนอร์ในระบบ</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    {% if points_rewards_enabled %}
+    <!-- ===== เพิ่มของรางวัล ===== -->
+    <article class="panel">
+      <h2 class="panel-title">เพิ่มของรางวัลใหม่</h2>
+      <form method="post" action="{{ url_for('admin_add_reward') }}" class="admin-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">ชื่อของรางวัล <span class="form-required">*</span></label>
+            <input type="text" name="name" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">แต้มที่ใช้แลก</label>
+            <input type="number" name="points_required" class="form-input" value="100" min="1" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">จำนวนสต็อก</label>
+            <input type="number" name="stock" class="form-input" value="10" min="0" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">ลิงก์รูปภาพ (URL)</label>
+          <input type="url" name="image_url" class="form-input" placeholder="https://..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label">รายละเอียด</label>
+          <textarea name="description" class="form-textarea" rows="2"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">เพิ่มของรางวัล</button>
+      </form>
+    </article>
+
+    <!-- ===== จัดการของรางวัล ===== -->
+    <article class="panel">
+      <h2 class="panel-title">รายการของรางวัล</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>รูป</th><th>ชื่อ</th><th>แต้ม</th><th>สต็อก</th><th>สถานะ</th><th>จัดการ</th></tr>
+          </thead>
+          <tbody>
+            {% for reward in rewards %}
+            <tr>
+              <td>
+                {% if reward.image_url %}
+                  <img src="{{ reward.image_url }}" alt="" class="table-thumb" />
+                {% else %}
+                  <div class="table-thumb table-thumb-empty"></div>
+                {% endif %}
+              </td>
+              <td class="text-strong">{{ reward.name }}</td>
+              <td>{{ "{:,}".format(reward.points_required) }}</td>
+              <td>{{ reward.stock }}</td>
+              <td>
+                <span class="status {{ 'status-completed' if reward.is_active else 'status-cancelled' }}">
+                  {{ 'เปิด' if reward.is_active else 'ปิด' }}
+                </span>
+              </td>
+              <td class="table-actions">
+                <a href="{{ url_for('admin_edit_reward', reward_id=reward.id) }}" class="btn btn-ghost btn-xs">แก้ไข</a>
+                <form method="post" action="{{ url_for('admin_delete_reward', reward_id=reward.id) }}"
+                      onsubmit="return confirm('ต้องการเปลี่ยนสถานะของรางวัลนี้?');">
+                  {% if reward.is_active %}
+                    <button type="submit" class="btn btn-danger btn-xs">ปิด</button>
+                  {% else %}
+                    <button type="submit" class="btn btn-success btn-xs">เปิด</button>
+                  {% endif %}
+                </form>
+                {% if not reward.redemptions %}
+                <form method="post" action="{{ url_for('admin_purge_reward', reward_id=reward.id) }}"
+                      onsubmit="return confirm('ลบรางวัลนี้ถาวรใช่หรือไม่? การกระทำนี้ย้อนกลับไม่ได้');">
+                  <button type="submit" class="btn btn-ghost btn-xs" title="ลบถาวร"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <!-- ===== รายการแลกล่าสุด ===== -->
+    <article class="panel">
+      <h2 class="panel-title">รายการแลกล่าสุด</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>รหัส</th><th>สมาชิก</th><th>ของรางวัล</th><th>แต้ม</th><th>สถานะ</th><th>จัดการ</th></tr>
+          </thead>
+          <tbody>
+            {% for r in records %}
+            <tr>
+              <td><code class="code-chip">{{ r.redeem_code }}</code></td>
+              <td>{{ r.user.username }}</td>
+              <td>{{ r.reward_name }}</td>
+              <td>{{ "{:,}".format(r.points_used) }}</td>
+              <td><span class="status status-{{ r.status }}">{{ r.status }}</span></td>
+              <td class="table-actions">
+                <form method="post" action="{{ url_for('admin_update_redemption', record_id=r.id) }}" class="inline-form">
+                  <button type="submit" name="status" value="completed" class="btn btn-success btn-xs">ส่งมอบแล้ว</button>
+                  <button type="submit" name="status" value="cancelled" class="btn btn-danger btn-xs"
+                          onclick="return confirm('ยกเลิกและคืนแต้มให้สมาชิก?');">ยกเลิก</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

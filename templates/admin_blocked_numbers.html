@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}จัดการเลขอั้น — {{ room.name }}{% endblock %}
+
+{% block content %}
+<section class="admin-section blocked-numbers-page">
+<div class="container">
+    <div class="blocked-page-head d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <span class="eyebrow">ROOM CONTROL</span>
+            <h1 class="page-title mb-1">จัดการเรทเลขอั้น</h1>
+            <p class="section-desc mb-0">{{ room.name }} · กำหนดเลขที่จ่ายลดลงเฉพาะห้องนี้ เช่น ปกติ 90 ให้จ่าย 45</p>
+        </div>
+        <a href="{{ url_for('admin_lottery_rooms') }}" class="btn btn-ghost">กลับหน้าห้องหวย</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="blocked-panel">
+                <div class="blocked-panel-head"><i class="fas fa-sliders-h"></i><span>เพิ่มหรือปรับเรทเลข</span></div>
+                <div class="blocked-panel-body">
+                    <form action="{{ url_for('admin_blocked_numbers', room_id=room.id) }}" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold" for="blocked-bet-type">ประเภทการแทง</label>
+                            <select id="blocked-bet-type" name="bet_type" class="form-input" required>
+                                <option value="">เลือกประเภท</option>
+                                <option value="3up">3 ตัวบน</option>
+                                <option value="3toad">3 ตัวโต๊ด</option>
+                                <option value="2up">2 ตัวบน</option>
+                                <option value="2down">2 ตัวล่าง</option>
+                                <option value="runup">วิ่งบน</option>
+                                <option value="rundown">วิ่งล่าง</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold" for="blocked-number">หมายเลข</label>
+                            <input id="blocked-number" type="text" name="number" class="form-input"
+                                   inputmode="numeric" pattern="[0-9]+" maxlength="3"
+                                   placeholder="เช่น 789 หรือ 89" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold" for="blocked-payout">อัตราจ่ายใหม่</label>
+                            <input id="blocked-payout" type="number" name="payout_multiplier" class="form-input"
+                                   min="0.01" step="0.01" placeholder="เช่น 45" required>
+                            <small class="text-muted">กรอกเป็นจำนวนเท่าที่จ่าย เช่น 45 จากเรทปกติ 90</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block fw-bold"><i class="fas fa-save"></i> บันทึกเรทเลข</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ตารางแสดงรายการเลขอั้นที่มีอยู่จริง -->
+<div class="col-md-8">
+    <div class="blocked-panel">
+        <div class="blocked-panel-head"><i class="fas fa-list-check"></i><span>รายการเรทเลขอั้นในห้องนี้</span>
+        </div>
+        <div class="blocked-table-wrap">
+            <div class="table-responsive">
+                <table class="data-table blocked-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ประเภท</th>
+                            <th>หมายเลข</th>
+                            <th>เรทจ่าย</th>
+                            <th>จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if room.blocked_numbers %}
+                            {% for item in room.blocked_numbers %}
+                            <tr>
+                                <td>
+                                    <span class="blocked-type-badge">
+                                        {% if item.bet_type == '3up' %}3 ตัวบน
+                                        {% elif item.bet_type == '3toad' %}3 ตัวโต๊ด
+                                        {% elif item.bet_type == '2up' %}2 ตัวบน
+                                        {% elif item.bet_type == '2down' %}2 ตัวล่าง
+                                        {% elif item.bet_type == 'runup' %}วิ่งบน
+                                        {% elif item.bet_type == 'rundown' %}วิ่งล่าง
+                                        {% else %}{{ item.bet_type }}
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td><strong class="blocked-number">{{ item.number }}</strong></td>
+                                <td><strong class="blocked-rate">{{ "{:,.2f}".format(item.payout_multiplier) }}</strong></td>
+                                <td>
+                                    <form action="{{ url_for('admin_delete_blocked_number', blocked_id=item.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('ต้องการลบเลขอั้น {{ item.number }} นี้ใช่หรือไม่?')">
+                                            <i class="fas fa-trash"></i> ลบ
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">ยังไม่มีการกำหนดเลขอั้นในห้องนี้</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}
