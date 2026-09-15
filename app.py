@@ -10,6 +10,7 @@ import re
 import shutil
 from datetime import datetime, timedelta
 from functools import wraps
+from zoneinfo import ZoneInfo
 from sqlalchemy import inspect, text, or_, func
 
 from flask import (
@@ -55,6 +56,7 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["POINTS_REWARDS_ENABLED"] = False
 ACCOUNT_TEXT_PATTERN = r"[A-Za-z0-9!@#$%^&*._+\-]+"
+BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
 # กำหนดโฟลเดอร์สำหรับเก็บรูปอัปโหลด
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(BASE_DIR, "static", "uploads"))
@@ -98,6 +100,11 @@ def current_user():
     return db.session.get(User, uid)
 
 
+def app_now():
+    """Return the current time in the timezone used by lottery schedules."""
+    return datetime.now(BANGKOK_TZ).replace(tzinfo=None)
+
+
 def ensure_default_admin_accounts():
     """Keep the documented local admin accounts available after a DB reset."""
     changed = False
@@ -121,7 +128,7 @@ def inject_globals():
     return {
         "current_user": user,
         "unread_notifications": Notification.query.filter_by(user_id=user.id, is_read=False).count() if user else 0,
-        "now": datetime.now(),
+        "now": app_now(),
         "HeroBanner": HeroBanner,
         "LotteryRoom": LotteryRoom
         ,"admin_contact_url": contact_setting.value if contact_setting and contact_setting.value else "",
@@ -193,7 +200,7 @@ def _api_draw_datetime(value, date_value):
 def sync_lottery_api_results(date_value=None):
     """Import API rooms, schedules, and results without settling member bets."""
     payload = fetch_results(date_value)
-    query_date = payload.get("date") or date_value or datetime.now().strftime("%Y-%m-%d")
+    query_date = payload.get("date") or date_value or app_now().strftime("%Y-%m-%d")
     imported_rooms = 0
     imported_periods = 0
     updated_results = 0
@@ -599,7 +606,7 @@ def close_expired_periods(room_id=None):
     """ปิดงวดที่เลยเวลารับแทงแล้ว ก่อนให้ผู้ใช้เห็นหรือส่งโพย"""
     query = ThaiLotteryPeriod.query.filter(
         ThaiLotteryPeriod.is_open.is_(True),
-        ThaiLotteryPeriod.close_time <= datetime.now(),
+        ThaiLotteryPeriod.close_time <= app_now(),
     )
     if room_id is not None:
         query = query.filter_by(room_id=room_id)
@@ -618,7 +625,7 @@ def add_thai_lottery_bets(user, period, entries):
     if len(entries) > MAX_BET_ENTRIES:
         raise ValueError(f"โพยหนึ่งใบมีรายการได้ไม่เกิน {MAX_BET_ENTRIES} รายการ")
 
-    now = datetime.now()
+    now = app_now()
     if not period or not period.is_open or period.close_time <= now:
         raise ValueError("งวดนี้ปิดรับแทงแล้ว")
     if period.open_time and period.open_time > now:
@@ -869,7 +876,7 @@ def contact_page():
 def lottery_rooms():
     rooms = active_lottery_rooms().all()
     close_expired_periods()
-    now = datetime.now()
+    now = app_now()
     room_schedules = {}
     room_groups = {}
     for room in rooms:
@@ -911,7 +918,7 @@ def lottery_thai():
         return redirect(url_for("lottery_rooms"))
 
     close_expired_periods(room.id)
-    now = datetime.now()
+    now = app_now()
     active_period = ThaiLotteryPeriod.query.filter(
         ThaiLotteryPeriod.room_id == room.id,
         ThaiLotteryPeriod.is_open.is_(True),
