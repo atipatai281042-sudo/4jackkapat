@@ -7,7 +7,7 @@
   <title>{% block title %}mklotto — ระบบแทงหวยออนไลน์{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="icon" href="{{ url_for('static', filename='brand-logo.png', v='3') }}" type="image/png" />
+  <link rel="icon" href="{{ url_for('static', filename='brand-icon.svg', v='3') }}" type="image/svg+xml" />
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <!-- เพิ่ม FontAwesome สำหรับแสดงไอคอนต่างๆ -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -21,7 +21,7 @@
     <div class="container header-inner">
       <a href="{{ url_for('index') }}" class="brand">
         <span class="brand-mark brand-mark-premium">
-          <img src="{{ url_for('static', filename='brand-logo.png', v='3') }}" alt="mklotto" class="brand-logo" onerror="this.src='{{ brand_icon_url }}';">
+          <img src="{{ url_for('static', filename='brand-icon.svg', v='3') }}" alt="mklotto" class="brand-logo" onerror="this.src='{{ brand_icon_url }}';">
         </span>
         <span class="brand-lockup">
           <span class="brand-text brand-text-premium">{{ brand_name }}</span>

@@ -127,7 +127,7 @@ def inject_globals():
         ,"admin_contact_url": contact_setting.value if contact_setting and contact_setting.value else "",
         "brand_name": get_setting("brand_name", "mklotto"),
         "brand_tagline": get_setting("brand_tagline", "LOTTERY NETWORK"),
-        "brand_icon_url": get_setting("brand_icon_url", "/static/brand-logo.png"),
+        "brand_icon_url": get_setting("brand_icon_url", "/static/brand-icon.svg"),
         "points_rewards_enabled": app.config["POINTS_REWARDS_ENABLED"],
     }
 
