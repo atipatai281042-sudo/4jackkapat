@@ -13,7 +13,7 @@ from models import (
 from app import app as main_app
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-MOBILE_BACKOFFICE_CSS = """<style>@media(max-width:700px){.shell{display:block}.side{position:sticky;top:0;z-index:20;width:100%;padding:10px;border-right:0;border-bottom:1px solid #ffffff20}.profile,.logout{display:none}.nav{display:flex;overflow-x:auto;gap:5px;scrollbar-width:none}.nav::-webkit-scrollbar{display:none}.nav-label{display:none}.nav a{flex:0 0 auto;white-space:nowrap;min-height:40px;padding:9px 11px;background:#111a26}.main{padding:16px 10px;overflow:hidden}.top{gap:8px}.top h1{font-size:21px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid{grid-template-columns:1fr;gap:10px}.table-wrap{overflow-x:auto}.main input,.main select,.main textarea,.main button{font-size:16px;max-width:100%}}</style>"""
+MOBILE_BACKOFFICE_CSS = """<style>@media(max-width:700px){.shell{display:block}.side{position:sticky;top:0;z-index:20;width:100%;padding:10px;border-right:0;border-bottom:1px solid #ffffff20}.profile,.logout{display:none}.nav{display:flex;overflow-x:auto;gap:5px;scrollbar-width:none}.nav::-webkit-scrollbar{display:none}.nav-label{display:none}.nav a{flex:0 0 auto;white-space:nowrap;min-height:40px;padding:9px 11px;background:#111a26}.main{padding:16px 10px;overflow:hidden}.top{gap:8px}.top h1{font-size:21px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid{grid-template-columns:1fr;gap:10px}.table-wrap{overflow-x:auto}.main form{display:grid;grid-template-columns:1fr!important;gap:10px!important}.main form label{min-width:0}.main input,.main select,.main textarea,.main button{width:100%;max-width:100%;font-size:16px;box-sizing:border-box}}</style>"""
 backoffice_app = Flask(__name__, template_folder="templates", static_folder="static")
 backoffice_app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "loyalty-app-session-secret-v1"
 backoffice_app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -161,7 +161,7 @@ def dashboard():
         )
         replacements = {
             'href="#members"': 'href="#members"',
-            'href="#transfer"': 'href="#transfer"',
+            'href="#transfer"': 'href="#partner-topup"',
             'href="#finance"': 'href="#finance"',
             'href="#reports"': 'href="#reports"',
             'href="#settings"': 'href="#reports"',
