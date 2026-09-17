@@ -59,7 +59,7 @@ app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["POINTS_REWARDS_ENABLED"] = False
-app.config["BACKOFFICE_URL"] = os.environ.get("BACKOFFICE_URL", "http://127.0.0.1:5004").rstrip("/")
+app.config["BACKOFFICE_URL"] = os.environ.get("BACKOFFICE_URL", "/backoffice").rstrip("/")
 ACCOUNT_TEXT_PATTERN = r"[A-Za-z0-9!@#$%^&*._+\-]+"
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 

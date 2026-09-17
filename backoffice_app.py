@@ -41,7 +41,7 @@ def logged_user():
 
 @backoffice_app.context_processor
 def inject_backoffice_globals():
-    main_app_url = request.host_url.rstrip("/") + "/main"
+    main_app_url = request.script_root.rstrip("/") + "/main"
     return {"current_user": logged_user(), "main_app_url": main_app_url}
 
 
