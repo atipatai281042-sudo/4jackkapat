@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timedelta
 
-from app import app, db, User, LotteryRoom, BlockedNumber, ThaiLotteryPeriod, ThaiLotteryBet, add_thai_lottery_bets
+from app import app, db, User, LotteryRoom, BlockedNumber, ThaiLotteryPeriod, ThaiLotteryBet, add_thai_lottery_bets, sync_lottery_api_results
 
 
 @pytest.fixture
@@ -443,3 +443,145 @@ def test_treasure_chest_demo_is_disabled(client):
         assert client.post('/games/treasure-chest/open', json={'chest': 1}).status_code == 404
         db.session.refresh(user)
         assert user.credit_balance == 100
+
+
+def test_api_results_auto_settle_pending_bets_without_admin_click(client):
+    import app as app_module
+
+    with app.app_context():
+        user = User(username='member-api-auto', full_name='Member', credit_balance=100)
+        user.set_password('test-password')
+        db.session.add(user)
+        room = LotteryRoom.query.filter_by(name='หวยรัฐบาลไทย').first()
+        period = ThaiLotteryPeriod(
+            room_id=room.id,
+            period_date='2026-09-16',
+            open_time=datetime.now() - timedelta(minutes=5),
+            close_time=datetime.now() + timedelta(minutes=30),
+            is_open=True,
+        )
+        db.session.add(period)
+        db.session.commit()
+        add_thai_lottery_bets(user, period, [{'bet_type': '3up', 'number': '123', 'amount': 10}])
+
+        payload = {
+            'date': '2026-09-16',
+            'items': [{
+                'key': 'thailotto',
+                'label': 'หวยรัฐบาลไทย',
+                'category': 'thailand',
+                'status': 'success',
+                'drawDate': '2026-09-16',
+                'schedule': {'openTime': '2026-09-16T00:00:00', 'closeTime': '2026-09-16T23:00:00'},
+                'top3': '123',
+                'bottom2': '45',
+            }],
+        }
+        original_fetch = app_module.fetch_results
+        app_module.fetch_results = lambda date_value=None: payload
+        try:
+            sync_lottery_api_results('2026-09-16')
+        finally:
+            app_module.fetch_results = original_fetch
+
+        db.session.refresh(user)
+        db.session.refresh(period)
+        bet = ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id).first()
+        assert user.credit_balance == 9090
+        assert period.is_checked is True
+        assert bet.status == 'win'
+
+
+def test_index_hides_deposit_and_withdraw_shortcuts(client):
+    with app.app_context():
+        user = User(username='member-home', full_name='Member', credit_balance=100)
+        user.set_password('test-password')
+        db.session.add(user)
+        db.session.commit()
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session['user_id'] = user.id
+        response = client.get('/')
+        html = response.get_data(as_text=True)
+        assert 'ฝากเงิน' not in html
+        assert 'ถอนเงิน' not in html
+
+
+def test_deposit_routes_are_disabled_for_all_users(client):
+    with app.app_context():
+        user = User(username='member-disabled-wallet', full_name='Member', credit_balance=100)
+        user.set_password('test-password')
+        db.session.add(user)
+        db.session.commit()
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session['user_id'] = user.id
+        assert client.get('/wallet').status_code == 404
+        assert client.get('/deposit').status_code == 404
+        assert client.get('/withdraw').status_code == 404
+
+
+def test_member_can_cancel_pending_ticket_before_period_close(client):
+    with app.app_context():
+        user = User(username='member-cancel', full_name='Member', credit_balance=100)
+        user.set_password('test-password')
+        db.session.add(user)
+        room = LotteryRoom.query.filter_by(name='หวยรัฐบาลไทย').first()
+        period = ThaiLotteryPeriod(
+            room_id=room.id,
+            period_date='2026-09-16',
+            open_time=datetime.now() - timedelta(minutes=5),
+            close_time=datetime.now() + timedelta(minutes=30),
+            is_open=True,
+        )
+        db.session.add(period)
+        db.session.commit()
+        add_thai_lottery_bets(user, period, [{'bet_type': '3up', 'number': '123', 'amount': 10}])
+        ticket = ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id).first()
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session['user_id'] = user.id
+        response = client.post(f'/lottery/ticket/{period.id}/{ticket.ticket_code}/cancel', follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers.get('Location') == f'/lottery/ticket/{period.id}/{ticket.ticket_code}'
+
+        with app.app_context():
+            db.session.refresh(ticket)
+            assert ticket.status == 'cancelled'
+            db.session.refresh(user)
+            assert user.credit_balance == 100
+
+
+def test_member_cannot_cancel_ticket_after_period_close(client):
+    with app.app_context():
+        user = User(username='member-expired', full_name='Member', credit_balance=100)
+        user.set_password('test-password')
+        db.session.add(user)
+        room = LotteryRoom.query.filter_by(name='หวยรัฐบาลไทย').first()
+        period = ThaiLotteryPeriod(
+            room_id=room.id,
+            period_date='2026-09-16',
+            open_time=datetime.now() - timedelta(hours=2),
+            close_time=datetime.now() - timedelta(minutes=1),
+            is_open=False,
+        )
+        db.session.add(period)
+        db.session.commit()
+        add_thai_lottery_bets(user, period, [{'bet_type': '3up', 'number': '123', 'amount': 10}])
+        ticket = ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id).first()
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session['user_id'] = user.id
+        response = client.post(f'/lottery/ticket/{period.id}/{ticket.ticket_code}/cancel', follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers.get('Location') == '/history'
+
+        with app.app_context():
+            db.session.refresh(ticket)
+            assert ticket.status == 'pending'
+            db.session.refresh(user)
+            assert user.credit_balance == 90

@@ -210,7 +210,7 @@ def _api_draw_datetime(value, date_value):
 
 
 def sync_lottery_api_results(date_value=None):
-    """Import API rooms, schedules, and results without settling member bets."""
+    """Import API rooms, schedules, and settle successful results automatically."""
     payload = fetch_results(date_value)
     query_date = payload.get("date") or date_value or app_now().strftime("%Y-%m-%d")
     imported_rooms = 0
@@ -293,7 +293,7 @@ def sync_lottery_api_results(date_value=None):
         period = ThaiLotteryPeriod.query.filter_by(
             room_id=room.id, api_key=api_key, period_date=draw_date
         ).first()
-        if period is None and api_key == room.api_key:
+        if period is None:
             period = ThaiLotteryPeriod.query.filter_by(
                 room_id=room.id, period_date=draw_date, api_key=None
             ).first()
@@ -320,6 +320,11 @@ def sync_lottery_api_results(date_value=None):
             period.result_2down = str(item.get("bottom2") or "").strip() or None
             period.result_3back = str(item.get("bottom3") or "").strip() or None
             updated_results += 1
+
+    settlement_admin = User.query.filter_by(role="admin").order_by(User.id.asc()).first()
+    if settlement_admin:
+        for period in ThaiLotteryPeriod.query.filter_by(is_checked=False, api_status="success").all():
+            settle_lottery_period(period, settlement_admin)
 
     db.session.commit()
     return {"date": query_date, "rooms": imported_rooms, "periods": imported_periods, "results": updated_results}
@@ -1272,6 +1277,29 @@ def lottery_ticket(period_id, ticket_code=None):
     )
 
 
+@app.route("/lottery/ticket/<int:period_id>/<string:ticket_code>/cancel", methods=["POST"])
+@login_required
+def cancel_lottery_ticket(period_id, ticket_code):
+    user = current_user()
+    period = db.session.get(ThaiLotteryPeriod, period_id)
+    if not period or not period.is_open or not period.close_time or period.close_time <= app_now():
+        abort(404)
+
+    bets = ThaiLotteryBet.query.filter_by(
+        user_id=user.id, period_id=period.id, ticket_code=ticket_code, status="pending"
+    ).all()
+    if not bets:
+        abort(404)
+
+    refund_amount = sum(bet.amount for bet in bets)
+    for bet in bets:
+        bet.status = "cancelled"
+    adjust_credit(user, refund_amount, f"คืนโพยหวย {ticket_code}")
+    db.session.commit()
+    flash("คืนโพยเรียบร้อยแล้ว", "success")
+    return redirect(url_for("lottery_ticket", period_id=period.id, ticket_code=ticket_code))
+
+
 @app.route("/admin/lottery-tickets")
 @admin_required
 def admin_lottery_tickets():
@@ -1438,146 +1466,19 @@ def admin_toggle_bank_account(account_id):
 @app.route("/wallet", methods=["GET", "POST"])
 @login_required
 def wallet():
-    user = current_user()
-    if not user.is_admin:
-        flash("ระบบฝาก-ถอนปิดให้บริการชั่วคราว กรุณาติดต่อแอดมินเพื่อเพิ่มเครดิต", "info")
-        return redirect(url_for("lottery_rooms"))
-    if request.method == "POST":
-        action = request.form.get("action")
-        try:
-            amount = round(float(request.form.get("amount", 0)), 2)
-        except ValueError:
-            amount = 0
-        if amount <= 0:
-            flash("กรุณาระบุจำนวนเครดิตให้ถูกต้อง", "error")
-        elif action == "deposit":
-            proof_url = request.form.get("proof_url", "").strip()
-            slip = request.files.get("slip_file")
-            if slip and slip.filename:
-                extension = os.path.splitext(secure_filename(slip.filename))[1].lower()
-                if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
-                    flash("รองรับสลิปเฉพาะไฟล์ JPG, PNG หรือ WEBP", "error")
-                    return redirect(url_for("wallet") + "#deposit")
-                filename = f"slip_{int(datetime.now().timestamp())}_{random.randint(1000, 9999)}{extension}"
-                slip.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-                proof_url = f"/static/uploads/{filename}"
-            db.session.add(DepositRequest(
-                user_id=user.id,
-                amount=amount,
-                method=request.form.get("method", "manual_transfer"),
-                reference=request.form.get("reference", "").strip(),
-                proof_url=proof_url,
-                note=request.form.get("note", "").strip(),
-            ))
-            notify_user(user, "ส่งคำขอฝากเครดิตแล้ว", f"รอแอดมินตรวจสอบจำนวน {amount:,.2f} เครดิต", "wallet")
-            db.session.commit()
-            flash("ส่งคำขอฝากเครดิตแล้ว กรุณารอแอดมินตรวจสอบ", "success")
-        elif action == "withdraw":
-            bank_account_id = request.form.get("bank_account_id", type=int)
-            account = db.session.get(UserBankAccount, bank_account_id) if bank_account_id else None
-            if amount > user.credit_balance:
-                flash("เครดิตไม่พอสำหรับการถอน", "error")
-            elif not account or account.user_id != user.id or not account.is_active:
-                flash("กรุณาเลือกบัญชีธนาคารที่ผูกไว้เท่านั้น", "error")
-            else:
-                db.session.add(WithdrawalRequest(
-                    user_id=user.id,
-                    amount=amount,
-                    method=request.form.get("method", "manual_transfer"),
-                    payout_account=f"{account.bank_name} {account.account_number} ({account.account_name})",
-                    note=request.form.get("note", "").strip(),
-                ))
-                notify_user(user, "ส่งคำขอถอนเครดิตแล้ว", f"รอแอดมินตรวจสอบจำนวน {amount:,.2f} เครดิต", "wallet")
-                db.session.commit()
-                flash("ส่งคำขอถอนเครดิตแล้ว กรุณารอแอดมินตรวจสอบ", "success")
-        return redirect(url_for("wallet"))
-
-    deposits = DepositRequest.query.filter_by(user_id=user.id).order_by(DepositRequest.created_at.desc()).limit(30).all()
-    withdrawals = WithdrawalRequest.query.filter_by(user_id=user.id).order_by(WithdrawalRequest.created_at.desc()).limit(30).all()
-    bank_accounts = UserBankAccount.query.filter_by(user_id=user.id, is_active=True).order_by(UserBankAccount.created_at.asc()).all()
-    return render_template(
-        "wallet.html", deposits=deposits, withdrawals=withdrawals, bank_accounts=bank_accounts,
-        deposit_bank_name=get_setting("deposit_bank_name", "ธนาคารกสิกรไทย"),
-        deposit_account_number=get_setting("deposit_account_number", "1068271726"),
-        deposit_account_name=get_setting("deposit_account_name", "อธิปไตย ขาวศรี"),
-        deposit_bank_color=get_setting("deposit_bank_color", "#2fbf8f"),
-    )
+    abort(404)
 
 
 @app.route("/deposit", methods=["GET", "POST"])
 @login_required
 def deposit_page():
-    user = current_user()
-    if not user.is_admin:
-        flash("ระบบฝาก-ถอนปิดให้บริการชั่วคราว กรุณาติดต่อแอดมินเพื่อเพิ่มเครดิต", "info")
-        return redirect(url_for("lottery_rooms"))
-    if request.method == "POST":
-        try:
-            amount = round(float(request.form.get("amount", 0)), 2)
-        except (TypeError, ValueError):
-            amount = 0
-        slip = request.files.get("slip_file")
-        if amount <= 0 or not slip or not slip.filename:
-            flash("กรุณาระบุจำนวนเงินและอัปโหลดสลิป", "error")
-            return redirect(url_for("deposit_page"))
-        extension = os.path.splitext(secure_filename(slip.filename))[1].lower()
-        if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
-            flash("รองรับสลิปเฉพาะไฟล์ JPG, PNG หรือ WEBP", "error")
-            return redirect(url_for("deposit_page"))
-        filename = f"slip_{int(datetime.now().timestamp())}_{random.randint(1000, 9999)}{extension}"
-        slip.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-        db.session.add(DepositRequest(
-            user_id=user.id,
-            amount=amount,
-            method="manual_transfer",
-            reference=request.form.get("reference", "").strip(),
-            proof_url=f"/static/uploads/{filename}",
-        ))
-        notify_user(user, "ส่งคำขอฝากเครดิตแล้ว", f"รอแอดมินตรวจสอบจำนวน {amount:,.2f} เครดิต", "wallet")
-        db.session.commit()
-        flash("ส่งหลักฐานฝากเงินแล้ว กรุณารอแอดมินตรวจสอบ", "success")
-        return redirect(url_for("deposit_page"))
-    deposits = DepositRequest.query.filter_by(user_id=user.id).order_by(DepositRequest.created_at.desc()).limit(30).all()
-    return render_template(
-        "deposit.html",
-        deposits=deposits,
-        deposit_bank_name=get_setting("deposit_bank_name", "ธนาคารกสิกรไทย"),
-        deposit_account_number=get_setting("deposit_account_number", "1068271726"),
-        deposit_account_name=get_setting("deposit_account_name", "อธิปไตย ขาวศรี"),
-        deposit_bank_color=get_setting("deposit_bank_color", "#2fbf8f"),
-    )
+    abort(404)
 
 
 @app.route("/withdraw", methods=["GET", "POST"])
 @login_required
 def withdraw_page():
-    user = current_user()
-    if not user.is_admin:
-        flash("ระบบฝาก-ถอนปิดให้บริการชั่วคราว กรุณาติดต่อแอดมินเพื่อเพิ่มเครดิต", "info")
-        return redirect(url_for("lottery_rooms"))
-    bank_accounts = UserBankAccount.query.filter_by(user_id=user.id, is_active=True).order_by(UserBankAccount.created_at.asc()).all()
-    if request.method == "POST":
-        try:
-            amount = round(float(request.form.get("amount", 0)), 2)
-        except (TypeError, ValueError):
-            amount = 0
-        account = db.session.get(UserBankAccount, request.form.get("bank_account_id", type=int))
-        if amount <= 0 or amount > user.credit_balance:
-            flash("เครดิตไม่พอหรือจำนวนเงินไม่ถูกต้อง", "error")
-        elif not account or account.user_id != user.id or not account.is_active:
-            flash("กรุณาเลือกบัญชีธนาคารที่ผูกไว้เท่านั้น", "error")
-        else:
-            db.session.add(WithdrawalRequest(
-                user_id=user.id, amount=amount, method="manual_transfer",
-                payout_account=f"{account.bank_name} {account.account_number} ({account.account_name})",
-                note=request.form.get("note", "").strip(),
-            ))
-            notify_user(user, "ส่งคำขอถอนเครดิตแล้ว", f"รอแอดมินตรวจสอบจำนวน {amount:,.2f} เครดิต", "wallet")
-            db.session.commit()
-            flash("ส่งคำขอถอนเงินแล้ว กรุณารอแอดมินตรวจสอบ", "success")
-            return redirect(url_for("withdraw_page"))
-    withdrawals = WithdrawalRequest.query.filter_by(user_id=user.id).order_by(WithdrawalRequest.created_at.desc()).limit(30).all()
-    return render_template("withdraw.html", withdrawals=withdrawals, bank_accounts=bank_accounts)
+    abort(404)
 
 
 @app.route("/dashboard")

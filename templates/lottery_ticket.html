@@ -26,6 +26,11 @@
 
     <article class="panel">
       <h2 class="panel-title">รายการในโพย</h2>
+      {% if refundable and not is_admin_view %}
+      <form method="post" action="{{ url_for('cancel_lottery_ticket', period_id=period.id, ticket_code=ticket_code) }}" onsubmit="return confirm('คืนโพยนี้และคืนเครดิตทั้งหมดเลยหรือไม่');">
+        <button type="submit" class="btn btn-danger btn-xs">คืนโพย</button>
+      </form>
+      {% endif %}
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr><th>ประเภท</th><th>เลข</th><th>ยอดแทง</th><th>อัตราจ่าย</th><th>รางวัล</th><th>สถานะ</th></tr></thead>

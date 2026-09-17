@@ -27,13 +27,23 @@
               {% set ticket_key = bet.ticket_code or ('legacy-' ~ bet.period_id) %}
               {% if ticket_key not in shown_tickets %}
               {% set _ = shown_tickets.append(ticket_key) %}
+              {% set can_cancel = bet.status == 'pending' and bet.period and bet.period.is_open and bet.period.close_time > now %}
               <tr>
                 <td>{{ bet.period.period_date }}</td>
                 <td>{{ bet.period.room.name if bet.period.room else '-' }}</td>
                 <td>{{ bet.number }} ({{ bet.bet_type }})</td>
                 <td class="text-negative">-{{ "{:,.2f}".format(bet.amount) }}</td>
                 <td><span class="status status-{{ bet.status }}">{{ bet.status }}</span></td>
-                <td><a class="btn btn-ghost btn-xs" href="{{ url_for('lottery_ticket', period_id=bet.period_id, ticket_code=bet.ticket_code) if bet.ticket_code else url_for('lottery_ticket', period_id=bet.period_id) }}">ดูใบโพย</a></td>
+                <td>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <a class="btn btn-ghost btn-xs" href="{{ url_for('lottery_ticket', period_id=bet.period_id, ticket_code=bet.ticket_code) if bet.ticket_code else url_for('lottery_ticket', period_id=bet.period_id) }}">ดูใบโพย</a>
+                    {% if bet.ticket_code and can_cancel %}
+                    <form method="post" action="{{ url_for('cancel_lottery_ticket', period_id=bet.period_id, ticket_code=bet.ticket_code) }}" onsubmit="return confirm('คืนโพยนี้และคืนเครดิตทั้งหมดเลยหรือไม่');">
+                      <button type="submit" class="btn btn-danger btn-xs">คืนโพย</button>
+                    </form>
+                    {% endif %}
+                  </div>
+                </td>
               </tr>
               {% endif %}
             {% endfor %}

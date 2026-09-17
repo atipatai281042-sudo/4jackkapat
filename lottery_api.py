@@ -38,7 +38,7 @@ def absolute_api_url(value):
 
 
 def flatten_result_items(payload):
-    items = []
+    items = [dict(item) for item in (payload.get("items") or [])]
     for category_key, category in (payload.get("categories") or {}).items():
         for item in category.get("items") or []:
             item = dict(item)
