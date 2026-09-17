@@ -42,7 +42,7 @@
     </div>
 
     <!-- ===== จัดการสมาชิก + ปรับแต้มและเครดิต ===== -->
-    <details class="panel admin-collapsible-panel" id="member-management" {% if username %}open{% endif %}>
+    <details class="panel admin-collapsible-panel" id="member-management" open>
       <summary class="admin-collapsible-summary"><h2 class="panel-title">จัดการสมาชิก แต้มสะสม และเครดิตเดิมพัน</h2><span><i class="fas fa-chevron-down"></i> เปิดจัดการ</span></summary>
       <form method="get" action="{{ url_for('admin', _anchor='member-management') }}" class="admin-member-search">
         <label for="member-username" class="admin-credit-label">ค้นหาด้วยชื่อผู้ใช้</label>
@@ -99,7 +99,7 @@
                     </div>
                     <div class="admin-credit-actions">
                       <button type="submit" name="action" value="add" class="btn btn-success btn-xs admin-credit-btn">
-                        <i class="fas fa-plus-circle"></i> เพิ่ม
+                        <i class="fas fa-plus-circle"></i> เติมเครดิต
                       </button>
                       <button type="submit" name="action" value="deduct" class="btn btn-danger btn-xs admin-credit-btn">
                         <i class="fas fa-minus-circle"></i> ลด
