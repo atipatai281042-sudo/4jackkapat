@@ -159,11 +159,11 @@ def dashboard():
             },
         )
         replacements = {
-            'href="#members"': 'href="/main/partner/members"',
-            'href="#transfer"': 'href="/main/partner#partner-topup"',
-            'href="#finance"': 'href="/main/partner/finance"',
-            'href="#reports"': 'href="/main/partner/reports"',
-            'href="#settings"': 'href="/main/partner/settings"',
+            'href="#members"': 'href="#members"',
+            'href="#transfer"': 'href="#transfer"',
+            'href="#finance"': 'href="#finance"',
+            'href="#reports"': 'href="#reports"',
+            'href="#settings"': 'href="#reports"',
         }
         for old_link, new_link in replacements.items():
             rendered = rendered.replace(old_link, new_link)
