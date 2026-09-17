@@ -13,6 +13,7 @@ from models import (
 from app import app as main_app
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+MOBILE_BACKOFFICE_CSS = """<style>@media(max-width:700px){.shell{display:block}.side{position:sticky;top:0;z-index:20;width:100%;padding:10px;border-right:0;border-bottom:1px solid #ffffff20}.profile,.logout{display:none}.nav{display:flex;overflow-x:auto;gap:5px;scrollbar-width:none}.nav::-webkit-scrollbar{display:none}.nav-label{display:none}.nav a{flex:0 0 auto;white-space:nowrap;min-height:40px;padding:9px 11px;background:#111a26}.main{padding:16px 10px;overflow:hidden}.top{gap:8px}.top h1{font-size:21px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid{grid-template-columns:1fr;gap:10px}.table-wrap{overflow-x:auto}.main input,.main select,.main textarea,.main button{font-size:16px;max-width:100%}}</style>"""
 backoffice_app = Flask(__name__, template_folder="templates", static_folder="static")
 backoffice_app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "loyalty-app-session-secret-v1"
 backoffice_app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -167,6 +168,7 @@ def dashboard():
         }
         for old_link, new_link in replacements.items():
             rendered = rendered.replace(old_link, new_link)
+        rendered = rendered.replace("</head>", MOBILE_BACKOFFICE_CSS + "</head>", 1)
         member_options = "".join(
             f'<option value="{member.id}">{escape(member.full_name or member.username)} - เครดิต {member.credit_balance:,.2f}</option>'
             for member in members
@@ -191,7 +193,13 @@ def dashboard():
     }
     announcements = HeroBanner.query.order_by(HeroBanner.created_at.desc()).limit(5).all()
     recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
-    return render_template("backoffice_admin_collapsible.html", stats=stats, announcements=announcements, recent_users=recent_users)
+    rendered = render_template(
+        "backoffice_admin_collapsible.html",
+        stats=stats,
+        announcements=announcements,
+        recent_users=recent_users,
+    )
+    return rendered.replace("</head>", MOBILE_BACKOFFICE_CSS + "</head>", 1)
 
 
 if __name__ == "__main__":
