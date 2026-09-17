@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "backoffice_shell.html" %}
 {% block content %}
 <div class="container py-4" style="max-width: 700px;">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -10,7 +10,7 @@
 
     <div class="card shadow-sm border-0">
         <div class="card-body p-4">
-            <form action="{{ url_for('admin_edit_lottery_room', room_id=room.id) }}" method="POST" enctype="multipart/form-data">
+            <form action="{{ url_for('admin_lottery_room_edit', room_id=room.id) }}" method="POST" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label class="form-label fw-bold">ชื่อห้องหวย <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" name="name" value="{{ room.name }}" required>

@@ -411,9 +411,24 @@ def points_rewards_required(view):
     return wrapper
 
 
+def _require_backoffice_proxy():
+    """Admin/partner pages are only ever meant to be reached through the
+    backoffice — main_app_proxy() stamps every request it forwards with this
+    header. A direct hit on /admin or /partner (bypassing /backoffice) bounces
+    to the backoffice login instead of rendering."""
+    expected = app.config["SECRET_KEY"]
+    provided = request.headers.get("X-Backoffice-Internal")
+    if not provided or provided != expected:
+        return redirect(f"{app.config['BACKOFFICE_URL']}/login")
+    return None
+
+
 def admin_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
+        gate = _require_backoffice_proxy()
+        if gate is not None:
+            return gate
         user = current_user()
         if not user:
             flash("กรุณาเข้าสู่ระบบก่อนใช้งาน", "warning")
@@ -427,6 +442,9 @@ def admin_required(view):
 def partner_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
+        gate = _require_backoffice_proxy()
+        if gate is not None:
+            return gate
         user = current_user()
         if not user:
             flash("กรุณาเข้าสู่ระบบก่อนใช้งาน", "warning")
@@ -2985,7 +3003,6 @@ def admin_lottery_rooms():
     return render_template("admin_lottery_rooms.html", rooms=rooms, categories=categories)
 
 
-@app.route("/admin/lottery-rooms/<int:room_id>/edit", methods=["GET", "POST"], endpoint="admin_edit_lottery_room")
 @app.route("/admin/lottery-rooms/<int:room_id>/edit", methods=["GET", "POST"], endpoint="admin_lottery_room_edit")
 @admin_required
 def admin_lottery_room_edit(room_id):

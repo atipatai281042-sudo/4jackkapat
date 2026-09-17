@@ -1,3 +1,114 @@
-<!doctype html>
-<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Partner Backoffice — mklotto</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>*{box-sizing:border-box}body{margin:0;background:#0b1018;color:#e7edf7;font-family:Kanit,sans-serif}.shell{min-height:100vh;display:grid;grid-template-columns:230px minmax(0,1fr)}.side{display:flex;flex-direction:column;gap:18px;padding:22px 14px;background:#070b12;border-right:1px solid #ffffff12}.brand{display:flex;align-items:center;gap:9px;padding:0 8px;color:#f3cf76}.brand img{width:40px;height:40px;object-fit:contain}.brand strong{display:block;font-size:18px}.brand small{display:block;font-size:8px;letter-spacing:.16em;color:#a58c55}.profile,.card{border:1px solid #ffffff12;border-radius:10px;background:#151d28}.profile{display:grid;gap:4px;padding:14px}.profile span,.profile small,.label,.kicker{font-size:10px;color:#8190a5;letter-spacing:.1em}.profile strong{font-size:15px;color:#fff}.profile small{color:#e4bd5b}.nav{display:grid;gap:4px}.nav-label{margin:5px 8px;color:#8190a5;font-size:10px;letter-spacing:.1em}.nav a,.logout{display:flex;align-items:center;gap:10px;padding:10px;border-radius:7px;color:#aeb9c9;text-decoration:none;font-size:13px}.nav a:hover,.nav a.active{background:#1a2a3d;color:#fff}.nav i,.logout i{width:17px;color:#e4bd5b;text-align:center}.logout{margin-top:auto;border-top:1px solid #ffffff12;border-radius:0;padding-top:16px}.main{min-width:0;padding:28px 34px;background:radial-gradient(circle at 90% 0%,#7e362b29,transparent 30%),#10161f}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px}.top h1{margin:3px 0 0;font-size:26px}.online{color:#9bd7bc;font-size:12px}.online i{display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:#45d397}.exit{margin-left:12px;padding:9px 12px;border:1px solid #ffffff1f;border-radius:7px;color:#dce4f0;text-decoration:none;font-size:12px}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.stats .card{padding:16px}.stats span{display:block;color:#99a7b9;font-size:11px}.stats span i{margin-right:6px;color:#e4bd5b}.stats strong{display:block;margin:9px 0 2px;color:#fff;font-size:26px}.stats small{color:#718096;font-size:11px}.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-bottom:18px}.card{padding:18px}.head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}.head h2{margin:3px 0 0;font-size:17px}.head i{color:#e4bd5b}.row,.task{display:flex;align-items:center;gap:11px;padding:11px 0;border-top:1px solid #ffffff12}.icon,.task>span{display:grid;place-items:center;width:32px;height:32px;flex:none;border-radius:7px;background:#22334a;color:#e4bd5b}.row strong,.task strong{display:block;color:#e8eef7;font-size:12px}.row small,.task small{display:block;margin-top:3px;color:#77869a;font-size:10px}.task{color:inherit;text-decoration:none}.task div{flex:1}.task>.fa-chevron-right{color:#66758a;font-size:11px}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:10px 8px;border-top:1px solid #ffffff12;text-align:left}.table th{color:#8190a5;font-size:10px;font-weight:400}.table td{color:#dbe4ef}.positive{color:#63d7a5!important}.muted{color:#8190a5!important}@media(max-width:900px){.shell{grid-template-columns:190px minmax(0,1fr)}.main{padding:20px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}@media(max-width:600px){.shell{grid-template-columns:1fr}.main{padding:14px}.top{align-items:flex-start;gap:12px;flex-direction:column}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.table{min-width:620px}.table-wrap{overflow-x:auto}}
-</style></head><body><div class="shell"><aside class="side"><div class="brand"><img src="{{ url_for('static',filename='brand-logo.png') }}" alt="mklotto"><div><strong>mklotto</strong><small>PARTNER BACKOFFICE</small></div></div><div class="profile"><span>ระดับบัญชี</span><strong>{{ partner.full_name or partner.username }}</strong><small>PARTNER · {{ profile.status|upper }}</small></div><nav class="nav"><span class="nav-label">PARTNER CENTER</span><a class="active" href="{{ url_for('dashboard') }}"><i class="fas fa-chart-line"></i> ภาพรวม</a><a href="#members"><i class="fas fa-users"></i> สมาชิกในสาย</a><a href="#transfer"><i class="fas fa-wallet"></i> เติมเครดิต</a><a href="#finance"><i class="fas fa-receipt"></i> ประวัติการเงิน</a><a href="#reports"><i class="fas fa-chart-pie"></i> รายงานแพ้ชนะ</a><a href="#settings"><i class="fas fa-sliders"></i> อัตราจ่าย/กลุ่มหวย</a></nav><div class="profile"><span>รหัสแนะนำ</span><strong>{{ profile.invite_code }}</strong></div><a class="logout" href="{{ url_for('logout') }}"><i class="fas fa-power-off"></i> ออกจากระบบ</a></aside><main class="main"><header class="top"><div><span class="kicker">PARTNER CONTROL CENTER</span><h1>ภาพรวม Partner</h1></div><div><span class="online"><i></i> ระบบทำงานปกติ</span><a class="exit" href="{{ url_for('logout') }}">ออกจากระบบ</a></div></header><section class="stats"><article class="card"><span><i class="fas fa-users"></i> สมาชิกในสาย</span><strong>{{ members|length }}</strong><small>สมาชิกทั้งหมด</small></article><article class="card"><span><i class="fas fa-wallet"></i> เครดิตสำหรับเติม</span><strong>{{ "{:,.2f}".format(partner.credit_balance) }}</strong><small>ยอดคงเหลือ</small></article><article class="card"><span><i class="fas fa-percent"></i> อัตราคอมมิชชัน</span><strong>{{ "{:,.2f}".format(profile.commission_rate) }}%</strong><small>อัตราปัจจุบัน</small></article><article class="card"><span><i class="fas fa-circle"></i> สมาชิกออนไลน์</span><strong>{{ online_count }}</strong><small>ใน 10 นาทีล่าสุด</small></article></section><section class="grid"><article class="card" id="transfer"><div class="head"><div><span class="label">CREDIT TRANSFER</span><h2>เติมเครดิตให้ลูกค้า</h2></div><i class="fas fa-arrow-right-arrow-left"></i></div><div class="row"><span class="icon"><i class="fas fa-link"></i></span><div><strong>เชื่อมกับระบบหลักแล้ว</strong><small>การโอนเครดิตและสมาชิกใช้ข้อมูลฐานเดียวกับเว็บหลัก</small></div></div><div class="row"><span class="icon"><i class="fas fa-coins"></i></span><div><strong>เครดิต Partner {{ "{:,.2f}".format(partner.credit_balance) }}</strong><small>การทำรายการเติมเครดิตใช้เมนู Partner บนเว็บหลัก</small></div></div></article><article class="card" id="reports"><div class="head"><div><span class="label">BETTING REPORT</span><h2>รายงานสาย Partner</h2></div><i class="fas fa-chart-pie"></i></div><div class="row"><span class="icon"><i class="fas fa-receipt"></i></span><div><strong>{{ report.bets }} รายการเดิมพัน</strong><small>ยอดเดิมพันรวม {{ "{:,.2f}".format(report.amount) }}</small></div></div><div class="row"><span class="icon"><i class="fas fa-trophy"></i></span><div><strong class="positive">ถูกรางวัล {{ report.wins }} รายการ</strong><small>แพ้ {{ report.losses }} รายการ</small></div></div></article></section><section class="card" id="members"><div class="head"><div><span class="label">MEMBER FLEET</span><h2>สมาชิกในสาย</h2></div><span class="muted">{{ members|length }} คน</span></div><div class="table-wrap"><table class="table"><thead><tr><th>สมาชิก</th><th>วันที่เข้าร่วม</th><th>แต้ม</th><th>เครดิต</th><th>VIP</th></tr></thead><tbody>{% for member in members %}<tr><td><strong>{{ member.full_name or member.username }}</strong></td><td>{{ member.created_at.strftime('%d/%m/%Y') }}</td><td>{{ "{:,}".format(member.points) }}</td><td>{{ "{:,.2f}".format(member.credit_balance) }}</td><td>{{ member.vip_tier.name if member.vip_tier else '-' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">ยังไม่มีสมาชิกในสาย</td></tr>{% endfor %}</tbody></table></div></section><section class="grid" id="finance"><article class="card"><div class="head"><div><span class="label">RECENT COMMISSION</span><h2>คอมมิชชันล่าสุด</h2></div><i class="fas fa-chart-line"></i></div>{% for entry in entries %}<div class="row"><span class="icon"><i class="fas fa-plus"></i></span><div><strong class="positive">+{{ "{:,.2f}".format(entry.commission_amount) }}</strong><small>{{ entry.reason or 'คอมมิชชันจากการเดิมพัน' }} · {{ entry.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div></div>{% else %}<small class="muted">ยังไม่มีรายการคอมมิชชัน</small>{% endfor %}</article><article class="card"><div class="head"><div><span class="label">WALLET HISTORY</span><h2>ประวัติการเงิน</h2></div><i class="fas fa-wallet"></i></div>{% for item in transactions %}<div class="row"><span class="icon"><i class="fas fa-money-bill"></i></span><div><strong class="{{ 'positive' if item.change >= 0 else '' }}">{{ '+' if item.change >= 0 else '' }}{{ "{:,.2f}".format(item.change) }}</strong><small>{{ item.reason or item.reference_type }} · {{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div></div>{% else %}<small class="muted">ยังไม่มีประวัติการเงิน</small>{% endfor %}</article></section></main></div></body></html>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes">
+  <title>Partner Backoffice — mklotto</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/backoffice.css') }}">
+</head>
+<body class="bo-body">
+<div class="bo-shell" id="bo-shell">
+  <aside class="bo-side">
+    <div class="bo-side-top">
+      <a class="bo-brand" href="{{ url_for('dashboard') }}">
+        <img src="{{ url_for('static',filename='brand-logo.png') }}" alt="mklotto">
+        <div><strong>mklotto</strong><small>PARTNER BACKOFFICE</small></div>
+      </a>
+      <button class="bo-collapse-btn" id="bo-collapse-toggle" type="button" aria-label="ยุบเมนู"><i class="fas fa-chevron-left"></i></button>
+      <a class="bo-mobile-logout" href="{{ url_for('logout') }}" aria-label="ออกจากระบบ"><i class="fas fa-power-off"></i></a>
+    </div>
+    <div class="bo-profile">
+      <span>ระดับบัญชี</span>
+      <strong>{{ partner.full_name or partner.username }}</strong>
+      <small>PARTNER · {{ profile.status|upper }}</small>
+    </div>
+    <nav class="bo-nav" aria-label="เมนู Partner">
+      <span class="bo-nav-label">PARTNER CENTER</span>
+      <a class="is-active" href="{{ url_for('dashboard') }}"><i class="fas fa-chart-pie"></i><span>ภาพรวม</span></a>
+      <a href="{{ main_app_url }}/partner/bets"><i class="fas fa-ticket"></i><span>รายการแทง</span></a>
+      <a href="{{ main_app_url }}/partner/bets/pending"><i class="fas fa-hourglass-half"></i><span>รอผลเดิมพัน</span></a>
+      <a href="{{ main_app_url }}/partner/bets/acceptance-by-type"><i class="fas fa-sliders"></i><span>ตั้งค่ารับของ</span></a>
+      <a href="{{ main_app_url }}/partner/members"><i class="fas fa-users"></i><span>จัดการสมาชิก</span></a>
+      <a href="{{ main_app_url }}/partner/assistants"><i class="fas fa-user-shield"></i><span>ผู้ช่วย</span></a>
+      <a href="{{ main_app_url }}/partner/finance"><i class="fas fa-wallet"></i><span>ประวัติการเงิน</span></a>
+      <a href="{{ main_app_url }}/partner/reports"><i class="fas fa-chart-line"></i><span>รายงานแพ้ชนะ</span></a>
+      <a href="{{ main_app_url }}/partner/online"><i class="fas fa-circle"></i><span>สมาชิกออนไลน์</span></a>
+      <a href="{{ main_app_url }}/partner/settings"><i class="fas fa-sliders"></i><span>อัตราจ่าย/กลุ่มหวย</span></a>
+      <a href="{{ main_app_url }}/partner/blocked"><i class="fas fa-ban"></i><span>เลขอั้นในสาย</span></a>
+    </nav>
+    <div class="bo-profile">
+      <span>รหัสแนะนำ</span>
+      <strong>{{ profile.invite_code }}</strong>
+    </div>
+    <a class="bo-logout" href="{{ url_for('logout') }}"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
+  </aside>
+  <main class="bo-main">
+    <header class="bo-topbar">
+      <div><span class="bo-kicker">PARTNER CONTROL CENTER</span><h1 class="bo-page-title">ภาพรวม Partner</h1></div>
+      <div><span class="bo-online"><i></i> ระบบทำงานปกติ</span></div>
+    </header>
+    <section class="bo-stats">
+      <article class="bo-statcard"><span><i class="fas fa-users"></i> สมาชิกในสาย</span><strong>{{ members|length }}</strong><small>สมาชิกทั้งหมด</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-wallet"></i> เครดิตสำหรับเติม</span><strong>{{ "{:,.2f}".format(partner.credit_balance) }}</strong><small>ยอดคงเหลือ</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-percent"></i> อัตราคอมมิชชัน</span><strong>{{ "{:,.2f}".format(profile.commission_rate) }}%</strong><small>อัตราปัจจุบัน</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-circle"></i> สมาชิกออนไลน์</span><strong>{{ online_count }}</strong><small>ใน 10 นาทีล่าสุด</small></article>
+    </section>
+    <section class="bo-grid">
+      <article class="bo-panel" id="reports">
+        <div class="bo-panel-head"><div><span class="bo-panel-label">BETTING REPORT</span><h2>รายงานสาย Partner</h2></div><i class="fas fa-chart-pie"></i></div>
+        <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-receipt"></i></span><div><strong>{{ report.bets }} รายการเดิมพัน</strong><small>ยอดเดิมพันรวม {{ "{:,.2f}".format(report.amount) }}</small></div></div>
+        <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-trophy"></i></span><div><strong>ถูกรางวัล {{ report.wins }} รายการ</strong><small>แพ้ {{ report.losses }} รายการ</small></div></div>
+      </article>
+      <article class="bo-panel">
+        <div class="bo-panel-head"><div><span class="bo-panel-label">WALLET HISTORY</span><h2>ประวัติการเงิน</h2></div><i class="fas fa-wallet"></i></div>
+        {% for item in transactions %}
+        <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-money-bill"></i></span><div><strong>{{ '+' if item.change >= 0 else '' }}{{ "{:,.2f}".format(item.change) }}</strong><small>{{ item.reason or item.reference_type }} · {{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div></div>
+        {% else %}
+        <small>ยังไม่มีประวัติการเงิน</small>
+        {% endfor %}
+      </article>
+    </section>
+    <section class="bo-panel" id="partner-topup" style="margin-bottom:18px;">
+      <div class="bo-panel-head"><div><span class="bo-panel-label">CREDIT TRANSFER</span><h2>เติมเครดิตให้ลูกค้า</h2></div><i class="fas fa-coins"></i></div>
+      <p style="color:#8190a5;font-size:13px;">โอนจากเครดิต Partner ให้สมาชิกในสายของคุณ</p>
+      <form method="post" action="{{ main_app_url }}/partner/topup" style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(130px,.7fr) minmax(150px,1fr) auto;gap:10px;align-items:end;">
+        <label style="font-size:12px;color:#8190a5;">สมาชิก<select name="member_id" required style="width:100%;background:#0c131d;border:1px solid #2a3849;color:#fff;border-radius:6px;padding:8px;"><option value="">เลือกสมาชิก</option>{% for member in members %}<option value="{{ member.id }}">{{ member.full_name or member.username }} - เครดิต {{ "{:,.2f}".format(member.credit_balance) }}</option>{% endfor %}</select></label>
+        <label style="font-size:12px;color:#8190a5;">จำนวนเครดิต<input name="amount" type="number" min="0.01" max="{{ partner.credit_balance }}" step="0.01" required style="width:100%;background:#0c131d;border:1px solid #2a3849;color:#fff;border-radius:6px;padding:8px;"></label>
+        <label style="font-size:12px;color:#8190a5;">หมายเหตุ<input name="reason" maxlength="255" placeholder="เช่น เติมเครดิตรอบเช้า" style="width:100%;background:#0c131d;border:1px solid #2a3849;color:#fff;border-radius:6px;padding:8px;"></label>
+        <button type="submit" {{ 'disabled' if not members or partner.credit_balance <= 0 else '' }} style="padding:9px 16px;border:0;border-radius:7px;background:linear-gradient(135deg,#ead39d,#a98236);color:#17130c;font:600 13px Kanit;cursor:pointer;">เติมเครดิต</button>
+      </form>
+    </section>
+    <section class="bo-panel" id="members">
+      <div class="bo-panel-head"><div><span class="bo-panel-label">MEMBER FLEET</span><h2>สมาชิกในสาย</h2></div><span style="color:#8190a5;font-size:12px;">{{ members|length }} คน</span></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">สมาชิก</th><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">วันที่เข้าร่วม</th><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">แต้ม</th><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">เครดิต</th><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">VIP</th></tr></thead>
+          <tbody>
+          {% for member in members %}
+            <tr style="border-top:1px solid #ffffff12;"><td style="padding:10px 8px;"><strong>{{ member.full_name or member.username }}</strong></td><td style="padding:10px 8px;">{{ member.created_at.strftime('%d/%m/%Y') }}</td><td style="padding:10px 8px;">{{ "{:,}".format(member.points) }}</td><td style="padding:10px 8px;">{{ "{:,.2f}".format(member.credit_balance) }}</td><td style="padding:10px 8px;">{{ member.vip_tier.name if member.vip_tier else '-' }}</td></tr>
+          {% else %}
+            <tr><td colspan="5" style="padding:10px 8px;color:#8190a5;">ยังไม่มีสมาชิกในสาย</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  var shell = document.getElementById('bo-shell');
+  var button = document.getElementById('bo-collapse-toggle');
+  var key = 'mklotto-backoffice-sidebar-collapsed';
+  if (localStorage.getItem(key) === '1') shell.classList.add('is-collapsed');
+  button.addEventListener('click', function () {
+    var collapsed = shell.classList.toggle('is-collapsed');
+    localStorage.setItem(key, collapsed ? '1' : '0');
+    button.setAttribute('aria-label', collapsed ? 'ขยายเมนู' : 'ยุบเมนู');
+  });
+})();
+</script>
+</body>
+</html>

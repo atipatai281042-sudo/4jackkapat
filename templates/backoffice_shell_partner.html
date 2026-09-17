@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  {% block viewport %}<meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes" />{% endblock %}
+  {% block head %}{% endblock %}
+  <title>{% block title %}Partner Backoffice — mklotto{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/backoffice.css') }}" />
+</head>
+<body class="bo-body">
+  <div class="bo-shell" id="bo-shell">
+    <aside class="bo-side">
+      <div class="bo-side-top">
+        <a class="bo-brand" href="__BACKOFFICE_HOME__">
+          <img src="{{ url_for('static', filename='brand-logo.png') }}" alt="mklotto">
+          <div><strong>mklotto</strong><small>PARTNER BACKOFFICE</small></div>
+        </a>
+        <button class="bo-collapse-btn" id="bo-collapse-toggle" type="button" aria-label="ยุบเมนู"><i class="fas fa-chevron-left"></i></button>
+        <a class="bo-mobile-logout" href="__BACKOFFICE_LOGOUT__" aria-label="ออกจากระบบ"><i class="fas fa-power-off"></i></a>
+      </div>
+      <div class="bo-profile">
+        <span>ระดับบัญชี</span>
+        <strong>{{ partner.full_name or partner.username }}</strong>
+        <small>PARTNER · {{ (partner.partner_profile.status if partner.partner_profile else '')|upper }}</small>
+      </div>
+      <nav class="bo-nav" aria-label="เมนู Partner">
+        <span class="bo-nav-label">PARTNER CENTER</span>
+        <a href="__BACKOFFICE_HOME__"><i class="fas fa-chart-pie"></i><span>ภาพรวม</span></a>
+        <a href="{{ url_for('partner_bets') }}" class="{{ 'is-active' if request.endpoint == 'partner_bets' else '' }}"><i class="fas fa-ticket"></i><span>รายการแทง</span></a>
+        <a href="{{ url_for('partner_pending_bets') }}" class="{{ 'is-active' if request.endpoint == 'partner_pending_bets' else '' }}"><i class="fas fa-hourglass-half"></i><span>รอผลเดิมพัน</span></a>
+        <a href="{{ url_for('partner_bet_acceptance_by_type') }}" class="{{ 'is-active' if request.endpoint == 'partner_bet_acceptance_by_type' else '' }}"><i class="fas fa-sliders"></i><span>ตั้งค่ารับของ</span></a>
+        <a href="{{ url_for('partner_members') }}" class="{{ 'is-active' if request.endpoint == 'partner_members' else '' }}"><i class="fas fa-users"></i><span>จัดการสมาชิก</span></a>
+        {% if partner.id == current_user.id %}<a href="{{ url_for('partner_assistants') }}" class="{{ 'is-active' if request.endpoint == 'partner_assistants' else '' }}"><i class="fas fa-user-shield"></i><span>ผู้ช่วย</span></a>{% endif %}
+        <a href="{{ url_for('partner_finance') }}" class="{{ 'is-active' if request.endpoint == 'partner_finance' else '' }}"><i class="fas fa-wallet"></i><span>ประวัติการเงิน</span></a>
+        <a href="{{ url_for('partner_reports') }}" class="{{ 'is-active' if request.endpoint == 'partner_reports' else '' }}"><i class="fas fa-chart-line"></i><span>รายงานแพ้ชนะ</span></a>
+        <a href="{{ url_for('partner_online_members') }}" class="{{ 'is-active' if request.endpoint == 'partner_online_members' else '' }}"><i class="fas fa-circle"></i><span>สมาชิกออนไลน์</span></a>
+        <a href="{{ url_for('partner_settings') }}" class="{{ 'is-active' if request.endpoint == 'partner_settings' else '' }}"><i class="fas fa-sliders"></i><span>อัตราจ่าย/กลุ่มหวย</span></a>
+        <a href="{{ url_for('partner_blocked_numbers') }}" class="{{ 'is-active' if request.endpoint == 'partner_blocked_numbers' else '' }}"><i class="fas fa-ban"></i><span>เลขอั้นในสาย</span></a>
+      </nav>
+      <div class="bo-profile">
+        <span>รหัสแนะนำ</span>
+        <strong>{{ partner.partner_profile.invite_code if partner.partner_profile else '-' }}</strong>
+      </div>
+      <a class="bo-logout" href="__BACKOFFICE_LOGOUT__"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
+    </aside>
+    <main class="bo-main">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            {% set normalized = category if category in ['success', 'warning', 'danger', 'info'] else ('danger' if category == 'error' else 'info') %}
+            <div class="bo-flash bo-flash-{{ normalized }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script>
+    (function () {
+      var shell = document.getElementById('bo-shell');
+      var button = document.getElementById('bo-collapse-toggle');
+      var key = 'mklotto-backoffice-sidebar-collapsed';
+      if (localStorage.getItem(key) === '1') shell.classList.add('is-collapsed');
+      button.addEventListener('click', function () {
+        var collapsed = shell.classList.toggle('is-collapsed');
+        localStorage.setItem(key, collapsed ? '1' : '0');
+        button.setAttribute('aria-label', collapsed ? 'ขยายเมนู' : 'ยุบเมนู');
+      });
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "backoffice_shell.html" %}
 {% block content %}
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -129,7 +129,7 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-end pe-3">
-                                        <a href="{{ url_for('admin_edit_lottery_room', room_id=room.id) }}" class="btn btn-sm btn-outline-warning me-1" title="แก้ไข">
+                                        <a href="{{ url_for('admin_lottery_room_edit', room_id=room.id) }}" class="btn btn-sm btn-outline-warning me-1" title="แก้ไข">
                                             <i class="fas fa-edit"></i>
                                         </a>
                                         <form action="{{ url_for('admin_delete_lottery_room', room_id=room.id) }}" method="POST" class="d-inline" onsubmit="return confirm('คุณต้องการลบห้องนี้ใช่หรือไม่?');">

@@ -1,0 +1,154 @@
+/* ==========================================================
+   Backoffice shell — shared dark admin/partner design system.
+   Namespaced with `bo-` so it never collides with Bootstrap
+   (used by admin_*.html) or the public site's style.css
+   (used by partner_*.html).
+   ========================================================== */
+
+* { box-sizing: border-box; }
+
+body.bo-body {
+  margin: 0;
+  background: var(--color-bg, #0b1018);
+  color: var(--color-text, #e7edf7);
+  font-family: Kanit, sans-serif;
+  font-size: 13px;
+}
+
+.bo-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  transition: grid-template-columns .2s ease;
+}
+.bo-shell.is-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
+
+.bo-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 10px;
+  background: #070b12;
+  border-right: 1px solid #ffffff12;
+  overflow: hidden;
+}
+.bo-side-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bo-brand { display: flex; align-items: center; gap: 9px; padding: 0 5px; color: #f3cf76; min-width: 0; text-decoration: none; }
+.bo-brand img { width: 36px; height: 36px; object-fit: contain; flex: none; }
+.bo-brand strong { display: block; font-size: 16px; white-space: nowrap; }
+.bo-brand small { display: block; font-size: 8px; letter-spacing: .16em; color: #a58c55; white-space: nowrap; }
+.bo-collapse-btn { width: 26px; height: 26px; flex: none; border: 1px solid #ffffff1c; border-radius: 6px; background: #151d28; color: #e4bd5b; cursor: pointer; }
+.bo-mobile-logout { display: none; }
+
+.bo-profile { display: grid; gap: 3px; padding: 12px; border: 1px solid #ffffff12; border-radius: 10px; background: #151d28; }
+.bo-profile span { font-size: 10px; color: #8190a5; letter-spacing: .08em; }
+.bo-profile strong { font-size: 14px; color: #fff; }
+.bo-profile small { color: #e4bd5b; }
+
+.bo-nav { display: grid; gap: 2px; overflow: auto; }
+.bo-nav-label { margin: 7px 8px 2px; color: #8190a5; font-size: 10px; letter-spacing: .1em; }
+.bo-nav a { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 7px; color: #aeb9c9; text-decoration: none; font-size: 12px; white-space: nowrap; }
+.bo-nav a:hover, .bo-nav a.is-active { background: #1a2a3d; color: #fff; }
+.bo-nav i { width: 16px; color: #e4bd5b; text-align: center; flex: none; }
+
+.bo-logout { display: flex; align-items: center; gap: 9px; margin-top: auto; padding-top: 13px; border-top: 1px solid #ffffff12; color: #aeb9c9; text-decoration: none; font-size: 12px; }
+.bo-logout:hover { color: #fff; }
+.bo-logout i { width: 16px; color: #e4bd5b; text-align: center; }
+
+.bo-shell.is-collapsed .bo-brand strong, .bo-shell.is-collapsed .bo-brand small,
+.bo-shell.is-collapsed .bo-profile, .bo-shell.is-collapsed .bo-nav-label,
+.bo-shell.is-collapsed .bo-nav a span, .bo-shell.is-collapsed .bo-logout span { display: none; }
+.bo-shell.is-collapsed .bo-side-top { justify-content: center; }
+.bo-shell.is-collapsed .bo-nav a, .bo-shell.is-collapsed .bo-logout { justify-content: center; }
+.bo-shell.is-collapsed .bo-collapse-btn i { transform: rotate(180deg); }
+
+.bo-main { min-width: 0; padding: 22px 28px 60px; background: radial-gradient(circle at 90% 0%, #7e362b29, transparent 30%), #10161f; }
+.bo-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.bo-kicker { color: #d9b35c; letter-spacing: .1em; font-size: 10px; display: block; }
+.bo-page-title { margin: 3px 0 0; font-size: 21px; font-weight: 600; color: #fff; }
+.bo-online { color: #9bd7bc; font-size: 12px; }
+.bo-online i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #45d397; }
+
+/* Small chrome-only widgets (dashboard landing page). Namespaced to avoid
+   colliding with Bootstrap's/style.css's own `.card`/`.row` etc. */
+.bo-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; margin-bottom: 17px; }
+.bo-statcard { padding: 14px; border: 1px solid #ffffff12; border-radius: 10px; background: #151d28; }
+.bo-statcard span { display: block; color: #99a7b9; font-size: 11px; }
+.bo-statcard span i { margin-right: 6px; color: #e4bd5b; }
+.bo-statcard strong { display: block; margin: 7px 0 1px; color: #fff; font-size: 22px; }
+.bo-statcard small { color: #718096; font-size: 10px; }
+.bo-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 14px; margin-bottom: 17px; }
+.bo-panel { padding: 15px; border: 1px solid #ffffff12; border-radius: 10px; background: #151d28; }
+.bo-panel-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.bo-panel-head h2 { margin: 3px 0 0; font-size: 15px; }
+.bo-panel-head i { color: #e4bd5b; }
+.bo-panel-label { font-size: 10px; color: #8190a5; letter-spacing: .1em; }
+.bo-list-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #ffffff12; }
+.bo-list-row-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 7px; background: #22334a; color: #e4bd5b; }
+.bo-list-row strong { display: block; color: #e8eef7; font-size: 12px; }
+.bo-list-row small { color: #718096; font-size: 10px; }
+.bo-accounts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.bo-accounts > div { display: grid; grid-template-columns: 26px 1fr; column-gap: 7px; align-items: center; padding: 8px; border-radius: 8px; background: #101721; }
+.bo-avatar { grid-row: span 2; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #273d56; color: #f0c866; font-weight: 700; font-size: 10px; }
+.bo-accounts strong, .bo-accounts small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bo-accounts strong { color: #e9eef6; font-size: 10px; }
+.bo-accounts small { color: #78879a; font-size: 9px; }
+.bo-status-active { color: #63d7a5; font-size: 9px; }
+
+/* ---- Bootstrap-dark polish for admin content pages (scoped to .bo-main
+   so it never touches the shell chrome above). Bootstrap 5.3's own
+   data-bs-theme="dark" already recolors everything; these are just brand
+   accents + a slightly tighter type scale. ---- */
+.bo-main h1, .bo-main h2, .bo-main h3 { color: #fff; }
+.bo-main h1 { font-size: 20px; }
+.bo-main h2 { font-size: 17px; }
+.bo-main h3 { font-size: 15px; }
+.bo-main .card { background: #151d28; border-color: #ffffff12; }
+.bo-main .table { --bs-table-color: #dbe4ef; --bs-table-bg: transparent; --bs-table-border-color: #ffffff12; font-size: 12.5px; }
+.bo-main .btn-primary { background: linear-gradient(135deg, #ead39d, #a98236); border-color: #a98236; color: #17130c; font-weight: 600; }
+.bo-main .btn-primary:hover { filter: brightness(1.05); }
+.bo-main .form-control, .bo-main .form-select { background: #0c131d; border-color: #2a3849; color: #fff; }
+.bo-main .form-control:focus, .bo-main .form-select:focus { background: #0c131d; color: #fff; border-color: #e4bd5b; box-shadow: 0 0 0 .2rem rgba(228,189,91,.18); }
+.bo-main small, .bo-main .text-muted { color: #8190a5 !important; }
+/* Bootstrap's light-mode utility classes ignore data-bs-theme="dark" —
+   neutralize the ones the legacy admin markup still uses so nothing shows
+   up as a bright white patch inside the dark shell. */
+.bo-main .bg-white, .bo-main .bg-light, .bo-main .table-light, .bo-main .table-light > * {
+  background-color: #151d28 !important;
+  color: #dbe4ef !important;
+}
+.bo-main .border { border-color: #ffffff1f !important; }
+
+.bo-flash { padding: 11px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; border: 1px solid transparent; }
+.bo-flash-success { background: rgba(47,191,143,.12); border-color: rgba(47,191,143,.35); color: #7fe0bf; }
+.bo-flash-danger { background: rgba(229,106,111,.12); border-color: rgba(229,106,111,.35); color: #ff9fa3; }
+.bo-flash-warning { background: rgba(243,182,63,.12); border-color: rgba(243,182,63,.35); color: #f3c95f; }
+.bo-flash-info { background: rgba(94,158,214,.12); border-color: rgba(94,158,214,.35); color: #8fc4ee; }
+
+/* ---- Responsive: same collapsing behaviour on every backoffice page ---- */
+@media (max-width: 1000px) {
+  .bo-shell { grid-template-columns: 190px minmax(0, 1fr); }
+  .bo-main { padding: 18px; }
+  .bo-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bo-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .bo-shell, .bo-shell.is-collapsed { display: block; min-height: 0; }
+  .bo-side { position: sticky; top: 0; z-index: 20; width: 100%; padding: 10px; border-right: 0; border-bottom: 1px solid #ffffff20; }
+  .bo-profile, .bo-logout { display: none; }
+  .bo-collapse-btn { display: none; }
+  .bo-mobile-logout { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex: none; border: 1px solid #ffffff1c; border-radius: 6px; background: #151d28; color: #e4bd5b; text-decoration: none; font-size: 13px; }
+  .bo-nav { display: flex; overflow-x: auto; gap: 5px; scrollbar-width: none; }
+  .bo-nav::-webkit-scrollbar { display: none; }
+  .bo-nav-label { display: none; }
+  .bo-nav a { flex: 0 0 auto; white-space: nowrap; min-height: 40px; padding: 9px 11px; background: #111a26; }
+  .bo-nav a span { display: inline; }
+  .bo-main { padding: 16px 10px; overflow: hidden; }
+  .bo-topbar { gap: 8px; }
+  .bo-page-title { font-size: 18px; }
+  .bo-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .bo-accounts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bo-main .table-wrap, .bo-main .table-responsive { overflow-x: auto; }
+  .bo-main form { display: grid; grid-template-columns: 1fr !important; gap: 10px !important; }
+  .bo-main input, .bo-main select, .bo-main textarea, .bo-main button { font-size: 16px; }
+}

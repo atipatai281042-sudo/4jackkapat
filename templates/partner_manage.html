@@ -1,32 +1,6 @@
-{% extends "base.html" %}
+{% extends "backoffice_shell_partner.html" %}
 {% block title %}ระบบ Partner — mklotto{% endblock %}
-{% block viewport %}<meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes" />{% endblock %}
 {% block content %}
-<section class="page-section partner-page">
-  <div class="container">
-    <div class="partner-dashboard-shell">
-      <aside class="partner-sidebar">
-        <div class="partner-profile-card">
-          <span class="partner-avatar"><i class="fas fa-users"></i></span>
-          <div><strong>{{ partner.full_name or partner.username }}</strong><small>PARTNER · {{ partner.partner_profile.status }}</small></div>
-        </div>
-        <nav class="partner-sidebar-nav" aria-label="เมนู Partner">
-          <a href="{{ url_for('partner_dashboard') }}"><i class="fas fa-chart-pie"></i> ภาพรวม</a>
-          <a href="{{ url_for('partner_bets') }}" class="{{ 'is-active' if view == 'bets' else '' }}"><i class="fas fa-ticket"></i> รายการแทง</a>
-          <a href="{{ url_for('partner_pending_bets') }}" class="{{ 'is-active' if view == 'pending_bets' else '' }}"><i class="fas fa-hourglass-half"></i> รอผลเดิมพัน</a>
-          <a href="{{ url_for('partner_bet_acceptance_by_type') }}" class="{{ 'is-active' if view == 'acceptance_types' else '' }}"><i class="fas fa-sliders"></i> ตั้งค่ารับของแยกตามชนิด</a>
-          <a href="{{ url_for('partner_members') }}" class="{{ 'is-active' if view == 'members' else '' }}"><i class="fas fa-users"></i> จัดการสมาชิก</a>
-          {% if partner.id == current_user.id %}<a href="{{ url_for('partner_assistants') }}" class="{{ 'is-active' if view == 'assistants' else '' }}"><i class="fas fa-user-shield"></i> ผู้ช่วย</a>{% endif %}
-          <a href="{{ url_for('partner_finance') }}" class="{{ 'is-active' if view == 'finance' else '' }}"><i class="fas fa-wallet"></i> ประวัติการเงิน</a>
-          <a href="{{ url_for('partner_reports') }}" class="{{ 'is-active' if view == 'reports' else '' }}"><i class="fas fa-chart-line"></i> รายงานแพ้ชนะ</a>
-          <a href="{{ url_for('partner_online_members') }}" class="{{ 'is-active' if view == 'online' else '' }}"><i class="fas fa-circle"></i> สมาชิกออนไลน์</a>
-          <a href="{{ url_for('partner_settings') }}" class="{{ 'is-active' if view == 'settings' else '' }}"><i class="fas fa-sliders"></i> อัตราจ่าย/กลุ่มหวย</a>
-          <a href="{{ url_for('partner_blocked_numbers') }}" class="{{ 'is-active' if view == 'blocked' else '' }}"><i class="fas fa-ban"></i> รายการเก็บของ/อั้น</a>
-          <a href="{{ url_for('lottery_rooms') }}"><i class="fas fa-dice"></i> กลับหน้าหวย</a>
-        </nav>
-        <div class="partner-invite-card"><small>รหัสแนะนำของคุณ</small><code>{{ partner.partner_profile.invite_code }}</code></div>
-      </aside>
-
       <main class="partner-dashboard-main">
         <header class="partner-dashboard-head">
           <div><span class="eyebrow">PARTNER CONTROL</span><h1 class="page-title">{% if view == 'members' %}จัดการสมาชิก{% elif view == 'finance' %}ประวัติการเงิน{% elif view == 'reports' %}รายงานแพ้ชนะ{% elif view == 'settings' %}อัตราจ่ายและกลุ่มหวย{% elif view == 'bet_summary' %}ยอดรวม/คาดได้เสีย{% elif view == 'bet_member_types' %}สมาชิกและประเภทเดิมพัน{% elif view == 'pending_bets' %}รายการรอผลเดิมพัน{% elif view == 'acceptance' %}ตั้งค่าการรับของ{% elif view == 'acceptance_types' %}ตั้งค่ารับของแยกตามชนิด{% else %}รายการเก็บของ/อั้น{% endif %}</h1><p class="section-desc">จัดการข้อมูลในสายของคุณอย่างเป็นระบบ</p></div>
@@ -107,7 +81,4 @@
         <div class="partner-content-grid"><article class="panel partner-topup-panel"><div class="partner-panel-heading"><div><span class="eyebrow">COLLECT / BLOCK</span><h2 class="panel-title">เพิ่มเลขอั้นเฉพาะสาย</h2></div><i class="fas fa-ban partner-muted-icon"></i></div><form method="post" class="partner-topup-form"><div class="form-group"><label class="form-label">ห้องหวย</label><select class="form-input" name="room_id" required>{% for room in rooms %}<option value="{{ room.id }}">{{ room.name }}</option>{% endfor %}</select></div><div class="partner-form-row"><div class="form-group"><label class="form-label">ประเภท</label><select class="form-input" name="bet_type" required><option value="3up">3 ตัวบน</option><option value="3toad">3 ตัวโต๊ด</option><option value="2up">2 ตัวบน</option><option value="2down">2 ตัวล่าง</option><option value="runup">วิ่งบน</option><option value="rundown">วิ่งล่าง</option></select></div><div class="form-group"><label class="form-label">หมายเลข</label><input class="form-input" name="number" inputmode="numeric" required></div></div><div class="form-group"><label class="form-label">อัตราจ่ายใหม่</label><input class="form-input" type="number" name="payout_multiplier" min="0.01" step="0.01" required></div><button class="btn btn-primary btn-block" type="submit"><i class="fas fa-save"></i> บันทึกเลขอั้น</button></form></article><article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">BLOCKED NUMBERS</span><h2 class="panel-title">รายการในสาย</h2></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>ห้อง</th><th>ประเภท</th><th>เลข</th><th>เรท</th><th></th></tr></thead><tbody>{% for item in blocked_numbers %}<tr><td>{{ item.room.name if item.room else '-' }}</td><td>{{ item.bet_type }}</td><td class="text-strong">{{ item.number }}</td><td>{{ "{:,.2f}".format(item.payout_multiplier) }}</td><td><form method="post" action="{{ url_for('partner_delete_blocked_number', item_id=item.id) }}"><button class="btn btn-danger btn-xs" type="submit">ลบ</button></form></td></tr>{% else %}<tr><td colspan="5" class="empty-state-text">ยังไม่มีเลขอั้นเฉพาะสาย</td></tr>{% endfor %}</tbody></table></div></article></div>
         {% endif %}
       </main>
-    </div>
-  </div>
-</section>
 {% endblock %}

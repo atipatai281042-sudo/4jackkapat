@@ -3,7 +3,6 @@ import os
 from datetime import datetime, timedelta
 
 from flask import Flask, Response, flash, redirect, render_template, request, session, url_for
-from markupsafe import escape
 from werkzeug.security import check_password_hash
 
 from models import (
@@ -13,9 +12,15 @@ from models import (
 from app import app as main_app
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-MOBILE_BACKOFFICE_CSS = """<style>@media(max-width:700px){.shell{display:block}.side{position:sticky;top:0;z-index:20;width:100%;padding:10px;border-right:0;border-bottom:1px solid #ffffff20}.profile,.logout{display:none}.nav{display:flex;overflow-x:auto;gap:5px;scrollbar-width:none}.nav::-webkit-scrollbar{display:none}.nav-label{display:none}.nav a{flex:0 0 auto;white-space:nowrap;min-height:40px;padding:9px 11px;background:#111a26}.main{padding:16px 10px;overflow:hidden}.top{gap:8px}.top h1{font-size:21px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid{grid-template-columns:1fr;gap:10px}.table-wrap{overflow-x:auto}.main form{display:grid;grid-template-columns:1fr!important;gap:10px!important}.main form label{min-width:0}.main input,.main select,.main textarea,.main button{width:100%;max-width:100%;font-size:16px;box-sizing:border-box}}</style>"""
+SECRET_KEY = os.environ.get("SECRET_KEY") or "loyalty-app-session-secret-v1"
+# Trusted-internal marker: main_app_proxy stamps every request it forwards to
+# the main app with this header, and app.py's admin_required/partner_required
+# decorators refuse any /admin or /partner request that doesn't carry it — so
+# those routes are only reachable by going through the backoffice.
+INTERNAL_PROXY_HEADER = "X-Backoffice-Internal"
+INTERNAL_PROXY_SECRET = SECRET_KEY
 backoffice_app = Flask(__name__, template_folder="templates", static_folder="static")
-backoffice_app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "loyalty-app-session-secret-v1"
+backoffice_app.config["SECRET_KEY"] = SECRET_KEY
 backoffice_app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 backoffice_app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365)
 backoffice_app.config["SESSION_REFRESH_EACH_REQUEST"] = True
@@ -79,6 +84,7 @@ def logout():
 
 
 @backoffice_app.route("/main", defaults={"path": "admin"}, methods=["GET", "POST"])
+@backoffice_app.route("/main/", defaults={"path": ""}, methods=["GET", "POST"])
 @backoffice_app.route("/main/<path:path>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 def main_app_proxy(path):
     user = logged_user()
@@ -94,6 +100,7 @@ def main_app_proxy(path):
         key: value for key, value in request.headers.items()
         if key.lower() not in {"host", "content-length", "cookie"}
     }
+    forwarded_headers[INTERNAL_PROXY_HEADER] = INTERNAL_PROXY_SECRET
     with main_app.test_client() as client:
         for key, value in request.cookies.items():
             client.set_cookie(key, value)
@@ -106,18 +113,23 @@ def main_app_proxy(path):
             content_type=request.content_type,
         )
 
+    main_prefix = request.script_root.rstrip("/") + "/main"
+
     response_headers = {
         key: value for key, value in response.headers.items()
         if key.lower() not in {"content-length", "transfer-encoding", "connection", "set-cookie"}
     }
     location = response_headers.get("Location")
-    if location and location.startswith("/") and not location.startswith("/main/"):
-        response_headers["Location"] = "/main" + location
+    if location and location.startswith("/") and not location.startswith(main_prefix + "/"):
+        response_headers["Location"] = main_prefix + location
     content = response.get_data()
     if response.headers.get("Content-Type", "").startswith("text/html"):
         rendered = content.decode("utf-8", errors="replace")
-        rendered = rendered.replace('href="/', 'href="/main/').replace('action="/', 'action="/main/')
-        rendered = rendered.replace('href="/main/static/', 'href="/static/').replace('src="/main/static/', 'src="/static/')
+        rendered = rendered.replace('href="/', f'href="{main_prefix}/').replace('action="/', f'action="{main_prefix}/')
+        rendered = rendered.replace(f'href="{main_prefix}/static/', 'href="/static/').replace(f'src="{main_prefix}/static/', 'src="/static/')
+        backoffice_root = request.script_root.rstrip("/")
+        rendered = rendered.replace("__BACKOFFICE_HOME__", f"{backoffice_root}/dashboard")
+        rendered = rendered.replace("__BACKOFFICE_LOGOUT__", f"{backoffice_root}/logout")
         content = rendered.encode("utf-8")
     return Response(content, status=response.status_code, headers=response_headers)
 
@@ -144,7 +156,7 @@ def dashboard():
         transactions = WalletTransaction.query.filter_by(user_id=user.id).order_by(
             WalletTransaction.created_at.desc()
         ).limit(8).all()
-        rendered = render_template(
+        return render_template(
             "backoffice_partner.html",
             partner=user,
             profile=user.partner_profile,
@@ -159,32 +171,6 @@ def dashboard():
                 "losses": sum(1 for bet in bets if bet.status == "lose"),
             },
         )
-        replacements = {
-            'href="#members"': 'href="#members"',
-            'href="#transfer"': 'href="#partner-topup"',
-            'href="#finance"': 'href="#finance"',
-            'href="#reports"': 'href="#reports"',
-            'href="#settings"': 'href="#reports"',
-        }
-        for old_link, new_link in replacements.items():
-            rendered = rendered.replace(old_link, new_link)
-        rendered = rendered.replace("</head>", MOBILE_BACKOFFICE_CSS + "</head>", 1)
-        member_options = "".join(
-            f'<option value="{member.id}">{escape(member.full_name or member.username)} - เครดิต {member.credit_balance:,.2f}</option>'
-            for member in members
-        )
-        topup_panel = f'''<article class="card" id="partner-topup" style="margin-bottom:18px;padding:20px;border-color:#2fbf8f66;">
-          <div class="head"><div><span class="label">CREDIT TRANSFER</span><h2>เติมเครดิตให้ลูกค้า</h2></div><i class="fas fa-coins"></i></div>
-          <p style="color:#aeb9c9;font-size:13px;">โอนจากเครดิต Partner ให้สมาชิกในสายของคุณ</p>
-          <form method="post" action="/main/partner/topup" style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(130px,.7fr) minmax(150px,1fr) auto;gap:10px;align-items:end;">
-            <label style="font-size:12px;color:#aeb9c9;">สมาชิก<select name="member_id" required><option value="">เลือกสมาชิก</option>{member_options}</select></label>
-            <label style="font-size:12px;color:#aeb9c9;">จำนวนเครดิต<input name="amount" type="number" min="0.01" max="{user.credit_balance}" step="0.01" required></label>
-            <label style="font-size:12px;color:#aeb9c9;">หมายเหตุ<input name="reason" maxlength="255" placeholder="เช่น เติมเครดิตรอบเช้า"></label>
-            <button type="submit" {'disabled' if not members or user.credit_balance <= 0 else ''}>เติมเครดิต</button>
-          </form>
-        </article>'''
-        rendered = rendered.replace("</main>", topup_panel + "</main>", 1)
-        return rendered
     stats = {
         "total_users": User.query.filter_by(role="member").count(),
         "total_rooms": LotteryRoom.query.filter_by(is_active=True).count(),
@@ -193,13 +179,12 @@ def dashboard():
     }
     announcements = HeroBanner.query.order_by(HeroBanner.created_at.desc()).limit(5).all()
     recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
-    rendered = render_template(
+    return render_template(
         "backoffice_admin_collapsible.html",
         stats=stats,
         announcements=announcements,
         recent_users=recent_users,
     )
-    return rendered.replace("</head>", MOBILE_BACKOFFICE_CSS + "</head>", 1)
 
 
 if __name__ == "__main__":
