@@ -213,6 +213,13 @@ def sync_lottery_api_results(date_value=None):
     """Import API rooms, schedules, and settle successful results automatically."""
     payload = fetch_results(date_value)
     query_date = payload.get("date") or date_value or app_now().strftime("%Y-%m-%d")
+    payloads = [payload]
+    if not date_value:
+        previous_date = (datetime.strptime(query_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            payloads.append(fetch_results(previous_date))
+        except Exception:
+            pass
     imported_rooms = 0
     imported_periods = 0
     updated_results = 0
@@ -225,7 +232,11 @@ def sync_lottery_api_results(date_value=None):
         "หวยออมสิน": "gsblotto",
     }
 
-    for item in flatten_result_items(payload):
+    items = []
+    for source_payload in payloads:
+        items.extend(flatten_result_items(source_payload))
+
+    for item in items:
         api_key = str(item.get("key") or "").strip()
         label = str(item.get("label") or api_key).strip()
         status = str(item.get("status") or "").strip().lower()
