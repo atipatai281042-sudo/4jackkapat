@@ -55,6 +55,7 @@
         .lottery-slip-table table { font-size: .65rem; min-width: 0 !important; }
         .lottery-slip-table th, .lottery-slip-table td { padding: 4px 3px !important; white-space: nowrap; }
         .lottery-slip-table .item-amount-input { width: 48px !important; padding: 3px !important; font-size: .68rem; }
+        .lottery-slip-table .item-payout { min-width: 62px; }
         .lottery-slip-table .btn-remove-item { padding: 3px 5px !important; font-size: .6rem; }
         .lottery-summary-panel > .form-label { font-size: .7rem; margin-bottom: 4px !important; }
         .lottery-quick-prices { gap: 3px !important; margin-bottom: 7px !important; }
@@ -209,12 +210,13 @@
               <th style="padding: 8px;">เลขที่แทง</th>
               <th style="padding: 8px;">อัตราจ่าย</th>
               <th style="padding: 8px;">จำนวนเงิน (฿)</th>
+              <th style="padding: 8px;">จำนวนเงินที่ถูกเลข (฿)</th>
               <th style="padding: 8px; width: 60px;">ลบ</th>
             </tr>
           </thead>
           <tbody id="items-tbody">
             <tr id="empty-row">
-              <td colspan="6" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td>
+              <td colspan="7" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td>
             </tr>
           </tbody>
         </table>
@@ -720,6 +722,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <td style="padding: 10px 8px;">
                                 <input type="number" name="amounts[]" class="form-control item-amount-input" value="${amtVal}" min="1" style="width: 90px; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 16px;" required inputmode="numeric">
                             </td>
+                            <td class="item-payout" style="padding: 10px 8px; color: #15803d; font-weight: bold;">${(amtVal * rateInfo.rate).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                             <td style="padding: 10px 8px;">
                                 <button type="button" class="btn btn-danger btn-xs btn-remove-item" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">ลบ</button>
                             </td>
@@ -788,6 +791,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td style="padding: 10px 8px;">
                     <input type="number" name="amounts[]" class="form-control item-amount-input" value="${amtVal}" min="1" style="width: 90px; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 16px;" required inputmode="numeric">
                 </td>
+                <td class="item-payout" style="padding: 10px 8px; color: #15803d; font-weight: bold;">${(amtVal * rateInfo.rate).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                 <td style="padding: 10px 8px;">
                     <button type="button" class="btn btn-danger btn-xs btn-remove-item" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">ลบ</button>
                 </td>
@@ -842,7 +846,7 @@ document.addEventListener('DOMContentLoaded', function() {
         orderedTypes.forEach(type => {
             const header = document.createElement('tr');
             header.dataset.groupHeader = 'true';
-            header.innerHTML = `<td colspan="6" style="padding: 6px 8px; background: #3b82f6; color: #fff; font-weight: 700; border-radius: 6px;">${type}</td>`;
+            header.innerHTML = `<td colspan="7" style="padding: 6px 8px; background: #3b82f6; color: #fff; font-weight: 700; border-radius: 6px;">${type}</td>`;
             itemsTbody.appendChild(header);
             groups.get(type).forEach(row => itemsTbody.appendChild(row));
         });
@@ -857,14 +861,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 reindexRows();
                 updateGrandTotal();
                 if (itemsTbody.querySelectorAll('tr:not([data-group-header])').length === 0) {
-                    itemsTbody.innerHTML = `<tr id="empty-row"><td colspan="6" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td></tr>`;
+                    itemsTbody.innerHTML = `<tr id="empty-row"><td colspan="7" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td></tr>`;
                     btnSubmitTicket.disabled = true;
                 }
             };
         });
 
         document.querySelectorAll('.item-amount-input').forEach(input => {
-            input.oninput = updateGrandTotal;
+            input.oninput = function() {
+                const row = this.closest('tr');
+                const rate = parseFloat(row.querySelector('input[name="rates[]"]')?.value) || 0;
+                const amount = parseFloat(this.value) || 0;
+                const payout = row.querySelector('.item-payout');
+                if (payout) payout.textContent = (amount * rate).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                updateGrandTotal();
+            };
         });
     }
 
@@ -930,7 +941,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('btn-clear-all').addEventListener('click', function() {
         if (confirm('ต้องการลบรายการทั้งหมดใช่หรือไม่?')) {
-            itemsTbody.innerHTML = `<tr id="empty-row"><td colspan="6" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td></tr>`;
+            itemsTbody.innerHTML = `<tr id="empty-row"><td colspan="7" style="text-align: center; color: #94a3b8; padding: 30px;">ยังไม่มีรายการแทง เลือกประเภทและกดตัวเลขให้ครบ ระบบจะเพิ่มรายการให้อัตโนมัติครับ</td></tr>`;
             updateGrandTotal();
         }
     });
