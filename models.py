@@ -272,6 +272,21 @@ class PartnerProfile(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class PartnerAssistant(db.Model):
+    __tablename__ = "partner_assistants"
+    __table_args__ = (db.UniqueConstraint("partner_id", "assistant_user_id", name="uq_partner_assistant"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    assistant_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    permissions = db.Column(db.String(255), nullable=False, default="members,bets,reports")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    partner = db.relationship("User", foreign_keys=[partner_id])
+    assistant = db.relationship("User", foreign_keys=[assistant_user_id])
+
+
 class PartnerMemberLimit(db.Model):
     __tablename__ = "partner_member_limits"
     __table_args__ = (db.UniqueConstraint("partner_id", "member_id", name="uq_partner_member_limit"),)
@@ -305,6 +320,33 @@ class PartnerPayoutRule(db.Model):
     bet_type = db.Column(db.String(30), nullable=False)
     payout_multiplier = db.Column(db.Float, nullable=False, default=1.0)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PartnerAcceptanceLimit(db.Model):
+    __tablename__ = "partner_acceptance_limits"
+    __table_args__ = (db.UniqueConstraint("partner_id", "room_id", "bet_type", name="uq_partner_acceptance_limit"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
+    bet_type = db.Column(db.String(30), nullable=False)
+    amount_limit = db.Column(db.Float, nullable=False, default=0.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    room = db.relationship("LotteryRoom")
+
+
+class PartnerAcceptanceNumber(db.Model):
+    __tablename__ = "partner_acceptance_numbers"
+    __table_args__ = (db.UniqueConstraint("partner_id", "period_id", "bet_type", "number", name="uq_partner_acceptance_number"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    period_id = db.Column(db.Integer, db.ForeignKey("thai_lottery_periods.id"), nullable=False, index=True)
+    bet_type = db.Column(db.String(30), nullable=False)
+    number = db.Column(db.String(10), nullable=False)
+    amount_limit = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    period = db.relationship("ThaiLotteryPeriod")
 
 
 class PartnerBlockedNumber(db.Model):

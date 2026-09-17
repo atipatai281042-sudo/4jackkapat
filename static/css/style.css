@@ -471,6 +471,9 @@ select.form-input { color-scheme: dark; cursor: pointer; }
 .partner-sidebar-nav a.is-active { border-left: 2px solid var(--color-primary); }
 .partner-sidebar-nav i { width: 16px; color: var(--color-primary); text-align: center; }
 .partner-sidebar-nav span { margin-left: auto; color: var(--color-primary); font-size: 11px; }
+.partner-subnav { display: grid; gap: 2px; margin: -2px 0 6px 25px; padding-left: 8px; border-left: 1px solid rgba(243,182,63,.25); }
+.partner-subnav a { padding: 5px 6px; color: var(--color-text-muted); font-size: 10px; text-decoration: none; }
+.partner-subnav a:hover { color: #fff; background: rgba(243,182,63,.1); }
 .partner-invite-card { padding: 10px; border: 1px solid rgba(47,191,143,.28); border-radius: 10px; background: rgba(47,191,143,.08); }
 .partner-invite-card small, .partner-invite-card code { display: block; }
 .partner-invite-card small { color: var(--color-text-muted); font-size: 10px; }
@@ -502,6 +505,8 @@ select.form-input { color-scheme: dark; cursor: pointer; }
 .partner-topup-form { display: grid; gap: 11px; margin-top: 14px; }
 .partner-member-select { min-height: 46px; font-weight: 500; }
 .partner-form-row { display: grid; grid-template-columns: .8fr 1.2fr; gap: 11px; }
+.partner-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; padding: 12px; border: 1px solid rgba(148, 163, 184, .16); border-radius: 9px; background: rgba(15, 23, 42, .28); }
+.partner-filter-grid .btn { min-height: 42px; }
 .partner-topup-form .btn { min-height: 42px; }
 .partner-count-chip { padding: 5px 9px; border: 1px solid rgba(243,182,63,.3); border-radius: 999px; color: #f7d477; background: rgba(243,182,63,.1); font-size: 11px; }
 .partner-members-panel .table-wrap { overflow-x: auto; }
@@ -962,8 +967,24 @@ select.form-input { color-scheme: dark; cursor: pointer; }
   .partner-stat-card strong { font-size: 17px; }
   .partner-content-grid { gap: 10px; margin-bottom: 10px; }
   .partner-form-row { grid-template-columns: 1fr; gap: 9px; }
+  .partner-filter-grid { grid-template-columns: 1fr 1fr; }
   .partner-members-panel .data-table { min-width: 520px; font-size: 11px; }
   .partner-members-panel .data-table th, .partner-members-panel .data-table td { padding: 7px 6px; }
+  .partner-members-panel .table-wrap { overflow-x: visible; }
+  .partner-members-panel .data-table { display: block; min-width: 0 !important; width: 100%; font-size: 11px; line-height: 1.25; }
+  .partner-members-panel .data-table thead { display: none; }
+  .partner-members-panel .data-table tbody { display: grid; gap: 8px; }
+  .partner-members-panel .data-table tr { display: grid; grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr)) auto; gap: 5px; align-items: end; padding: 8px 6px; border: 1px solid rgba(148,163,184,.18); border-radius: 8px; background: rgba(15,23,42,.28); }
+  .partner-members-panel .data-table td { display: block; width: auto !important; padding: 2px !important; border: 0; overflow-wrap: anywhere; }
+  .partner-members-panel .data-table td:nth-child(1) { grid-column: 1 / -1; padding-bottom: 4px !important; border-bottom: 1px solid rgba(148,163,184,.14); }
+  .partner-members-panel .data-table td:nth-child(2) { display: none; }
+  .partner-members-panel .data-table td:nth-child(3)::before { content: 'เครดิต'; display: block; color: var(--color-text-muted); font-size: 9px; }
+  .partner-members-panel .data-table td:nth-child(4)::before { content: 'ขั้นต่ำ'; display: block; color: var(--color-text-muted); font-size: 9px; }
+  .partner-members-panel .data-table td:nth-child(5)::before { content: 'สูงสุด/รายการ'; display: block; color: var(--color-text-muted); font-size: 9px; }
+  .partner-members-panel .data-table td:nth-child(6)::before { content: 'สูงสุด/เลข'; display: block; color: var(--color-text-muted); font-size: 9px; }
+  .partner-members-panel .data-table td:nth-child(7)::before { content: 'บันทึก'; display: block; color: transparent; font-size: 9px; }
+  .partner-members-panel .data-table .form-input-sm { width: 100%; min-width: 0; padding: 4px 2px; font-size: 11px; }
+  .partner-members-panel .data-table .btn-xs { padding: 5px 4px; font-size: 9px; white-space: normal; }
   .lottery-action-row { gap: 7px; margin-bottom: 1rem; }
   .wallet-action, .lottery-full-btn { min-height: 42px; padding: 8px 10px; border-radius: 9px; font-size: 13px; }
   .voyage-strip-inner { gap: 6px; padding-top: 8px; padding-bottom: 8px; }
@@ -986,4 +1007,27 @@ select.form-input { color-scheme: dark; cursor: pointer; }
   .room-card .room-countdown { padding: .42rem .55rem !important; margin-bottom: .45rem !important; }
   .room-card .room-countdown-value { font-size: .9rem !important; }
   .room-card .room-action { min-height: 34px; padding: 5px 8px !important; font-size: .78rem; }
+}
+
+/* Partner portal keeps the desktop canvas on small screens. */
+@media (max-width: 920px) {
+  .partner-page { min-width: 1100px; }
+  .partner-dashboard-shell { grid-template-columns: 220px minmax(0, 1fr); gap: 22px; }
+  .partner-sidebar { position: sticky; top: 92px; padding: 14px; }
+  .partner-sidebar-nav { display: flex; flex-direction: column; gap: 4px; padding: 14px 0; }
+  .partner-sidebar-nav a { padding: 9px 10px; font-size: 12px; }
+  .partner-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .partner-content-grid { grid-template-columns: minmax(0, 1.18fr) minmax(280px, .82fr); gap: 16px; }
+  .partner-form-row { grid-template-columns: .8fr 1.2fr; gap: 11px; }
+  .partner-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .partner-members-panel .table-wrap { overflow-x: auto; }
+  .partner-members-panel .data-table { display: table; min-width: 600px !important; width: 100%; table-layout: auto; font-size: 14px; line-height: 1.45; }
+  .partner-members-panel .data-table thead { display: table-header-group; }
+  .partner-members-panel .data-table tbody { display: table-row-group; }
+  .partner-members-panel .data-table tr { display: table-row; padding: 0; border: 0; background: transparent; }
+  .partner-members-panel .data-table th, .partner-members-panel .data-table td { display: table-cell; width: auto !important; padding: 12px; border-bottom: 1px solid var(--color-border); }
+  .partner-members-panel .data-table td:nth-child(2) { display: table-cell; }
+  .partner-members-panel .data-table td::before { content: none !important; }
+  .partner-members-panel .data-table .form-input-sm { width: 100%; min-width: 80px; padding: 6px 8px; font-size: 14px; }
+  .partner-members-panel .data-table .btn-xs { padding: 6px 8px; font-size: 11px; white-space: nowrap; }
 }

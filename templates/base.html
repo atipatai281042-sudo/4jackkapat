@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  {% block viewport %}{% if current_user and (current_user.is_admin or current_user.is_partner) %}<meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes" />{% else %}<meta name="viewport" content="width=device-width, initial-scale=1.0" />{% endif %}{% endblock %}
   {% block head %}{% endblock %}
   <title>{% block title %}mklotto — ระบบแทงหวยออนไลน์{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -45,12 +45,6 @@
           <a href="{{ url_for('notifications') }}" class="nav-link"><i class="fas fa-bell me-1"></i> แจ้งเตือน{% if unread_notifications %}<span class="notification-count">{{ unread_notifications }}</span>{% endif %}</a>
           {% if admin_contact_url %}<a href="{{ admin_contact_url }}" class="nav-link nav-link-contact" target="_blank" rel="noopener"><i class="fab fa-line me-1"></i> ติดต่อแอดมิน</a>{% endif %}
           <a href="{{ url_for('responsible_play') }}" class="nav-link"><i class="fas fa-shield-heart me-1"></i> ตั้งค่าการเล่น</a>
-          {% if current_user.is_partner %}
-            <a href="{{ url_for('partner_dashboard') }}" class="nav-link nav-link-partner"><i class="fas fa-users me-1"></i> ระบบ Partner</a>
-          {% endif %}
-          {% if current_user.is_admin %}
-            <a href="{{ url_for('admin') }}" class="nav-link nav-link-admin"><i class="fas fa-compass me-1"></i> หลังบ้าน</a>
-          {% endif %}
         {% endif %}
       </nav>
 

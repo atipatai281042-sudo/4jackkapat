@@ -27,7 +27,8 @@ from models import (
     db, User, Reward, RedemptionHistory, PointLog,
     HeroBanner, MediaImage, LotteryRoom, BlockedNumber,
     LotteryPayoutRule, ThaiLotteryPeriod, ThaiLotteryBet,
-    PartnerProfile, PartnerMemberLimit, PartnerRoomSetting, PartnerPayoutRule,
+    PartnerProfile, PartnerAssistant, PartnerMemberLimit, PartnerRoomSetting, PartnerPayoutRule,
+    PartnerAcceptanceLimit, PartnerAcceptanceNumber,
     PartnerBlockedNumber, PartnerPresence, CommissionLedger, VipTier,
     WalletTransaction, Notification, AdminAuditLog, ResponsiblePlayProfile,
     SystemSetting, DepositRequest, WithdrawalRequest, UserBankAccount, LotteryCategory
@@ -58,6 +59,7 @@ app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["POINTS_REWARDS_ENABLED"] = False
+app.config["BACKOFFICE_URL"] = os.environ.get("BACKOFFICE_URL", "http://127.0.0.1:5004").rstrip("/")
 ACCOUNT_TEXT_PATTERN = r"[A-Za-z0-9!@#$%^&*._+\-]+"
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
@@ -145,6 +147,7 @@ def inject_globals():
         "brand_tagline": get_setting("brand_tagline", "LOTTERY NETWORK"),
         "brand_icon_url": get_setting("brand_icon_url", "/static/brand-logo.png"),
         "points_rewards_enabled": app.config["POINTS_REWARDS_ENABLED"],
+        "backoffice_url": app.config["BACKOFFICE_URL"],
     }
 
 
@@ -417,8 +420,21 @@ def partner_required(view):
         if user.is_partner and user.partner_profile and user.partner_profile.status != "active":
             flash("บัญชี Partner นี้ถูกพักการใช้งาน", "error")
             return redirect(url_for("index"))
+        assistant = PartnerAssistant.query.filter_by(assistant_user_id=user.id).first() if user else None
+        if assistant and not assistant.is_active:
+            flash("บัญชีผู้ช่วยนี้ถูกระงับการใช้งาน", "error")
+            return redirect(url_for("index"))
         return view(*args, **kwargs)
     return wrapper
+
+
+def partner_owner(user=None):
+    """Return the owning Partner for either an owner or assistant account."""
+    user = user or current_user()
+    assistant = PartnerAssistant.query.filter_by(
+        assistant_user_id=user.id, is_active=True
+    ).first() if user else None
+    return assistant.partner if assistant else user
 
 
 def refresh_vip_status(user):
@@ -544,6 +560,8 @@ def normalize_bet_type(raw_value):
     aliases = {
         "3ตัวบน": "3up",
         "3up": "3up",
+        "3ตัวล่าง": "3down",
+        "3down": "3down",
         "3ตัวโต๊ด": "3toad",
         "3toad": "3toad",
         "2ตัวบน": "2up",
@@ -1117,7 +1135,10 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user():
-        return redirect(url_for("admin" if current_user().is_admin else ("partner_dashboard" if current_user().is_partner else "lottery_rooms")))
+        user = current_user()
+        if user.is_admin or user.is_partner:
+            return redirect(f"{app.config['BACKOFFICE_URL']}/dashboard")
+        return redirect(url_for("lottery_rooms"))
 
     if request.method == "POST":
         ensure_default_admin_accounts()
@@ -1135,8 +1156,9 @@ def login():
             session["user_id"] = user.id
             session.permanent = True
             flash(f"ยินดีต้อนรับ {user.username}", "success")
-            destination = "admin" if user.is_admin else ("partner_dashboard" if user.is_partner else "lottery_rooms")
-            return redirect(url_for(destination))
+            if user.is_admin or user.is_partner:
+                return redirect(f"{app.config['BACKOFFICE_URL']}/dashboard")
+            return redirect(url_for("lottery_rooms"))
 
         flash("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", "error")
 
@@ -1803,7 +1825,11 @@ def admin_process_withdrawal(request_id, action):
         flash("คำขอถอนนี้ถูกดำเนินการไปแล้วหรือไม่ถูกต้อง", "error")
         return redirect(url_for("admin_wallet"))
     admin_user = current_user()
-    if action == "approve" and item.user.credit_balance < item.amount:
+    commission_payout = item.method == "commission_payout" and item.user.partner_profile
+    if action == "approve" and commission_payout and item.user.partner_profile.commission_balance < item.amount:
+        flash("คอมมิชชันของ Partner ไม่พอสำหรับอนุมัติคำขอนี้", "error")
+        return redirect(url_for("admin_wallet"))
+    if action == "approve" and not commission_payout and item.user.credit_balance < item.amount:
         flash("เครดิตสมาชิกไม่พอสำหรับอนุมัติคำขอถอนนี้", "error")
         return redirect(url_for("admin_wallet"))
     item.status = "approved" if action == "approve" else "rejected"
@@ -1811,7 +1837,18 @@ def admin_process_withdrawal(request_id, action):
     item.processed_at = datetime.now()
     item.admin_note = request.form.get("admin_note", "").strip()
     if action == "approve":
-        adjust_credit(item.user, -item.amount, f"อนุมัติถอนเครดิตคำขอ #{item.id}", admin=admin_user)
+        if commission_payout:
+            item.user.partner_profile.commission_balance = round(
+                item.user.partner_profile.commission_balance - item.amount, 2
+            )
+            db.session.add(WalletTransaction(
+                user_id=item.user.id, wallet_type="commission", change=-item.amount,
+                balance_after=item.user.partner_profile.commission_balance,
+                reference_type="commission_payout", reference_id=item.id,
+                reason=f"อนุมัติเบิกคอมมิชชันคำขอ #{item.id}", admin_id=admin_user.id,
+            ))
+        else:
+            adjust_credit(item.user, -item.amount, f"อนุมัติถอนเครดิตคำขอ #{item.id}", admin=admin_user)
         notify_user(item.user, "ถอนเครดิตสำเร็จ", f"ดำเนินการถอน {item.amount:,.2f} เครดิตแล้ว", "wallet")
     else:
         notify_user(item.user, "คำขอถอนเครดิตไม่ผ่านการอนุมัติ", item.admin_note or "กรุณาติดต่อแอดมิน", "wallet")
@@ -1907,23 +1944,252 @@ def partner_dashboard():
     if user.is_admin and not user.partner_profile:
         flash("กรุณาเข้าสู่ระบบด้วยบัญชี Partner เพื่อเปิดหน้านี้", "info")
         return redirect(url_for("admin"))
-    members = User.query.filter_by(partner_id=user.id).order_by(User.created_at.desc()).all()
-    entries = CommissionLedger.query.filter_by(partner_id=user.id).order_by(
+    partner = partner_owner(user)
+    members = User.query.filter_by(partner_id=partner.id).order_by(User.created_at.desc()).all()
+    entries = CommissionLedger.query.filter_by(partner_id=partner.id).order_by(
         CommissionLedger.created_at.desc()
     ).limit(50).all()
-    profile = user.partner_profile
+    profile = partner.partner_profile
     online_cutoff = datetime.now() - timedelta(minutes=10)
-    online_count = PartnerPresence.query.filter_by(partner_id=user.id).filter(
+    online_count = PartnerPresence.query.filter_by(partner_id=partner.id).filter(
         PartnerPresence.last_seen_at >= online_cutoff
     ).count()
-    return render_template("partner_dashboard.html", partner=user, profile=profile,
+    return render_template("partner_dashboard.html", partner=partner, profile=profile,
                            members=members, entries=entries, online_count=online_count)
+
+
+@app.route("/partner/assistants", methods=["GET", "POST"])
+@partner_required
+def partner_assistants():
+    owner = current_user()
+    partner = partner_owner(owner)
+    if owner.id != partner.id:
+        abort(403)
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        full_name = request.form.get("full_name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        if len(username) < 4 or not re.fullmatch(r"[A-Za-z0-9]+", username):
+            flash("ชื่อผู้ช่วยต้องเป็นภาษาอังกฤษหรือตัวเลขอย่างน้อย 4 ตัว", "error")
+        elif len(password) < 6 or not re.fullmatch(r"[A-Za-z0-9]+", password):
+            flash("รหัสผ่านต้องเป็นภาษาอังกฤษและตัวเลขอย่างน้อย 6 ตัว", "error")
+        elif not full_name:
+            flash("กรุณากรอกชื่อผู้ช่วย", "error")
+        elif User.query.filter_by(username=username).first():
+            flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
+        else:
+            assistant_user = User(
+                username=username, full_name=full_name, phone=phone,
+                role="partner", partner_id=partner.id, points=0, credit_balance=0.0,
+            )
+            assistant_user.set_password(password)
+            db.session.add(assistant_user)
+            db.session.flush()
+            db.session.add(PartnerProfile(
+                user_id=assistant_user.id,
+                invite_code=f"ASST{random.randint(10000, 99999)}",
+                commission_rate=0,
+            ))
+            db.session.add(PartnerAssistant(partner_id=partner.id, assistant_user_id=assistant_user.id))
+            db.session.commit()
+            flash(f"สร้างผู้ช่วย {username} สำเร็จ", "success")
+        return redirect(url_for("partner_assistants"))
+    assistants = PartnerAssistant.query.filter_by(partner_id=partner.id).order_by(
+        PartnerAssistant.created_at.desc()
+    ).all()
+    return render_template("partner_manage.html", view="assistants", partner=partner, assistants=assistants)
+
+
+@app.route("/partner/assistants/<int:assistant_id>/toggle", methods=["POST"])
+@partner_required
+def partner_toggle_assistant(assistant_id):
+    owner = current_user()
+    partner = partner_owner(owner)
+    if owner.id != partner.id:
+        abort(403)
+    assistant = PartnerAssistant.query.filter_by(id=assistant_id, partner_id=partner.id).first()
+    if assistant:
+        assistant.is_active = not assistant.is_active
+        assistant.assistant.is_active = assistant.is_active
+        db.session.commit()
+        flash("อัปเดตสถานะผู้ช่วยแล้ว", "success")
+    return redirect(url_for("partner_assistants"))
+
+
+def partner_bet_query(partner):
+    """Build the Partner-only bet query used by the bet list and reports."""
+    query = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).join(
+        ThaiLotteryPeriod, ThaiLotteryBet.period_id == ThaiLotteryPeriod.id
+    ).filter(User.partner_id == partner.id)
+    member_id = request.args.get("member_id", type=int)
+    room_id = request.args.get("room_id", type=int)
+    status = request.args.get("status", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    if member_id:
+        query = query.filter(ThaiLotteryBet.user_id == member_id)
+    if room_id:
+        query = query.filter(ThaiLotteryPeriod.room_id == room_id)
+    if status in {"pending", "win", "lose"}:
+        query = query.filter(ThaiLotteryBet.status == status)
+    for raw_date, operator in ((date_from, ">="), (date_to, "<")):
+        if raw_date:
+            try:
+                parsed_date = datetime.strptime(raw_date, "%Y-%m-%d")
+                if operator == "<":
+                    parsed_date += timedelta(days=1)
+                query = query.filter(
+                    ThaiLotteryBet.created_at >= parsed_date if operator == ">="
+                    else ThaiLotteryBet.created_at < parsed_date
+                )
+            except ValueError:
+                pass
+    return query.order_by(ThaiLotteryBet.created_at.desc())
+
+
+@app.route("/partner/bets")
+@partner_required
+def partner_bets():
+    partner = partner_owner(current_user())
+    if partner.is_admin and not partner.partner_profile:
+        flash("กรุณาเข้าสู่ระบบด้วยบัญชี Partner เพื่อเปิดหน้านี้", "info")
+        return redirect(url_for("admin"))
+    members = User.query.filter_by(partner_id=partner.id, role="member").order_by(User.created_at.desc()).all()
+    rooms = active_lottery_rooms().all()
+    bets = partner_bet_query(partner).limit(500).all()
+    return render_template(
+        "partner_manage.html", view="bets", partner=partner, members=members,
+        rooms=rooms, bets=bets,
+        filters={key: request.args.get(key, "") for key in ("member_id", "room_id", "status", "date_from", "date_to")},
+    )
+
+
+def partner_bet_snapshot(partner, status=None):
+    query = partner_bet_query(partner)
+    if status:
+        query = query.filter(ThaiLotteryBet.status == status)
+    bets = query.limit(1000).all()
+    total_amount = sum(float(bet.amount) for bet in bets)
+    total_payout = sum(float(bet.amount) * float(bet.rate) for bet in bets)
+    return bets, total_amount, total_payout
+
+
+@app.route("/partner/bets/summary")
+@partner_required
+def partner_bet_summary():
+    partner = partner_owner(current_user())
+    bets, total_amount, total_payout = partner_bet_snapshot(partner)
+    return render_template("partner_manage.html", view="bet_summary", partner=partner, bets=bets,
+                           total_amount=total_amount, total_payout=total_payout,
+                           net_exposure=total_payout - total_amount)
+
+
+@app.route("/partner/bets/member-types")
+@partner_required
+def partner_bet_member_types():
+    partner = partner_owner(current_user())
+    bets, _, _ = partner_bet_snapshot(partner)
+    grouped = {}
+    for bet in bets:
+        key = (bet.user.full_name or bet.user.username, bet.bet_type)
+        row = grouped.setdefault(key, {"count": 0, "amount": 0.0, "payout": 0.0})
+        row["count"] += 1
+        row["amount"] += float(bet.amount)
+        row["payout"] += float(bet.amount) * float(bet.rate)
+    return render_template("partner_manage.html", view="bet_member_types", partner=partner,
+                           grouped=grouped)
+
+
+@app.route("/partner/bets/pending")
+@partner_required
+def partner_pending_bets():
+    partner = partner_owner(current_user())
+    bets, total_amount, _ = partner_bet_snapshot(partner, "pending")
+    return render_template("partner_manage.html", view="pending_bets", partner=partner,
+                           bets=bets, total_amount=total_amount)
+
+
+@app.route("/partner/bets/acceptance")
+@partner_required
+def partner_bet_acceptance():
+    return redirect(url_for("partner_bet_acceptance_by_type"))
+
+
+@app.route("/partner/bets/acceptance-by-type", methods=["GET", "POST"])
+@partner_required
+def partner_bet_acceptance_by_type():
+    partner = partner_owner(current_user())
+    rooms = active_lottery_rooms().all()
+    room_id = request.args.get("room_id", type=int) or (rooms[0].id if rooms else None)
+    periods = ThaiLotteryPeriod.query.filter_by(room_id=room_id).order_by(
+        ThaiLotteryPeriod.close_time.desc()
+    ).limit(10).all() if room_id else []
+    period_id = request.args.get("period_id", type=int) or (periods[0].id if periods else None)
+    if request.method == "POST":
+        room_id = request.form.get("room_id", type=int)
+        bet_type = normalize_bet_type(request.form.get("bet_type"))
+        try:
+            amount_limit = max(0.0, float(request.form.get("amount_limit", 0)))
+        except (TypeError, ValueError):
+            amount_limit = 0
+        room = db.session.get(LotteryRoom, room_id) if room_id else None
+        if not room or not bet_type:
+            flash("กรุณาเลือกห้องและประเภทให้ถูกต้อง", "error")
+        else:
+            rule = PartnerAcceptanceLimit.query.filter_by(
+                partner_id=partner.id, room_id=room.id, bet_type=bet_type
+            ).first()
+            if rule is None:
+                rule = PartnerAcceptanceLimit(partner_id=partner.id, room_id=room.id, bet_type=bet_type)
+                db.session.add(rule)
+            rule.amount_limit = amount_limit
+            db.session.commit()
+            flash("บันทึกวงเงินรับของแยกตามประเภทแล้ว", "success")
+        return redirect(url_for("partner_bet_acceptance_by_type", room_id=room_id, period_id=period_id))
+    limits = PartnerAcceptanceLimit.query.filter_by(partner_id=partner.id).all()
+    number_limits = PartnerAcceptanceNumber.query.filter_by(
+        partner_id=partner.id, period_id=period_id
+    ).order_by(PartnerAcceptanceNumber.bet_type, PartnerAcceptanceNumber.number).all() if period_id else []
+    return render_template("partner_manage.html", view="acceptance_types", partner=partner,
+                           rooms=rooms, periods=periods, selected_room_id=room_id,
+                           selected_period_id=period_id, acceptance_limits=limits,
+                           number_limits=number_limits)
+
+
+@app.route("/partner/bets/acceptance-number", methods=["POST"])
+@partner_required
+def partner_bet_acceptance_number():
+    partner = partner_owner(current_user())
+    period_id = request.form.get("period_id", type=int)
+    bet_type = normalize_bet_type(request.form.get("bet_type"))
+    number = request.form.get("number", "").strip()
+    try:
+        amount_limit = max(0.0, float(request.form.get("amount_limit", 0)))
+    except (TypeError, ValueError):
+        amount_limit = 0
+    period = db.session.get(ThaiLotteryPeriod, period_id) if period_id else None
+    if not period or not bet_type or not number.isdigit():
+        flash("กรุณากรอกงวด ประเภท เลข และวงเงินให้ถูกต้อง", "error")
+    else:
+        item = PartnerAcceptanceNumber.query.filter_by(
+            partner_id=partner.id, period_id=period.id, bet_type=bet_type, number=number
+        ).first()
+        if item is None:
+            item = PartnerAcceptanceNumber(partner_id=partner.id, period_id=period.id,
+                                           bet_type=bet_type, number=number)
+            db.session.add(item)
+        item.amount_limit = amount_limit
+        db.session.commit()
+        flash("บันทึกวงเงินรับของรายเลขแล้ว", "success")
+    return redirect(url_for("partner_bet_acceptance_by_type", room_id=period.room_id if period else None,
+                            period_id=period_id))
 
 
 @app.route("/partner/topup", methods=["POST"])
 @partner_required
 def partner_topup_member():
-    partner = current_user()
+    partner = partner_owner(current_user())
     if not partner.is_partner:
         abort(403)
 
@@ -1954,7 +2220,7 @@ def partner_topup_member():
 @app.route("/partner/members", methods=["GET", "POST"])
 @partner_required
 def partner_members():
-    partner = current_user()
+    partner = partner_owner(current_user())
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -1985,7 +2251,7 @@ def partner_members():
 @app.route("/partner/members/<int:member_id>/limits", methods=["POST"])
 @partner_required
 def partner_member_limits(member_id):
-    partner = current_user()
+    partner = partner_owner(current_user())
     member = User.query.filter_by(id=member_id, partner_id=partner.id, role="member").first()
     if not member:
         abort(404)
@@ -2012,18 +2278,82 @@ def partner_member_limits(member_id):
 @app.route("/partner/finance")
 @partner_required
 def partner_finance():
-    partner = current_user()
+    partner = partner_owner(current_user())
     transactions = WalletTransaction.query.filter_by(user_id=partner.id).order_by(
         WalletTransaction.created_at.desc()
     ).limit(100).all()
+    accounts = UserBankAccount.query.filter_by(user_id=partner.id, is_active=True).order_by(
+        UserBankAccount.created_at.asc()
+    ).all()
+    pending_payout = db.session.query(func.coalesce(func.sum(WithdrawalRequest.amount), 0.0)).filter(
+        WithdrawalRequest.user_id == partner.id,
+        WithdrawalRequest.method == "commission_payout",
+        WithdrawalRequest.status == "pending",
+    ).scalar()
     return render_template("partner_manage.html", view="finance", partner=partner,
-                           transactions=transactions)
+                           transactions=transactions, bank_accounts=accounts,
+                           bank_catalog=get_bank_catalog(), pending_payout=float(pending_payout or 0))
+
+
+@app.route("/partner/finance/bank-account", methods=["POST"])
+@partner_required
+def partner_add_bank_account():
+    partner = partner_owner(current_user())
+    bank_code = request.form.get("bank_code", "").strip()
+    account_number = request.form.get("account_number", "").strip()
+    account_name = request.form.get("account_name", "").strip()
+    bank = get_bank_catalog().get(bank_code)
+    if not bank or not account_number or not account_name:
+        flash("กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วน", "error")
+    elif UserBankAccount.query.filter_by(user_id=partner.id, bank_code=bank_code,
+                                         account_number=account_number, is_active=True).first():
+        flash("บัญชีธนาคารนี้ถูกผูกไว้แล้ว", "error")
+    else:
+        db.session.add(UserBankAccount(
+            user_id=partner.id, bank_code=bank_code, bank_name=bank["name"],
+            account_number=account_number, account_name=account_name, logo_url=bank["logo"],
+        ))
+        db.session.commit()
+        flash("ผูกบัญชีธนาคารสำหรับรับคอมมิชชันแล้ว", "success")
+    return redirect(url_for("partner_finance"))
+
+
+@app.route("/partner/finance/payout", methods=["POST"])
+@partner_required
+def partner_request_payout():
+    partner = partner_owner(current_user())
+    account_id = request.form.get("bank_account_id", type=int)
+    account = db.session.get(UserBankAccount, account_id) if account_id else None
+    try:
+        amount = round(float(request.form.get("amount", 0)), 2)
+    except (TypeError, ValueError):
+        amount = 0
+    pending = db.session.query(func.coalesce(func.sum(WithdrawalRequest.amount), 0.0)).filter(
+        WithdrawalRequest.user_id == partner.id,
+        WithdrawalRequest.method == "commission_payout",
+        WithdrawalRequest.status == "pending",
+    ).scalar() or 0
+    available = round(float(partner.partner_profile.commission_balance) - float(pending), 2)
+    if not account or account.user_id != partner.id or not account.is_active:
+        flash("กรุณาเลือกบัญชีธนาคารของ Partner เท่านั้น", "error")
+    elif amount <= 0 or amount > available:
+        flash(f"คอมมิชชันที่เบิกได้คงเหลือ {available:,.2f}", "error")
+    else:
+        db.session.add(WithdrawalRequest(
+            user_id=partner.id, amount=amount, method="commission_payout",
+            payout_account=f"{account.bank_name} {account.account_number} ({account.account_name})",
+            note=request.form.get("note", "").strip(),
+        ))
+        notify_user(partner, "ส่งคำขอเบิกคอมมิชชันแล้ว", f"รอตรวจสอบจำนวน {amount:,.2f}", "wallet")
+        db.session.commit()
+        flash("ส่งคำขอเบิกคอมมิชชันแล้ว", "success")
+    return redirect(url_for("partner_finance"))
 
 
 @app.route("/partner/reports")
 @partner_required
 def partner_reports():
-    partner = current_user()
+    partner = partner_owner(current_user())
     bets = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).filter(
         User.partner_id == partner.id
     ).order_by(ThaiLotteryBet.created_at.desc()).limit(200).all()
@@ -2041,7 +2371,7 @@ def partner_reports():
 @app.route("/partner/online")
 @partner_required
 def partner_online_members():
-    partner = current_user()
+    partner = partner_owner(current_user())
     online_cutoff = datetime.now() - timedelta(minutes=10)
     presence = PartnerPresence.query.filter_by(partner_id=partner.id).filter(
         PartnerPresence.last_seen_at >= online_cutoff
@@ -2053,7 +2383,7 @@ def partner_online_members():
 @app.route("/partner/settings", methods=["GET", "POST"])
 @partner_required
 def partner_settings():
-    partner = current_user()
+    partner = partner_owner(current_user())
     if request.method == "POST" and request.form.get("action") == "rate":
         bet_type = normalize_bet_type(request.form.get("bet_type"))
         try:
@@ -2096,7 +2426,7 @@ def partner_settings():
 @app.route("/partner/blocked", methods=["GET", "POST"])
 @partner_required
 def partner_blocked_numbers():
-    partner = current_user()
+    partner = partner_owner(current_user())
     if request.method == "POST":
         room_id = request.form.get("room_id", type=int)
         bet_type = normalize_bet_type(request.form.get("bet_type"))
@@ -2131,7 +2461,7 @@ def partner_blocked_numbers():
 @app.route("/partner/blocked/<int:item_id>/delete", methods=["POST"])
 @partner_required
 def partner_delete_blocked_number(item_id):
-    partner = current_user()
+    partner = partner_owner(current_user())
     item = PartnerBlockedNumber.query.filter_by(id=item_id, partner_id=partner.id).first()
     if item:
         db.session.delete(item)

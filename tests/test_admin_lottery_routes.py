@@ -129,7 +129,7 @@ def test_admin_login_keeps_admin_route_accessible():
         }, follow_redirects=False)
 
         assert response.status_code == 302
-        assert response.headers.get('Location') == '/admin'
+        assert response.headers.get('Location') == f"{app.config['BACKOFFICE_URL']}/dashboard"
 
         admin_response = client.get('/admin', follow_redirects=False)
         assert admin_response.status_code == 200

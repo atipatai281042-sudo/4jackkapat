@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}แทงหวย — mklotto{% endblock %}
+{% block head %}<meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes" />{% endblock %}
 {% block content %}
 <div class="rooms-page container">
         <div class="betting-shell">
@@ -257,6 +258,120 @@
     }
     @media (max-width: 359px) {
         .betting-catalog .room-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Keep mobile visually identical to the desktop betting page. */
+    @media (max-width: 640px) {
+        .rooms-page { padding: 4px 12px 42px !important; }
+        .rooms-heading { margin-bottom: 8px !important; }
+        .rooms-heading h1 { font-size: 1.25rem !important; line-height: 1.2 !important; }
+        .rooms-heading p, .rooms-heading .eyebrow, .category-kicker { display: none !important; }
+        .lottery-category-section { margin-bottom: 14px !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; }
+        .lottery-category-heading { margin-bottom: 8px !important; padding: 0 2px 6px !important; align-items: center !important; flex-wrap: nowrap !important; }
+        .lottery-category-heading .section-title { font-size: 1rem !important; }
+        .room-grid, .betting-catalog .room-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 12px !important; }
+        .room-card, .betting-catalog .room-card { min-height: 245px !important; border-radius: 7px !important; }
+        .room-card .card-body, .betting-catalog .room-card .card-body { padding: 10px !important; padding-top: 72px !important; }
+        .room-card .room-visual, .betting-catalog .room-card .room-visual { height: 82px !important; }
+        .room-image-frame, .betting-catalog .room-image-frame { width: 58px !important; height: 58px !important; border-radius: 8px !important; }
+        .room-image, .betting-catalog .room-image { width: 44px !important; height: 44px !important; }
+        .room-card h4, .betting-catalog .room-card h4 { font-size: .98rem !important; }
+        .room-card p, .betting-catalog .room-card p { display: none !important; }
+        .room-countdown, .betting-catalog .room-countdown { padding: .5rem .55rem !important; border-radius: 6px !important; }
+        .room-countdown-value, .betting-catalog .room-countdown-value { font-size: .9rem !important; }
+        .room-action, .betting-catalog .room-action { min-height: 34px !important; padding: 6px 8px !important; font-size: .78rem !important; }
+        .betting-shell { grid-template-columns: 220px minmax(0, 1fr) !important; gap: 20px !important; }
+        .betting-sidebar { position: sticky !important; display: flex !important; grid-template-columns: none !important; gap: 10px !important; }
+        .betting-shortcuts { grid-column: auto !important; grid-template-columns: none !important; }
+        .betting-slip-placeholder { grid-column: auto !important; }
+    }
+    @media (max-width: 359px) {
+        .room-grid, .betting-catalog .room-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+    }
+
+    @media (max-width: 1180px) {
+        .site-header .container,
+        .rooms-page.container {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+    }
+
+    @media (max-width: 1350px) {
+        .site-header .container,
+        .rooms-page.container {
+            margin-left: 0 !important;
+            margin-right: auto !important;
+        }
+        .rooms-page.container {
+            width: 100vw !important;
+            max-width: none !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+    }
+
+    @media (max-width: 640px) {
+        /* The phone view keeps the desktop composition, but at a compact scale. */
+        html, body {
+            overflow-x: hidden;
+        }
+        body.app-body .site-header .header-inner {
+            flex-wrap: nowrap !important;
+            justify-content: flex-start !important;
+            gap: 6px !important;
+            min-height: 74px !important;
+            height: 74px !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        body.app-body .site-header .container {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            max-width: none !important;
+        }
+        body.app-body .site-header .nav-toggle {
+            display: none !important;
+        }
+        body.app-body .site-header .main-nav {
+            display: flex !important;
+            order: initial !important;
+            flex: 0 1 auto !important;
+            width: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            flex-direction: row !important;
+            white-space: nowrap;
+        }
+        body.app-body .site-header .header-actions {
+            order: initial !important;
+            width: auto !important;
+            margin-left: 0 !important;
+            flex: 0 1 auto !important;
+            overflow: hidden !important;
+            padding-bottom: 0 !important;
+            justify-content: flex-start !important;
+        }
+        body.app-body .container,
+        body.app-body .rooms-page.container {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+        body.app-body .rooms-page {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
     }
 </style>
 <script>
