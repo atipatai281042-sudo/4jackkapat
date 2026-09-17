@@ -902,6 +902,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 let rate = parseFloat(rateInput.value) || 0;
                 totalBet += amt;
                 maxPayout += (amt * rate);
+                const payoutCell = row.querySelector('.item-payout');
+                if (payoutCell) {
+                    payoutCell.textContent = (amt * rate).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
             }
         });
 
