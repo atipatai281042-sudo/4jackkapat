@@ -1268,12 +1268,23 @@ def lottery_ticket(period_id, ticket_code=None):
     if not bets:
         abort(404)
 
+    refundable = bool(
+        ticket_code
+        and period.is_open
+        and period.close_time
+        and period.close_time > app_now()
+        and all(bet.status == "pending" for bet in bets)
+    )
+
     return render_template(
         "lottery_ticket.html",
         period=period,
         bets=bets,
         total_amount=sum(bet.amount for bet in bets),
         total_reward=sum(bet.reward_amount for bet in bets if bet.status == "win"),
+        ticket_code=ticket_code,
+        refundable=refundable,
+        is_admin_view=False,
     )
 
 
@@ -2534,7 +2545,7 @@ def admin_thai_lottery():
             flash(
                 f"ซิงก์ API วันที่ {summary['date']} แล้ว: เพิ่มห้อง {summary['rooms']} ห้อง, "
                 f"เพิ่มงวด {summary['periods']} งวด, อัปเดตผล {summary['results']} งวด "
-                "ตรวจสอบรายการผลด้านล่างก่อนกดยืนยันผลทั้งหมด",
+                "ระบบตรวจสอบและจ่ายรางวัลอัตโนมัติแล้ว",
                 "success",
             )
             return redirect(url_for("admin_thai_lottery"))

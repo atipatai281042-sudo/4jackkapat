@@ -18,7 +18,6 @@
                 <nav class="betting-shortcuts" aria-label="เมนูการแทงหวย">
                     <a class="is-active" href="{{ url_for('lottery_rooms') }}"><i class="fas fa-ticket"></i> แทงหวย</a>
                     <a href="{{ url_for('history') }}"><i class="fas fa-list-check"></i> รายการแทงของฉัน</a>
-                      {% if current_user.is_admin %}<a href="{{ url_for('wallet') }}"><i class="fas fa-wallet"></i> บัญชีการเงิน</a>{% endif %}
                     <a href="{{ url_for('lottery_results') }}"><i class="fas fa-square-poll-vertical"></i> ตรวจรางวัล</a>
                 </nav>
                 <a class="betting-slip-placeholder betting-slip-link" href="{{ url_for('history') }}">
