@@ -1213,9 +1213,6 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user():
-        user = current_user()
-        if user.is_admin or user.is_partner:
-            return redirect(f"{app.config['BACKOFFICE_URL']}/dashboard")
         return redirect(url_for("lottery_rooms"))
 
     if request.method == "POST":
@@ -1240,8 +1237,6 @@ def login():
             ))
             db.session.commit()
             flash(f"ยินดีต้อนรับ {user.username}", "success")
-            if user.is_admin or user.is_partner:
-                return redirect(f"{app.config['BACKOFFICE_URL']}/dashboard")
             return redirect(url_for("lottery_rooms"))
 
         flash("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", "error")
