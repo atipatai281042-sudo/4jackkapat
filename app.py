@@ -329,7 +329,20 @@ def sync_lottery_api_results(date_value=None):
         if status == "success" and not period.is_checked:
             period.result_3up = str(item.get("top3") or "").strip() or None
             period.result_2down = str(item.get("bottom2") or "").strip() or None
-            period.result_3back = str(item.get("bottom3") or "").strip() or None
+            # thailottoapi.com returns "เลขหน้า 3 ตัว" and "เลขท้าย 3 ตัว" bundled
+            # together in one "bottom3" field (2 front + 2 back for the Thai
+            # government lottery). Split them into their own result fields
+            # instead of dumping all 4 numbers into result_3back, which used to
+            # make "3 หน้า" bets always lose and "3 หลัง" bets settle against
+            # numbers that were never actually the back prize.
+            bottom3_raw = str(item.get("bottom3") or "").strip()
+            bottom3_numbers = [n.strip() for n in bottom3_raw.split(",") if n.strip()]
+            if len(bottom3_numbers) == 4:
+                period.result_3front = ", ".join(bottom3_numbers[:2])
+                period.result_3back = ", ".join(bottom3_numbers[2:])
+            else:
+                period.result_3front = None
+                period.result_3back = bottom3_raw or None
             updated_results += 1
 
     settlement_admin = User.query.filter_by(role="admin").order_by(User.id.asc()).first()
