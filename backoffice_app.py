@@ -83,8 +83,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-@backoffice_app.route("/main", defaults={"path": "admin"}, methods=["GET", "POST"])
-@backoffice_app.route("/main/", defaults={"path": ""}, methods=["GET", "POST"])
 @backoffice_app.route("/main/<path:path>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 def main_app_proxy(path):
     user = logged_user()
@@ -132,6 +130,16 @@ def main_app_proxy(path):
         rendered = rendered.replace("__BACKOFFICE_LOGOUT__", f"{backoffice_root}/logout")
         content = rendered.encode("utf-8")
     return Response(content, status=response.status_code, headers=response_headers)
+
+
+@backoffice_app.route("/main", methods=["GET", "POST"])
+def main_app_proxy_admin_shortcut():
+    return main_app_proxy("admin")
+
+
+@backoffice_app.route("/main/", methods=["GET", "POST"])
+def main_app_proxy_root_shortcut():
+    return main_app_proxy("")
 
 
 @backoffice_app.route("/dashboard")

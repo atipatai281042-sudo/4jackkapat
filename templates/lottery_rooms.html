@@ -234,17 +234,30 @@
     .betting-slip-link { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #f8fafc; text-decoration: none; font-size: .82rem; }
     .betting-slip-link i { color: #f5c85b; }
     .betting-catalog { min-width: 0; }
-    .betting-catalog .room-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-    .betting-catalog .room-card { min-height: 245px; border-radius: 7px; }
-    .betting-catalog .room-card .card-body { padding: 10px !important; padding-top: 72px !important; }
+    .betting-catalog .room-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .betting-catalog .room-card { min-height: 262px; border-radius: 9px; }
+    .betting-catalog .room-card .card-body { padding: 12px 14px !important; padding-top: 74px !important; }
     .betting-catalog .room-card .room-visual { height: 82px; }
     .betting-catalog .room-image-frame { width: 58px; height: 58px; border-radius: 8px; }
     .betting-catalog .room-image { width: 44px !important; height: 44px !important; }
     .betting-catalog .room-card h4 { font-size: .98rem; }
-    .betting-catalog .room-card p { display: none; }
-    .betting-catalog .room-countdown { padding: .5rem .55rem !important; border-radius: 6px !important; }
+    .betting-catalog .room-card p {
+        display: -webkit-box !important;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: .6rem !important;
+        font-size: .78rem !important;
+    }
+    .betting-catalog .room-countdown { padding: .55rem .6rem !important; border-radius: 6px !important; }
     .betting-catalog .room-countdown-value { font-size: .9rem !important; }
-    .betting-catalog .room-action { min-height: 34px; padding: 6px 8px !important; font-size: .78rem; }
+    .betting-catalog .room-action { min-height: 36px; padding: 7px 8px !important; font-size: .8rem; }
+    @media (min-width: 1600px) {
+        .betting-catalog .room-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+    }
+    @media (min-width: 2000px) {
+        .betting-catalog .room-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
+    }
     @media (max-width: 1100px) {
         .betting-catalog .room-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
@@ -288,30 +301,21 @@
         .room-grid, .betting-catalog .room-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
     }
 
-    @media (max-width: 1180px) {
-        .site-header .container,
-        .rooms-page.container {
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-        }
+    /* Fill the screen instead of sitting in a fixed 1180px column with big
+       side gutters on normal/wide desktop monitors. */
+    .site-header .container,
+    .rooms-page.container {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
     }
-
-    @media (max-width: 1350px) {
-        .site-header .container,
-        .rooms-page.container {
-            margin-left: 0 !important;
-            margin-right: auto !important;
-        }
-        .rooms-page.container {
-            width: 100vw !important;
-            max-width: none !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-        }
+    .rooms-page.container {
+        width: 100vw !important;
+        max-width: none !important;
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+    }
+    @media (max-width: 640px) {
+        .rooms-page.container { padding-left: 12px !important; padding-right: 12px !important; }
     }
 
     @media (max-width: 640px) {
