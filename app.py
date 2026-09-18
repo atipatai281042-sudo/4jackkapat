@@ -11,6 +11,7 @@ import re
 import shutil
 from datetime import datetime, timedelta
 from functools import wraps
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 from sqlalchemy import inspect, text, or_, func
 
@@ -32,6 +33,7 @@ from models import (
     PartnerAcceptanceLimit, PartnerAcceptanceNumber, PartnerStockShare, PartnerStockLedger,
     PartnerBlockedNumber, PartnerPresence, CommissionLedger, VipTier,
     SeniorProfile, SeniorStockShare, SeniorStockLedger, SeniorCommissionLedger,
+    SeniorMemberLimit, SeniorRoomSetting, SeniorBlockedNumber, SeniorAcceptanceLimit, SeniorAcceptanceNumber,
     WalletTransaction, Notification, AdminAuditLog, ResponsiblePlayProfile,
     SystemSetting, DepositRequest, WithdrawalRequest, UserBankAccount, LotteryCategory,
     LoginHistory, Announcement
@@ -1022,20 +1024,50 @@ def adjust_credit(user: User, change: float, reason: str, admin: User | None = N
 
 
 def get_partner_member_limit(user, member):
+    """user = Agent ที่ดูแลสมาชิกคนนี้โดยตรง, member = สมาชิกที่กำลังจะแทง
+    รวมวงเงินของ Agent ตัวเอง กับของ Senior บนสุดของสาย (ถ้ามี) โดยเอาค่าที่
+    "เข้มงวดที่สุด" ของแต่ละช่องชนะ (ขั้นต่ำเอาค่ามาก, สูงสุดเอาค่าน้อย) — ไม่มีการ
+    ไล่ระดับ Agent ระหว่างทาง (Agent ย่อยของ Agent) เพราะของเดิมก็ไม่เคยรองรับ
+    เฉพาะ Agent ตรง + Senior บนสุดเท่านั้นที่ตั้งวงเงินแบบนี้ได้"""
     if not user or not member or not user.is_partner or member.partner_id != user.id:
         return None
-    return PartnerMemberLimit.query.filter_by(
+    agent_limit = PartnerMemberLimit.query.filter_by(
         partner_id=user.id, member_id=member.id
     ).first()
+    senior = agent_upline_senior(user)
+    senior_limit = SeniorMemberLimit.query.filter_by(
+        senior_id=senior.id, member_id=member.id
+    ).first() if senior else None
+    if not agent_limit and not senior_limit:
+        return None
+    if agent_limit and not senior_limit:
+        return agent_limit
+    if senior_limit and not agent_limit:
+        return senior_limit
+    return SimpleNamespace(
+        min_bet=max(agent_limit.min_bet, senior_limit.min_bet),
+        max_bet=min(agent_limit.max_bet, senior_limit.max_bet),
+        max_number_bet=min(agent_limit.max_number_bet, senior_limit.max_number_bet),
+    )
 
 
 def partner_room_is_enabled(user, room_id):
+    """user = สมาชิกที่กำลังจะแทง — เช็คทั้งการตั้งค่าของ Agent ตรง (user.partner_id)
+    และของ Senior บนสุดของสาย ถ้าฝั่งไหนปิดห้องนี้ไว้ ถือว่าปิด (เข้มงวดที่สุดชนะ)"""
     if not user or not user.partner_id or not room_id:
         return True
     setting = PartnerRoomSetting.query.filter_by(
         partner_id=user.partner_id, room_id=room_id
     ).first()
-    return setting is None or setting.is_enabled
+    if setting is not None and not setting.is_enabled:
+        return False
+    agent = user.partner
+    senior = agent_upline_senior(agent) if agent else None
+    if senior:
+        senior_setting = SeniorRoomSetting.query.filter_by(senior_id=senior.id, room_id=room_id).first()
+        if senior_setting is not None and not senior_setting.is_enabled:
+            return False
+    return True
 
 
 def get_partner_payout_rates(partner):
@@ -1048,13 +1080,26 @@ def get_partner_payout_rates(partner):
 
 
 def partner_blocked_rate(user, room_id, bet_type, number):
+    """user = สมาชิกที่กำลังจะแทง — เช็คเลขอั้นของ Agent ตรงก่อน ถ้าไม่เจอค่อยเช็ค
+    ของ Senior บนสุดของสาย (ใครตั้งไว้ก่อนใช้ค่านั้น ไม่รวมกัน เพราะเป็นอัตราจ่าย
+    ไม่ใช่วงเงิน จะ "รวม" แบบ min/max ไม่ได้)"""
     if not user or not user.partner_id:
         return None
     blocked = PartnerBlockedNumber.query.filter_by(
         partner_id=user.partner_id, room_id=room_id,
         bet_type=bet_type, number=number,
     ).first()
-    return blocked.payout_multiplier if blocked else None
+    if blocked:
+        return blocked.payout_multiplier
+    agent = user.partner
+    senior = agent_upline_senior(agent) if agent else None
+    if senior:
+        senior_blocked = SeniorBlockedNumber.query.filter_by(
+            senior_id=senior.id, room_id=room_id, bet_type=bet_type, number=number,
+        ).first()
+        if senior_blocked:
+            return senior_blocked.payout_multiplier
+    return None
 
 
 def touch_partner_presence(user):
@@ -3042,7 +3087,27 @@ def senior_owner(user=None):
 
 
 def senior_agent_ids(senior):
-    return [row.id for row in User.query.filter_by(senior_id=senior.id, role="partner").with_entities(User.id).all()]
+    """สาย Agent ของ Senior คนนี้ทั้งหมด รวม Agent ย่อยที่ถูกสร้างซ้อนกันไม่จำกัดชั้น
+    (Agent1 มี senior_id ตรง, Agent2/Agent3/... ที่ Agent1 สร้างเพิ่มจะมีแค่
+    partner_id ชี้มาที่ Agent1 เท่านั้น ไม่มี senior_id ของตัวเอง) — เดินลงทีละชั้น
+    (BFS) จนกว่าจะไม่เจอ Agent ย่อยเพิ่ม กันวนซ้ำด้วย seen set"""
+    top_level = [row.id for row in User.query.filter_by(senior_id=senior.id, role="partner").with_entities(User.id).all()]
+    all_ids = list(top_level)
+    seen = set(all_ids)
+    frontier = list(top_level)
+    while frontier:
+        children = [
+            row.id for row in User.query.filter(
+                User.partner_id.in_(frontier), User.role == "partner"
+            ).with_entities(User.id).all()
+            if row.id not in seen
+        ]
+        if not children:
+            break
+        all_ids.extend(children)
+        seen.update(children)
+        frontier = children
+    return all_ids
 
 
 def senior_bet_query(senior, agent_ids):
@@ -3202,8 +3267,15 @@ def senior_reports():
         "losses": sum(1 for bet in bets if bet.status == "lose"),
         "commission": sum(float(entry.commission_amount) for entry in SeniorCommissionLedger.query.filter_by(senior_id=senior.id).all()),
     }
+    by_category = {}
+    for bet in bets:
+        room = bet.period.room if bet.period else None
+        category = (room.category_ref.name if room and room.category_ref else (room.category if room else None)) or "อื่นๆ"
+        row = by_category.setdefault(category, {"count": 0, "amount": 0.0})
+        row["count"] += 1
+        row["amount"] += float(bet.amount)
     return render_template("senior_manage.html", view="reports", senior=senior,
-                           bets=bets, summary=summary)
+                           bets=bets, summary=summary, by_category=by_category)
 
 
 @app.route("/senior/reports/chart")
@@ -3363,6 +3435,259 @@ def senior_stock():
     return render_template("senior_manage.html", view="stock", senior=senior,
                            rooms=rooms, stock_shares=shares,
                            stock_balance=senior.senior_profile.stock_balance if senior.senior_profile else 0.0)
+
+
+@app.route("/senior/pending")
+@senior_required
+def senior_pending_bets():
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    bets = senior_bet_query(senior, agent_ids).filter(ThaiLotteryBet.status == "pending").limit(1000).all() if agent_ids else []
+    total_amount = sum(float(bet.amount) for bet in bets)
+    return render_template("senior_manage.html", view="pending_bets", senior=senior,
+                           bets=bets, total_amount=total_amount)
+
+
+@app.route("/senior/members", methods=["GET", "POST"])
+@senior_required
+def senior_members():
+    """Senior เพิ่มสมาชิกได้ แต่ต้องเลือกว่าสมาชิกคนนี้อยู่ใต้ Agent คนไหนในสาย
+    (เพราะ partner_id ของสมาชิกต้องชี้ไปที่ Agent เสมอ ให้ commission/stock
+    cascade ทำงานถูกต้อง — Senior ไม่ใช่ Agent เลยรับสมาชิกตรงๆ ไม่ได้)"""
+    senior = senior_owner(current_user())
+    agents = User.query.filter_by(senior_id=senior.id, role="partner").order_by(User.username.asc()).all()
+    if request.method == "POST":
+        agent_id = request.form.get("agent_id", type=int)
+        agent = User.query.filter_by(id=agent_id, senior_id=senior.id, role="partner").first() if agent_id else None
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        full_name = request.form.get("full_name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        if not agent:
+            flash("กรุณาเลือก Agent ในสายของคุณให้สมาชิกคนนี้", "error")
+        elif len(username) < 4 or not re.fullmatch(r"[A-Za-z0-9]+", username):
+            flash("ชื่อผู้ใช้ต้องเป็นภาษาอังกฤษหรือตัวเลขอย่างน้อย 4 ตัว", "error")
+        elif len(password) < 6 or not re.fullmatch(r"[A-Za-z0-9]+", password):
+            flash("รหัสผ่านต้องเป็นภาษาอังกฤษและตัวเลขอย่างน้อย 6 ตัว", "error")
+        elif not full_name:
+            flash("กรุณากรอกชื่อสมาชิก", "error")
+        elif User.query.filter_by(username=username).first():
+            flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
+        else:
+            member = User(username=username, full_name=full_name, phone=phone,
+                          role="member", partner_id=agent.id, points=0, credit_balance=0.0)
+            member.set_password(password)
+            db.session.add(member)
+            db.session.commit()
+            flash(f"เพิ่มสมาชิก {username} เข้าสาย Agent {agent.username} แล้ว", "success")
+        return redirect(url_for("senior_members"))
+
+    agent_ids = [a.id for a in agents]
+    members = User.query.filter(User.partner_id.in_(agent_ids)).order_by(
+        User.created_at.desc()
+    ).all() if agent_ids else []
+    return render_template("senior_manage.html", view="members", senior=senior,
+                           agents=agents, members=members)
+
+
+@app.route("/senior/members/<int:member_id>/limits", methods=["POST"])
+@senior_required
+def senior_member_limits(member_id):
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    member = User.query.filter(User.id == member_id, User.role == "member",
+                               User.partner_id.in_(agent_ids)).first() if agent_ids else None
+    if not member:
+        abort(404)
+    try:
+        min_bet = max(0.0, float(request.form.get("min_bet", 0)))
+        max_bet = max(0.0, float(request.form.get("max_bet", 1000000)))
+        max_number_bet = max(0.0, float(request.form.get("max_number_bet", 1000000)))
+    except (TypeError, ValueError):
+        flash("วงเงินไม่ถูกต้อง", "error")
+        return redirect(url_for("senior_members"))
+    if max_bet < min_bet or max_number_bet < min_bet:
+        flash("วงเงินสูงสุดต้องไม่น้อยกว่าวงเงินขั้นต่ำ", "error")
+        return redirect(url_for("senior_members"))
+    limit = SeniorMemberLimit.query.filter_by(senior_id=senior.id, member_id=member.id).first()
+    if limit is None:
+        limit = SeniorMemberLimit(senior_id=senior.id, member_id=member.id)
+        db.session.add(limit)
+    limit.min_bet, limit.max_bet, limit.max_number_bet = min_bet, max_bet, max_number_bet
+    db.session.commit()
+    flash(f"บันทึกวงเงินของ {member.username} แล้ว", "success")
+    return redirect(url_for("senior_members"))
+
+
+@app.route("/senior/topup", methods=["POST"])
+@senior_required
+def senior_topup_member():
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    member_id = request.form.get("member_id", type=int)
+    member = User.query.filter(User.id == member_id, User.role == "member",
+                               User.partner_id.in_(agent_ids)).first() if member_id and agent_ids else None
+    try:
+        amount = round(float(request.form.get("amount", 0)), 2)
+    except (TypeError, ValueError):
+        amount = 0
+
+    if not member:
+        flash("เลือกสมาชิกในสายของคุณเท่านั้น", "error")
+    elif amount <= 0:
+        flash("กรุณาระบุจำนวนเครดิตมากกว่า 0", "error")
+    elif amount > senior.credit_balance:
+        flash("เครดิตของ Senior ไม่พอสำหรับเติมให้สมาชิก", "error")
+    else:
+        reason = request.form.get("reason", "").strip() or "Senior เติมเครดิตให้สมาชิก"
+        adjust_credit(senior, -amount, f"โอนเครดิตให้ {member.username}: {reason}")
+        adjust_credit(member, amount, f"ได้รับเครดิตจาก Senior {senior.username}: {reason}")
+        notify_user(member, "ได้รับเครดิตจาก Senior", f"เครดิตเพิ่ม {amount:,.2f} เครดิต", "wallet")
+        notify_user(senior, "เติมเครดิตให้สมาชิกสำเร็จ", f"โอนให้ {member.username} จำนวน {amount:,.2f} เครดิต", "wallet")
+        db.session.commit()
+        flash(f"เติมเครดิตให้ {member.username} แล้ว", "success")
+    return redirect(url_for("senior_members"))
+
+
+@app.route("/senior/settings", methods=["GET", "POST"])
+@senior_required
+def senior_settings():
+    senior = senior_owner(current_user())
+    if request.method == "POST":
+        room_id = request.form.get("room_id", type=int)
+        room = db.session.get(LotteryRoom, room_id) if room_id else None
+        if not room:
+            abort(404)
+        setting = SeniorRoomSetting.query.filter_by(senior_id=senior.id, room_id=room.id).first()
+        if setting is None:
+            setting = SeniorRoomSetting(senior_id=senior.id, room_id=room.id)
+            db.session.add(setting)
+        setting.is_enabled = request.form.get("is_enabled") == "1"
+        db.session.commit()
+        flash(f"อัปเดตสถานะห้อง {room.name} แล้ว", "success")
+        return redirect(url_for("senior_settings"))
+
+    rooms = active_lottery_rooms().all()
+    settings = {item.room_id: item for item in SeniorRoomSetting.query.filter_by(senior_id=senior.id).all()}
+    return render_template("senior_manage.html", view="settings", senior=senior,
+                           rooms=rooms, room_settings=settings)
+
+
+@app.route("/senior/bets/acceptance-by-type", methods=["GET", "POST"])
+@senior_required
+def senior_bet_acceptance_by_type():
+    senior = senior_owner(current_user())
+    rooms = active_lottery_rooms().all()
+    room_id = request.args.get("room_id", type=int) or (rooms[0].id if rooms else None)
+    periods = ThaiLotteryPeriod.query.filter_by(room_id=room_id).order_by(
+        ThaiLotteryPeriod.close_time.desc()
+    ).limit(10).all() if room_id else []
+    period_id = request.args.get("period_id", type=int) or (periods[0].id if periods else None)
+    if request.method == "POST":
+        room_id = request.form.get("room_id", type=int)
+        bet_type = normalize_bet_type(request.form.get("bet_type"))
+        try:
+            amount_limit = max(0.0, float(request.form.get("amount_limit", 0)))
+        except (TypeError, ValueError):
+            amount_limit = 0
+        room = db.session.get(LotteryRoom, room_id) if room_id else None
+        if not room or not bet_type:
+            flash("กรุณาเลือกห้องและประเภทให้ถูกต้อง", "error")
+        else:
+            rule = SeniorAcceptanceLimit.query.filter_by(
+                senior_id=senior.id, room_id=room.id, bet_type=bet_type
+            ).first()
+            if rule is None:
+                rule = SeniorAcceptanceLimit(senior_id=senior.id, room_id=room.id, bet_type=bet_type)
+                db.session.add(rule)
+            rule.amount_limit = amount_limit
+            db.session.commit()
+            flash("บันทึกวงเงินรับของแยกตามประเภทแล้ว", "success")
+        return redirect(url_for("senior_bet_acceptance_by_type", room_id=room_id, period_id=period_id))
+    limits = SeniorAcceptanceLimit.query.filter_by(senior_id=senior.id).all()
+    number_limits = SeniorAcceptanceNumber.query.filter_by(
+        senior_id=senior.id, period_id=period_id
+    ).order_by(SeniorAcceptanceNumber.bet_type, SeniorAcceptanceNumber.number).all() if period_id else []
+    return render_template("senior_manage.html", view="acceptance_types", senior=senior,
+                           rooms=rooms, periods=periods, selected_room_id=room_id,
+                           selected_period_id=period_id, acceptance_limits=limits,
+                           number_limits=number_limits)
+
+
+@app.route("/senior/bets/acceptance-number", methods=["POST"])
+@senior_required
+def senior_bet_acceptance_number():
+    senior = senior_owner(current_user())
+    period_id = request.form.get("period_id", type=int)
+    bet_type = normalize_bet_type(request.form.get("bet_type"))
+    number = request.form.get("number", "").strip()
+    try:
+        amount_limit = max(0.0, float(request.form.get("amount_limit", 0)))
+    except (TypeError, ValueError):
+        amount_limit = 0
+    period = db.session.get(ThaiLotteryPeriod, period_id) if period_id else None
+    if not period or not bet_type or not number.isdigit():
+        flash("กรุณากรอกงวด ประเภท เลข และวงเงินให้ถูกต้อง", "error")
+    else:
+        item = SeniorAcceptanceNumber.query.filter_by(
+            senior_id=senior.id, period_id=period.id, bet_type=bet_type, number=number
+        ).first()
+        if item is None:
+            item = SeniorAcceptanceNumber(senior_id=senior.id, period_id=period.id,
+                                          bet_type=bet_type, number=number)
+            db.session.add(item)
+        item.amount_limit = amount_limit
+        db.session.commit()
+        flash("บันทึกวงเงินรับของรายเลขแล้ว", "success")
+    return redirect(url_for("senior_bet_acceptance_by_type", room_id=period.room_id if period else None,
+                            period_id=period_id))
+
+
+@app.route("/senior/blocked", methods=["GET", "POST"])
+@senior_required
+def senior_blocked_numbers():
+    senior = senior_owner(current_user())
+    if request.method == "POST":
+        room_id = request.form.get("room_id", type=int)
+        bet_type = normalize_bet_type(request.form.get("bet_type"))
+        number = request.form.get("number", "").strip()
+        try:
+            payout = float(request.form.get("payout_multiplier", 0))
+        except (TypeError, ValueError):
+            payout = 0
+        if not db.session.get(LotteryRoom, room_id) or not bet_type or not number.isdigit() or payout <= 0:
+            flash("กรุณากรอกข้อมูลเลขอั้นให้ถูกต้อง", "error")
+        else:
+            item = SeniorBlockedNumber.query.filter_by(
+                senior_id=senior.id, room_id=room_id, bet_type=bet_type, number=number
+            ).first()
+            if item is None:
+                item = SeniorBlockedNumber(senior_id=senior.id, room_id=room_id,
+                                           bet_type=bet_type, number=number)
+                db.session.add(item)
+            item.payout_multiplier = payout
+            db.session.commit()
+            flash("บันทึกเลขอั้นทั้งสายแล้ว", "success")
+        return redirect(url_for("senior_blocked_numbers"))
+
+    rooms = active_lottery_rooms().all()
+    blocked = SeniorBlockedNumber.query.filter_by(senior_id=senior.id).order_by(
+        SeniorBlockedNumber.created_at.desc()
+    ).all()
+    return render_template("senior_manage.html", view="blocked", senior=senior,
+                           rooms=rooms, blocked_numbers=blocked)
+
+
+@app.route("/senior/blocked/<int:item_id>/delete", methods=["POST"])
+@senior_required
+def senior_delete_blocked_number(item_id):
+    senior = senior_owner(current_user())
+    item = SeniorBlockedNumber.query.filter_by(id=item_id, senior_id=senior.id).first()
+    if item:
+        db.session.delete(item)
+        db.session.commit()
+        flash("ลบเลขอั้นทั้งสายแล้ว", "success")
+    return redirect(url_for("senior_blocked_numbers"))
 
 
 @app.route("/admin/credits/<int:user_id>", methods=["POST"])

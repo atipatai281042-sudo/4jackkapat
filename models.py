@@ -361,6 +361,71 @@ class PartnerRoomSetting(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SeniorMemberLimit(db.Model):
+    __tablename__ = "senior_member_limits"
+    __table_args__ = (db.UniqueConstraint("senior_id", "member_id", name="uq_senior_member_limit"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    min_bet = db.Column(db.Float, nullable=False, default=0.0)
+    max_bet = db.Column(db.Float, nullable=False, default=1000000.0)
+    max_number_bet = db.Column(db.Float, nullable=False, default=1000000.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SeniorRoomSetting(db.Model):
+    __tablename__ = "senior_room_settings"
+    __table_args__ = (db.UniqueConstraint("senior_id", "room_id", name="uq_senior_room_setting"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
+    is_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SeniorBlockedNumber(db.Model):
+    __tablename__ = "senior_blocked_numbers"
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
+    bet_type = db.Column(db.String(30), nullable=False)
+    number = db.Column(db.String(10), nullable=False)
+    payout_multiplier = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    room = db.relationship("LotteryRoom", backref="senior_blocked_numbers")
+
+
+class SeniorAcceptanceLimit(db.Model):
+    __tablename__ = "senior_acceptance_limits"
+    __table_args__ = (db.UniqueConstraint("senior_id", "room_id", "bet_type", name="uq_senior_acceptance_limit"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
+    bet_type = db.Column(db.String(30), nullable=False)
+    amount_limit = db.Column(db.Float, nullable=False, default=0.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    room = db.relationship("LotteryRoom")
+
+
+class SeniorAcceptanceNumber(db.Model):
+    __tablename__ = "senior_acceptance_numbers"
+    __table_args__ = (db.UniqueConstraint("senior_id", "period_id", "bet_type", "number", name="uq_senior_acceptance_number"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    period_id = db.Column(db.Integer, db.ForeignKey("thai_lottery_periods.id"), nullable=False, index=True)
+    bet_type = db.Column(db.String(30), nullable=False)
+    number = db.Column(db.String(10), nullable=False)
+    amount_limit = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    period = db.relationship("ThaiLotteryPeriod")
+
+
 class PartnerStockShare(db.Model):
     __tablename__ = "partner_stock_shares"
     __table_args__ = (db.UniqueConstraint("partner_id", "room_id", name="uq_partner_stock_share"),)
