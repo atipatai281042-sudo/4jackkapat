@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes">
-  <title>Partner Backoffice — mklotto</title>
+  <title>Agent Backoffice — mklotto</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/backoffice.css') }}">
@@ -15,7 +15,7 @@
     <div class="bo-side-top">
       <a class="bo-brand" href="{{ url_for('dashboard') }}">
         <img src="{{ url_for('static',filename='brand-logo.png') }}" alt="mklotto">
-        <div><strong>mklotto</strong><small>PARTNER BACKOFFICE</small></div>
+        <div><strong>mklotto</strong><small>AGENT BACKOFFICE</small></div>
       </a>
       <button class="bo-collapse-btn" id="bo-collapse-toggle" type="button" aria-label="ยุบเมนู"><i class="fas fa-chevron-left"></i></button>
       <a class="bo-mobile-logout" href="{{ url_for('logout') }}" aria-label="ออกจากระบบ"><i class="fas fa-power-off"></i></a>
@@ -23,15 +23,16 @@
     <div class="bo-profile">
       <span>ระดับบัญชี</span>
       <strong>{{ partner.full_name or partner.username }}</strong>
-      <small>PARTNER · {{ profile.status|upper }}</small>
+      <small>AGENT · {{ profile.status|upper }}</small>
     </div>
-    <nav class="bo-nav" aria-label="เมนู Partner">
-      <span class="bo-nav-label">PARTNER CENTER</span>
+    <nav class="bo-nav" aria-label="เมนู Agent">
+      <span class="bo-nav-label">AGENT CENTER</span>
       <a class="is-active" href="{{ url_for('dashboard') }}"><i class="fas fa-chart-pie"></i><span>ภาพรวม</span></a>
       <a href="{{ main_app_url }}/partner/bets"><i class="fas fa-ticket"></i><span>รายการแทง</span></a>
       <a href="{{ main_app_url }}/partner/bets/pending"><i class="fas fa-hourglass-half"></i><span>รอผลเดิมพัน</span></a>
       <a href="{{ main_app_url }}/partner/bets/acceptance-by-type"><i class="fas fa-sliders"></i><span>ตั้งค่ารับของ</span></a>
       <a href="{{ main_app_url }}/partner/members"><i class="fas fa-users"></i><span>จัดการสมาชิก</span></a>
+      <a href="{{ main_app_url }}/partner/agents"><i class="fas fa-user-plus"></i><span>Agent ย่อย</span></a>
       <a href="{{ main_app_url }}/partner/assistants"><i class="fas fa-user-shield"></i><span>ผู้ช่วย</span></a>
       <a href="{{ main_app_url }}/partner/deposit"><i class="fas fa-money-bill-transfer"></i><span>เติมเงิน</span></a>
       <a href="{{ main_app_url }}/partner/finance"><i class="fas fa-wallet"></i><span>ประวัติการเงิน</span></a>
@@ -53,7 +54,7 @@
   </aside>
   <main class="bo-main">
     <header class="bo-topbar">
-      <div><span class="bo-kicker">PARTNER CONTROL CENTER</span><h1 class="bo-page-title">ภาพรวม Partner</h1></div>
+      <div><span class="bo-kicker">AGENT CONTROL CENTER</span><h1 class="bo-page-title">ภาพรวม Agent</h1></div>
       <div><span class="bo-online"><i></i> ระบบทำงานปกติ</span></div>
     </header>
     <section class="bo-stats">
@@ -73,7 +74,7 @@
     </section>
     <section class="bo-grid">
       <article class="bo-panel" id="reports">
-        <div class="bo-panel-head"><div><span class="bo-panel-label">BETTING REPORT</span><h2>รายงานสาย Partner</h2></div><i class="fas fa-chart-pie"></i></div>
+        <div class="bo-panel-head"><div><span class="bo-panel-label">BETTING REPORT</span><h2>รายงานสาย Agent</h2></div><i class="fas fa-chart-pie"></i></div>
         <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-receipt"></i></span><div><strong>{{ report.bets }} รายการเดิมพัน</strong><small>ยอดเดิมพันรวม {{ "{:,.2f}".format(report.amount) }}</small></div></div>
         <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-trophy"></i></span><div><strong>ถูกรางวัล {{ report.wins }} รายการ</strong><small>แพ้ {{ report.losses }} รายการ</small></div></div>
       </article>
@@ -88,7 +89,7 @@
     </section>
     <section class="bo-panel" id="partner-topup" style="margin-bottom:18px;">
       <div class="bo-panel-head"><div><span class="bo-panel-label">CREDIT TRANSFER</span><h2>เติมเครดิตให้ลูกค้า</h2></div><i class="fas fa-coins"></i></div>
-      <p style="color:#8190a5;font-size:13px;">โอนจากเครดิต Partner ให้สมาชิกในสายของคุณ</p>
+      <p style="color:#8190a5;font-size:13px;">โอนจากเครดิต Agent ให้สมาชิกในสายของคุณ</p>
       <form method="post" action="{{ main_app_url }}/partner/topup" style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(130px,.7fr) minmax(150px,1fr) auto;gap:10px;align-items:end;">
         <label style="font-size:12px;color:#8190a5;">สมาชิก<select name="member_id" required style="width:100%;background:#0c131d;border:1px solid #2a3849;color:#fff;border-radius:6px;padding:8px;"><option value="">เลือกสมาชิก</option>{% for member in members %}<option value="{{ member.id }}">{{ member.full_name or member.username }} - เครดิต {{ "{:,.2f}".format(member.credit_balance) }}</option>{% endfor %}</select></label>
         <label style="font-size:12px;color:#8190a5;">จำนวนเครดิต<input name="amount" type="number" min="0.01" max="{{ partner.credit_balance }}" step="0.01" required style="width:100%;background:#0c131d;border:1px solid #2a3849;color:#fff;border-radius:6px;padding:8px;"></label>

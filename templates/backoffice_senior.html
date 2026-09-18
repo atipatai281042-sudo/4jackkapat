@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes">
+  <title>Senior Backoffice — mklotto</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/backoffice.css') }}">
+</head>
+<body class="bo-body">
+{% if admin_contact_url %}<a class="bo-floating-chat" href="{{ admin_contact_url }}" target="_blank" rel="noopener" aria-label="ติดต่อทีมงาน"><i class="fab fa-line"></i></a>{% endif %}
+<div class="bo-shell" id="bo-shell">
+  <aside class="bo-side">
+    <div class="bo-side-top">
+      <a class="bo-brand" href="{{ url_for('dashboard') }}">
+        <img src="{{ url_for('static',filename='brand-logo.png') }}" alt="mklotto">
+        <div><strong>mklotto</strong><small>SENIOR BACKOFFICE</small></div>
+      </a>
+      <button class="bo-collapse-btn" id="bo-collapse-toggle" type="button" aria-label="ยุบเมนู"><i class="fas fa-chevron-left"></i></button>
+      <a class="bo-mobile-logout" href="{{ url_for('logout') }}" aria-label="ออกจากระบบ"><i class="fas fa-power-off"></i></a>
+    </div>
+    <div class="bo-profile">
+      <span>ระดับบัญชี</span>
+      <strong>{{ senior.full_name or senior.username }}</strong>
+      <small>SENIOR · {{ profile.status|upper }}</small>
+    </div>
+    <nav class="bo-nav" aria-label="เมนู Senior">
+      <span class="bo-nav-label">SENIOR CENTER</span>
+      <a class="is-active" href="{{ url_for('dashboard') }}"><i class="fas fa-chart-pie"></i><span>ภาพรวม</span></a>
+      <a href="{{ main_app_url }}/senior/agents"><i class="fas fa-users-gear"></i><span>Agent ในสาย</span></a>
+      <a href="{{ main_app_url }}/senior/bets"><i class="fas fa-ticket"></i><span>รายการแทง</span></a>
+      <a href="{{ main_app_url }}/senior/finance"><i class="fas fa-wallet"></i><span>ประวัติการเงิน</span></a>
+      <a href="{{ main_app_url }}/senior/reports"><i class="fas fa-chart-line"></i><span>รายงานแพ้ชนะ</span></a>
+      <a href="{{ main_app_url }}/senior/reports/chart"><i class="fas fa-chart-column"></i><span>กราฟแพ้-ชนะ</span></a>
+      <a href="{{ main_app_url }}/senior/reports/winners"><i class="fas fa-trophy"></i><span>รายการที่ถูกรางวัล</span></a>
+      <a href="{{ main_app_url }}/senior/stock"><i class="fas fa-chart-pie"></i><span>% ถือหุ้น</span></a>
+      <a href="{{ main_app_url }}/senior/login-history"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
+      <a class="bo-logout" href="{{ url_for('logout') }}"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
+    </nav>
+    <div class="bo-profile">
+      <span>รหัสแนะนำ</span>
+      <strong>{{ profile.invite_code }}</strong>
+    </div>
+  </aside>
+  <main class="bo-main">
+    <header class="bo-topbar">
+      <div><span class="bo-kicker">SENIOR CONTROL CENTER</span><h1 class="bo-page-title">ภาพรวม Senior</h1></div>
+      <div><span class="bo-online"><i></i> ระบบทำงานปกติ</span></div>
+    </header>
+    <section class="bo-stats">
+      <article class="bo-statcard"><span><i class="fas fa-users-gear"></i> Agent ในสาย</span><strong>{{ agents|length }}</strong><small>Agent ทั้งหมด</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-percent"></i> อัตราคอมมิชชัน</span><strong>{{ "{:,.2f}".format(profile.commission_rate) }}%</strong><small>อัตราปัจจุบัน</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-wallet"></i> คอมมิชชันสะสม</span><strong>{{ "{:,.2f}".format(profile.commission_balance) }}</strong><small>ยอดคงเหลือ</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-chart-pie"></i> ถือหุ้น</span><strong>{{ "{:,.2f}".format(profile.stock_balance) }}</strong><small>บวก=กำไร ลบ=ต้องจ่ายคืน</small></article>
+    </section>
+    <section class="bo-grid">
+      <article class="bo-panel" id="reports">
+        <div class="bo-panel-head"><div><span class="bo-panel-label">BETTING REPORT</span><h2>รายงานทั้งสาย</h2></div><i class="fas fa-chart-pie"></i></div>
+        <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-receipt"></i></span><div><strong>{{ report.bets }} รายการเดิมพัน</strong><small>ยอดเดิมพันรวม {{ "{:,.2f}".format(report.amount) }}</small></div></div>
+        <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-trophy"></i></span><div><strong>ถูกรางวัล {{ report.wins }} รายการ</strong><small>แพ้ {{ report.losses }} รายการ</small></div></div>
+      </article>
+      <article class="bo-panel">
+        <div class="bo-panel-head"><div><span class="bo-panel-label">WALLET HISTORY</span><h2>ประวัติการเงิน</h2></div><i class="fas fa-wallet"></i></div>
+        {% for item in transactions %}
+        <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-money-bill"></i></span><div><strong>{{ '+' if item.change >= 0 else '' }}{{ "{:,.2f}".format(item.change) }}</strong><small>{{ item.reason or item.reference_type }} · {{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div></div>
+        {% else %}
+        <small>ยังไม่มีประวัติการเงิน</small>
+        {% endfor %}
+      </article>
+    </section>
+    <section class="bo-panel" id="agents">
+      <div class="bo-panel-head"><div><span class="bo-panel-label">AGENT FLEET</span><h2>Agent ในสาย</h2></div><span style="color:#8190a5;font-size:12px;">{{ agents|length }} คน</span></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">Agent</th><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">วันที่เข้าร่วม</th><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">สมาชิกในสาย</th><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">คอมมิชชัน (%)</th><th style="text-align:left;color:#8190a5;font-weight:400;padding:10px 8px;">สถานะ</th></tr></thead>
+          <tbody>
+          {% for agent in agents %}
+            <tr style="border-top:1px solid #ffffff12;"><td style="padding:10px 8px;"><strong>{{ agent.full_name or agent.username }}</strong></td><td style="padding:10px 8px;">{{ agent.created_at.strftime('%d/%m/%Y') }}</td><td style="padding:10px 8px;">{{ agent.referred_members|length }}</td><td style="padding:10px 8px;">{{ "{:,.2f}".format(agent.partner_profile.commission_rate) if agent.partner_profile else '-' }}</td><td style="padding:10px 8px;">{{ agent.partner_profile.status if agent.partner_profile else '-' }}</td></tr>
+          {% else %}
+            <tr><td colspan="5" style="padding:10px 8px;color:#8190a5;">ยังไม่มี Agent ในสาย</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+(function () {
+  var shell = document.getElementById('bo-shell');
+  var button = document.getElementById('bo-collapse-toggle');
+  var key = 'mklotto-backoffice-sidebar-collapsed';
+  if (localStorage.getItem(key) === '1') shell.classList.add('is-collapsed');
+  button.addEventListener('click', function () {
+    var collapsed = shell.classList.toggle('is-collapsed');
+    localStorage.setItem(key, collapsed ? '1' : '0');
+    button.setAttribute('aria-label', collapsed ? 'ขยายเมนู' : 'ยุบเมนู');
+  });
+})();
+</script>
+</body>
+</html>

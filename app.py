@@ -4,6 +4,7 @@ app.py — ไฟล์หลักของระบบสมาชิกสะ
 """
 import os
 import random
+import secrets
 import string
 import itertools
 import re
@@ -30,6 +31,7 @@ from models import (
     PartnerProfile, PartnerAssistant, PartnerMemberLimit, PartnerRoomSetting, PartnerPayoutRule,
     PartnerAcceptanceLimit, PartnerAcceptanceNumber, PartnerStockShare, PartnerStockLedger,
     PartnerBlockedNumber, PartnerPresence, CommissionLedger, VipTier,
+    SeniorProfile, SeniorStockShare, SeniorStockLedger, SeniorCommissionLedger,
     WalletTransaction, Notification, AdminAuditLog, ResponsiblePlayProfile,
     SystemSetting, DepositRequest, WithdrawalRequest, UserBankAccount, LotteryCategory,
     LoginHistory, Announcement
@@ -378,6 +380,8 @@ def settle_lottery_period(period, admin_user):
         )
         bet.status = "win" if is_win else "lose"
         apply_partner_stock_holding(bet, is_win)
+        apply_agent_upline_stock_holding(bet, is_win)
+        apply_senior_stock_holding(bet, is_win)
         if is_win:
             adjust_credit(
                 bet.user, bet.reward_amount,
@@ -467,11 +471,30 @@ def partner_required(view):
         if not user.is_partner and not user.is_admin:
             abort(403)
         if user.is_partner and user.partner_profile and user.partner_profile.status != "active":
-            flash("บัญชี Partner นี้ถูกพักการใช้งาน", "error")
+            flash("บัญชี Agent นี้ถูกพักการใช้งาน", "error")
             return redirect(url_for("index"))
         assistant = PartnerAssistant.query.filter_by(assistant_user_id=user.id).first() if user else None
         if assistant and not assistant.is_active:
             flash("บัญชีผู้ช่วยนี้ถูกระงับการใช้งาน", "error")
+            return redirect(url_for("index"))
+        return view(*args, **kwargs)
+    return wrapper
+
+
+def senior_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        gate = _require_backoffice_proxy()
+        if gate is not None:
+            return gate
+        user = current_user()
+        if not user:
+            flash("กรุณาเข้าสู่ระบบก่อนใช้งาน", "warning")
+            return redirect(url_for("login"))
+        if not user.is_senior and not user.is_admin:
+            abort(403)
+        if user.is_senior and user.senior_profile and user.senior_profile.status != "active":
+            flash("บัญชี Senior นี้ถูกพักการใช้งาน", "error")
             return redirect(url_for("index"))
         return view(*args, **kwargs)
     return wrapper
@@ -484,6 +507,35 @@ def partner_owner(user=None):
         assistant_user_id=user.id, is_active=True
     ).first() if user else None
     return assistant.partner if assistant else user
+
+
+def agent_upline_chain(agent):
+    """เดินสายขึ้นจาก Agent คนหนึ่งไปเรื่อยๆ ตาม partner_id (Agent เพิ่ม Agent ย่อย
+    ของตัวเองได้ ซ้อนได้ไม่จำกัดชั้น — ใช้คอลัมน์ partner_id ตัวเดียวกับที่ Member ใช้
+    ชี้หา Agent ของตัวเอง เพราะเป็นความสัมพันธ์แบบเดียวกัน แค่คนละ role) คืนค่าเป็น
+    list ของ Agent ระดับที่สูงกว่า agent คนนี้ (ไม่รวมตัว agent เอง), เรียงจากใกล้สุด
+    ไปไกลสุด. กันวนซ้ำ (loop) ด้วย seen set."""
+    chain = []
+    seen = {agent.id}
+    current = agent
+    while current.is_partner and current.partner_id:
+        upline = current.partner
+        if not upline or not upline.is_partner or upline.id in seen:
+            break
+        chain.append(upline)
+        seen.add(upline.id)
+        current = upline
+    return chain
+
+
+def agent_upline_senior(agent):
+    """หา Senior ที่ดูแลสาย Agent นี้อยู่ — เดินขึ้นไปสุดสาย Agent (ถ้ามีการซ้อนชั้น)
+    แล้วดูว่า Agent บนสุดของสายมี Senior คนไหน (เฉพาะ Agent ระดับบนสุดเท่านั้นที่ต้อง
+    ผูก senior_id ไว้ตอนสร้างโดย Admin — Agent ย่อยที่ถูกสร้างซ้อนไม่ต้องมี senior_id
+    ของตัวเอง เพราะสืบทอดจากต้นสายแทน)"""
+    chain = agent_upline_chain(agent)
+    top = chain[-1] if chain else agent
+    return top.senior
 
 
 def refresh_vip_status(user):
@@ -525,6 +577,80 @@ def create_partner_commission(bet):
     return entry
 
 
+def create_agent_upline_commissions(bet):
+    """Agent เพิ่ม Agent ย่อยของตัวเองได้ ซ้อนได้ไม่จำกัดชั้น (agent_upline_chain) —
+    ฟังก์ชันนี้จ่ายคอมมิชชันให้ Agent ทุกคนที่อยู่ "เหนือ" Agent ที่ดูแลสมาชิกคนนี้
+    โดยตรง (ซึ่งได้ค่าคอมไปแล้วจาก create_partner_commission) แต่ละคนคิดจากยอดแทง
+    เดียวกัน (bet.amount) ตามอัตราของตัวเอง เป็นคนละก้อนไม่หักลบกัน เหมือนหลักการ
+    เดียวกับที่ Senior ได้คอมแยกจาก Agent"""
+    member = bet.user
+    direct_agent = member.partner
+    if not direct_agent:
+        return []
+    entries = []
+    for agent in agent_upline_chain(direct_agent):
+        if not agent.partner_profile or agent.partner_profile.status != "active":
+            continue
+        rate = float(agent.partner_profile.commission_rate)
+        amount = round(float(bet.amount) * rate / 100, 2)
+        if amount <= 0:
+            continue
+        agent.partner_profile.commission_balance += amount
+        record_wallet_transaction(
+            agent, "commission", amount,
+            agent.partner_profile.commission_balance,
+            f"คอมมิชชันสาย (Agent ย่อย) โพย {bet.number} ({bet.bet_type}) จาก {direct_agent.username}",
+            reference_type="bet", reference_id=bet.id,
+        )
+        entry = CommissionLedger(
+            partner_id=agent.id,
+            member_id=member.id,
+            bet_id=bet.id,
+            base_amount=bet.amount,
+            rate=rate,
+            commission_amount=amount,
+            reason=f"คอมมิชชันสาย (Agent ย่อย) โพย {bet.number} ({bet.bet_type})",
+        )
+        db.session.add(entry)
+        entries.append(entry)
+    return entries
+
+
+def create_senior_commission(bet):
+    """เหมือน create_partner_commission ทุกประการ แต่เป็นของ Senior ที่ดูแลสาย
+    Agent ของสมาชิกคนนี้ (เดินหาจนสุดสาย Agent ก่อน เผื่อ Agent ซ้อนกันหลายชั้น) —
+    แยกอิสระจากคอมมิชชันของ Agent โดยสิ้นเชิง (แบ่งจากยอดแทงเดียวกัน ไม่ได้หักจาก
+    คอมมิชชันที่ Agent ได้ไปแล้ว)"""
+    member = bet.user
+    agent = member.partner
+    senior = agent_upline_senior(agent) if agent else None
+    if not senior or not senior.senior_profile or senior.senior_profile.status != "active":
+        return None
+    rate = float(senior.senior_profile.commission_rate)
+    amount = round(float(bet.amount) * rate / 100, 2)
+    if amount <= 0:
+        return None
+    senior.senior_profile.commission_balance += amount
+    record_wallet_transaction(
+        senior, "commission", amount,
+        senior.senior_profile.commission_balance,
+        f"คอมมิชชัน Senior โพย {bet.number} ({bet.bet_type}) จากเอเจ้น {agent.username}",
+        reference_type="bet", reference_id=bet.id,
+    )
+    entry = SeniorCommissionLedger(
+        senior_id=senior.id,
+        agent_id=agent.id,
+        member_id=member.id,
+        bet_id=bet.id,
+        base_amount=bet.amount,
+        rate=rate,
+        commission_amount=amount,
+        reason=f"คอมมิชชัน Senior โพย {bet.number} ({bet.bet_type})",
+    )
+    db.session.add(entry)
+    return entry
+
+
 def apply_partner_stock_holding(bet, is_win):
     """บันทึกกำไร/ขาดทุนของ Partner ที่เลือก "ถือหุ้น" บางส่วนของห้องนี้ไว้เอง
     แยกจากคอมมิชชันโดยสิ้นเชิง — ถ้าไม่ได้ตั้งค่า % ถือหุ้นไว้ จะไม่มีผลใดๆ"""
@@ -550,6 +676,71 @@ def apply_partner_stock_holding(bet, is_win):
     )
     db.session.add(PartnerStockLedger(
         partner_id=partner.id, member_id=member.id, bet_id=bet.id, room_id=room_id,
+        hold_percent=share.hold_percent, stake_amount=bet.amount, pnl_amount=pnl,
+    ))
+
+
+def apply_agent_upline_stock_holding(bet, is_win):
+    """เหมือน create_agent_upline_commissions แต่เป็นฝั่งถือหุ้น — Agent ทุกคนที่อยู่
+    เหนือ Agent ที่ดูแลสมาชิกคนนี้โดยตรง คำนวณจาก house_pnl เดียวกัน คนละก้อน
+    ไม่หักลบกัน (เหมือนหลักการเดียวกับ apply_senior_stock_holding)"""
+    member = bet.user
+    direct_agent = member.partner
+    if not direct_agent:
+        return
+    room_id = bet.period.room_id if bet.period else None
+    if not room_id:
+        return
+    house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
+    for agent in agent_upline_chain(direct_agent):
+        if not agent.partner_profile or agent.partner_profile.status != "active":
+            continue
+        share = PartnerStockShare.query.filter_by(partner_id=agent.id, room_id=room_id).first()
+        if not share or share.hold_percent <= 0:
+            continue
+        pnl = round(house_pnl * share.hold_percent / 100, 2)
+        if pnl == 0:
+            continue
+        agent.partner_profile.stock_balance = round(agent.partner_profile.stock_balance + pnl, 2)
+        record_wallet_transaction(
+            agent, "stock", pnl, agent.partner_profile.stock_balance,
+            f"ถือหุ้นสาย (Agent ย่อย) {share.hold_percent:g}% โพย {bet.number} ({bet.bet_type}) จาก {direct_agent.username}",
+            reference_type="bet", reference_id=bet.id,
+        )
+        db.session.add(PartnerStockLedger(
+            partner_id=agent.id, member_id=member.id, bet_id=bet.id, room_id=room_id,
+            hold_percent=share.hold_percent, stake_amount=bet.amount, pnl_amount=pnl,
+        ))
+
+
+def apply_senior_stock_holding(bet, is_win):
+    """เหมือน apply_partner_stock_holding ทุกประการ แต่คำนวณจาก house_pnl เดียวกัน
+    แยกอิสระจากหุ้นของ Agent — ไม่ได้หักลบซึ่งกันและกัน (Senior กับ Agent อาจถือหุ้น
+    ห้องเดียวกันคนละ % พร้อมกันได้ โดยไม่กระทบกัน) หา Senior จากบนสุดของสาย Agent
+    เผื่อ Agent ซ้อนกันหลายชั้น"""
+    member = bet.user
+    agent = member.partner
+    senior = agent_upline_senior(agent) if agent else None
+    if not senior or not senior.senior_profile or senior.senior_profile.status != "active":
+        return
+    room_id = bet.period.room_id if bet.period else None
+    if not room_id:
+        return
+    share = SeniorStockShare.query.filter_by(senior_id=senior.id, room_id=room_id).first()
+    if not share or share.hold_percent <= 0:
+        return
+    house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
+    pnl = round(house_pnl * share.hold_percent / 100, 2)
+    if pnl == 0:
+        return
+    senior.senior_profile.stock_balance = round(senior.senior_profile.stock_balance + pnl, 2)
+    record_wallet_transaction(
+        senior, "stock", pnl, senior.senior_profile.stock_balance,
+        f"ถือหุ้น Senior {share.hold_percent:g}% โพย {bet.number} ({bet.bet_type}) จากเอเจ้น {agent.username}",
+        reference_type="bet", reference_id=bet.id,
+    )
+    db.session.add(SeniorStockLedger(
+        senior_id=senior.id, agent_id=agent.id, member_id=member.id, bet_id=bet.id, room_id=room_id,
         hold_percent=share.hold_percent, stake_amount=bet.amount, pnl_amount=pnl,
     ))
 
@@ -607,7 +798,7 @@ def get_bank_catalog():
 
 def ensure_betting_allowed(user, amount, room_id=None):
     if not partner_room_is_enabled(user, room_id):
-        raise ValueError("Partner ปิดการให้บริการห้องหวยนี้ไว้")
+        raise ValueError("Agent ปิดการให้บริการห้องหวยนี้ไว้")
     profile = user.responsible_play
     if profile and profile.self_excluded_until and profile.self_excluded_until > datetime.now():
         raise ValueError("บัญชีของคุณอยู่ในช่วงพักการเล่น")
@@ -797,6 +988,8 @@ def add_thai_lottery_bets(user, period, entries):
         db.session.add(new_bet)
         db.session.flush()
         create_partner_commission(new_bet)
+        create_agent_upline_commissions(new_bet)
+        create_senior_commission(new_bet)
         notify_user(user, "ส่งโพยสำเร็จ", f"เลข {raw_number} ({bet_type}) ใช้ {amount:,} เครดิต", "bet")
         created += 1
 
@@ -1708,25 +1901,29 @@ def admin_partners():
         full_name = request.form.get("full_name", "").strip()
         phone = request.form.get("phone", "").strip()
         invite_code = request.form.get("invite_code", "").strip().upper()
+        senior_id = request.form.get("senior_id", type=int)
+        senior = db.session.get(User, senior_id) if senior_id else None
         try:
             commission_rate = float(request.form.get("commission_rate", 3))
         except ValueError:
             commission_rate = 0
 
         if len(username) < 4 or len(password) < 6 or not full_name:
-            flash("กรุณากรอกชื่อผู้ใช้ ชื่อ Partner และรหัสผ่านให้ถูกต้อง", "error")
+            flash("กรุณากรอกชื่อผู้ใช้ ชื่อ Agent และรหัสผ่านให้ถูกต้อง", "error")
         elif commission_rate < 0 or commission_rate > 100:
             flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
         elif User.query.filter_by(username=username).first():
             flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
         elif invite_code and PartnerProfile.query.filter_by(invite_code=invite_code).first():
             flash("รหัสแนะนำนี้ถูกใช้แล้ว", "error")
+        elif not senior or not senior.is_senior or not senior.senior_profile or senior.senior_profile.status != "active":
+            flash("กรุณาเลือก Senior ที่ใช้งานอยู่ให้ Agent นี้", "error")
         else:
             if not invite_code:
                 invite_code = f"FLEET{random.randint(10000, 99999)}"
             partner_user = User(
                 username=username, full_name=full_name, phone=phone,
-                role="partner", points=0, credit_balance=0.0,
+                role="partner", senior_id=senior.id, points=0, credit_balance=0.0,
             )
             partner_user.set_password(password)
             db.session.add(partner_user)
@@ -1736,9 +1933,10 @@ def admin_partners():
                 invite_code=invite_code,
                 commission_rate=commission_rate,
             ))
-            audit_admin(current_user(), "create_partner", "user", partner_user.id, f"invite={invite_code}")
+            audit_admin(current_user(), "create_partner", "user", partner_user.id,
+                        f"invite={invite_code}, senior_id={senior.id}")
             db.session.commit()
-            flash(f"สร้าง Partner {username} สำเร็จ รหัสแนะนำ: {invite_code}", "success")
+            flash(f"สร้าง Agent {username} สำเร็จ รหัสแนะนำ: {invite_code}", "success")
         return redirect(url_for("admin_partners"))
 
     partners = User.query.filter_by(role="partner").order_by(User.created_at.desc()).all()
@@ -1746,8 +1944,21 @@ def admin_partners():
         partner.id: UserBankAccount.query.filter_by(user_id=partner.id).order_by(UserBankAccount.created_at.asc()).all()
         for partner in partners
     }
+    seniors = User.query.filter_by(role="senior").order_by(User.username.asc()).all()
+    # แสดงผลว่าแต่ละ Agent อยู่ใต้ Senior โดยตรง หรือเป็น Agent ย่อยของ Agent อีกคน
+    # (agent_upline_chain รองรับการซ้อนชั้นไม่จำกัด — ที่นี่แค่โชว์ผลลัพธ์ให้แอดมินดู)
+    upline_labels = {}
+    for partner in partners:
+        chain = agent_upline_chain(partner)
+        if chain:
+            upline_labels[partner.id] = f"ใต้ Agent: {chain[0].full_name or chain[0].username}"
+        elif partner.senior:
+            upline_labels[partner.id] = partner.senior.full_name or partner.senior.username
+        else:
+            upline_labels[partner.id] = "ยังไม่มี Senior"
     return render_template("admin_partners.html", partners=partners,
-                           partner_bank_accounts=partner_bank_accounts, bank_catalog=get_bank_catalog())
+                           partner_bank_accounts=partner_bank_accounts, bank_catalog=get_bank_catalog(),
+                           seniors=seniors, upline_labels=upline_labels)
 
 
 @app.route("/admin/partners/<int:user_id>/bank-account", methods=["POST"])
@@ -1856,9 +2067,10 @@ def admin_process_withdrawal(request_id, action):
         flash("คำขอถอนนี้ถูกดำเนินการไปแล้วหรือไม่ถูกต้อง", "error")
         return redirect(url_for("admin_wallet"))
     admin_user = current_user()
-    commission_payout = item.method == "commission_payout" and item.user.partner_profile
-    if action == "approve" and commission_payout and item.user.partner_profile.commission_balance < item.amount:
-        flash("คอมมิชชันของ Partner ไม่พอสำหรับอนุมัติคำขอนี้", "error")
+    commission_profile = item.user.partner_profile or item.user.senior_profile
+    commission_payout = item.method == "commission_payout" and commission_profile
+    if action == "approve" and commission_payout and commission_profile.commission_balance < item.amount:
+        flash("คอมมิชชันไม่พอสำหรับอนุมัติคำขอนี้", "error")
         return redirect(url_for("admin_wallet"))
     if action == "approve" and not commission_payout and item.user.credit_balance < item.amount:
         flash("เครดิตสมาชิกไม่พอสำหรับอนุมัติคำขอถอนนี้", "error")
@@ -1869,12 +2081,12 @@ def admin_process_withdrawal(request_id, action):
     item.admin_note = request.form.get("admin_note", "").strip()
     if action == "approve":
         if commission_payout:
-            item.user.partner_profile.commission_balance = round(
-                item.user.partner_profile.commission_balance - item.amount, 2
+            commission_profile.commission_balance = round(
+                commission_profile.commission_balance - item.amount, 2
             )
             db.session.add(WalletTransaction(
                 user_id=item.user.id, wallet_type="commission", change=-item.amount,
-                balance_after=item.user.partner_profile.commission_balance,
+                balance_after=commission_profile.commission_balance,
                 reference_type="commission_payout", reference_id=item.id,
                 reason=f"อนุมัติเบิกคอมมิชชันคำขอ #{item.id}", admin_id=admin_user.id,
             ))
@@ -1931,23 +2143,29 @@ def admin_vip():
 def admin_update_partner(user_id):
     partner = db.session.get(User, user_id)
     if not partner or not partner.is_partner or not partner.partner_profile:
-        flash("ไม่พบ Partner", "error")
+        flash("ไม่พบ Agent", "error")
         return redirect(url_for("admin_partners"))
     try:
         rate = float(request.form.get("commission_rate", partner.partner_profile.commission_rate))
     except ValueError:
         rate = -1
+    senior_id = request.form.get("senior_id", type=int)
+    senior = db.session.get(User, senior_id) if senior_id else None
     if not 0 <= rate <= 100:
         flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
+    elif not senior or not senior.is_senior or not senior.senior_profile or senior.senior_profile.status != "active":
+        flash("กรุณาเลือก Senior ที่ใช้งานอยู่ให้ Agent นี้", "error")
     else:
         status = request.form.get("status", "active")
         if status not in {"active", "suspended"}:
             status = "active"
         partner.partner_profile.commission_rate = rate
         partner.partner_profile.status = status
-        audit_admin(current_user(), "update_partner", "user", partner.id, f"rate={rate}, status={status}")
+        partner.senior_id = senior.id
+        audit_admin(current_user(), "update_partner", "user", partner.id,
+                    f"rate={rate}, status={status}, senior_id={senior.id}")
         db.session.commit()
-        flash(f"อัปเดต Partner {partner.username} แล้ว", "success")
+        flash(f"อัปเดต Agent {partner.username} แล้ว", "success")
     return redirect(url_for("admin_partners"))
 
 
@@ -1956,7 +2174,7 @@ def admin_update_partner(user_id):
 def admin_partner_payout(user_id):
     partner = db.session.get(User, user_id)
     if not partner or not partner.partner_profile:
-        flash("ไม่พบ Partner", "error")
+        flash("ไม่พบ Agent", "error")
         return redirect(url_for("admin_partners"))
     partner.partner_profile.commission_balance = 0.0
     CommissionLedger.query.filter_by(partner_id=partner.id, status="approved").update(
@@ -1968,12 +2186,145 @@ def admin_partner_payout(user_id):
     return redirect(url_for("admin_partners"))
 
 
+@app.route("/admin/seniors", methods=["GET", "POST"])
+@admin_required
+def admin_seniors():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        full_name = request.form.get("full_name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        invite_code = request.form.get("invite_code", "").strip().upper()
+        try:
+            commission_rate = float(request.form.get("commission_rate", 1))
+        except ValueError:
+            commission_rate = 0
+
+        if len(username) < 4 or len(password) < 6 or not full_name:
+            flash("กรุณากรอกชื่อผู้ใช้ ชื่อ Senior และรหัสผ่านให้ถูกต้อง", "error")
+        elif commission_rate < 0 or commission_rate > 100:
+            flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
+        elif User.query.filter_by(username=username).first():
+            flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
+        elif invite_code and SeniorProfile.query.filter_by(invite_code=invite_code).first():
+            flash("รหัสแนะนำนี้ถูกใช้แล้ว", "error")
+        else:
+            if not invite_code:
+                invite_code = f"SNR{random.randint(10000, 99999)}"
+            senior_user = User(
+                username=username, full_name=full_name, phone=phone,
+                role="senior", points=0, credit_balance=0.0,
+            )
+            senior_user.set_password(password)
+            db.session.add(senior_user)
+            db.session.flush()
+            db.session.add(SeniorProfile(
+                user_id=senior_user.id,
+                invite_code=invite_code,
+                commission_rate=commission_rate,
+            ))
+            audit_admin(current_user(), "create_senior", "user", senior_user.id, f"invite={invite_code}")
+            db.session.commit()
+            flash(f"สร้าง Senior {username} สำเร็จ รหัสแนะนำ: {invite_code}", "success")
+        return redirect(url_for("admin_seniors"))
+
+    seniors = User.query.filter_by(role="senior").order_by(User.created_at.desc()).all()
+    senior_bank_accounts = {
+        senior.id: UserBankAccount.query.filter_by(user_id=senior.id).order_by(UserBankAccount.created_at.asc()).all()
+        for senior in seniors
+    }
+    return render_template("admin_seniors.html", seniors=seniors,
+                           senior_bank_accounts=senior_bank_accounts, bank_catalog=get_bank_catalog())
+
+
+@app.route("/admin/seniors/<int:user_id>/bank-account", methods=["POST"])
+@admin_required
+def admin_add_senior_bank_account(user_id):
+    senior = db.session.get(User, user_id)
+    if not senior or not senior.is_senior:
+        abort(404)
+    bank_code = request.form.get("bank_code", "").strip()
+    account_number = request.form.get("account_number", "").strip()
+    account_name = request.form.get("account_name", "").strip()
+    bank = get_bank_catalog().get(bank_code)
+    if not bank or not account_number or not account_name:
+        flash("กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วน", "error")
+    elif UserBankAccount.query.filter_by(user_id=senior.id, bank_code=bank_code,
+                                          account_number=account_number).first():
+        flash("มีบัญชีธนาคารนี้อยู่แล้ว", "error")
+    else:
+        db.session.add(UserBankAccount(
+            user_id=senior.id, bank_code=bank_code, bank_name=bank["name"],
+            account_number=account_number, account_name=account_name,
+            logo_url=bank.get("logo", ""),
+        ))
+        audit_admin(current_user(), "add_senior_bank_account", "user", senior.id,
+                    f"{bank['name']} {account_number}")
+        db.session.commit()
+        flash(f"เพิ่มบัญชีธนาคารให้ {senior.username} แล้ว", "success")
+    return redirect(url_for("admin_seniors"))
+
+
+@app.route("/admin/seniors/<int:user_id>/bank-account/<int:account_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_senior_bank_account(user_id, account_id):
+    account = db.session.get(UserBankAccount, account_id)
+    if account and account.user_id == user_id:
+        db.session.delete(account)
+        audit_admin(current_user(), "delete_senior_bank_account", "user", user_id, str(account_id))
+        db.session.commit()
+        flash("ลบบัญชีธนาคารแล้ว", "success")
+    return redirect(url_for("admin_seniors"))
+
+
+@app.route("/admin/seniors/<int:user_id>/update", methods=["POST"])
+@admin_required
+def admin_update_senior(user_id):
+    senior = db.session.get(User, user_id)
+    if not senior or not senior.is_senior or not senior.senior_profile:
+        flash("ไม่พบ Senior", "error")
+        return redirect(url_for("admin_seniors"))
+    try:
+        rate = float(request.form.get("commission_rate", senior.senior_profile.commission_rate))
+    except ValueError:
+        rate = -1
+    if not 0 <= rate <= 100:
+        flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
+    else:
+        status = request.form.get("status", "active")
+        if status not in {"active", "suspended"}:
+            status = "active"
+        senior.senior_profile.commission_rate = rate
+        senior.senior_profile.status = status
+        audit_admin(current_user(), "update_senior", "user", senior.id, f"rate={rate}, status={status}")
+        db.session.commit()
+        flash(f"อัปเดต Senior {senior.username} แล้ว", "success")
+    return redirect(url_for("admin_seniors"))
+
+
+@app.route("/admin/seniors/<int:user_id>/payout", methods=["POST"])
+@admin_required
+def admin_senior_payout(user_id):
+    senior = db.session.get(User, user_id)
+    if not senior or not senior.senior_profile:
+        flash("ไม่พบ Senior", "error")
+        return redirect(url_for("admin_seniors"))
+    senior.senior_profile.commission_balance = 0.0
+    SeniorCommissionLedger.query.filter_by(senior_id=senior.id, status="approved").update(
+        {SeniorCommissionLedger.status: "paid"}, synchronize_session=False
+    )
+    audit_admin(current_user(), "payout_senior", "user", senior.id, "mark commission paid")
+    db.session.commit()
+    flash(f"บันทึกการจ่ายคอมมิชชันของ {senior.username} แล้ว", "success")
+    return redirect(url_for("admin_seniors"))
+
+
 @app.route("/partner")
 @partner_required
 def partner_dashboard():
     user = current_user()
     if user.is_admin and not user.partner_profile:
-        flash("กรุณาเข้าสู่ระบบด้วยบัญชี Partner เพื่อเปิดหน้านี้", "info")
+        flash("กรุณาเข้าสู่ระบบด้วยบัญชี Agent เพื่อเปิดหน้านี้", "info")
         return redirect(url_for("admin"))
     partner = partner_owner(user)
     members = User.query.filter_by(partner_id=partner.id).order_by(User.created_at.desc()).all()
@@ -2084,7 +2435,7 @@ def partner_bet_query(partner):
 def partner_bets():
     partner = partner_owner(current_user())
     if partner.is_admin and not partner.partner_profile:
-        flash("กรุณาเข้าสู่ระบบด้วยบัญชี Partner เพื่อเปิดหน้านี้", "info")
+        flash("กรุณาเข้าสู่ระบบด้วยบัญชี Agent เพื่อเปิดหน้านี้", "info")
         return redirect(url_for("admin"))
     members = User.query.filter_by(partner_id=partner.id, role="member").order_by(User.created_at.desc()).all()
     rooms = active_lottery_rooms().all()
@@ -2236,12 +2587,12 @@ def partner_topup_member():
     elif amount <= 0:
         flash("กรุณาระบุจำนวนเครดิตมากกว่า 0", "error")
     elif amount > partner.credit_balance:
-        flash("เครดิตของ Partner ไม่พอสำหรับเติมให้สมาชิก", "error")
+        flash("เครดิตของ Agent ไม่พอสำหรับเติมให้สมาชิก", "error")
     else:
-        reason = request.form.get("reason", "").strip() or "Partner เติมเครดิตให้สมาชิก"
+        reason = request.form.get("reason", "").strip() or "Agent เติมเครดิตให้สมาชิก"
         adjust_credit(partner, -amount, f"โอนเครดิตให้ {member.username}: {reason}")
-        adjust_credit(member, amount, f"ได้รับเครดิตจาก Partner {partner.username}: {reason}")
-        notify_user(member, "ได้รับเครดิตจาก Partner", f"เครดิตเพิ่ม {amount:,.2f} เครดิต", "wallet")
+        adjust_credit(member, amount, f"ได้รับเครดิตจาก Agent {partner.username}: {reason}")
+        notify_user(member, "ได้รับเครดิตจาก Agent", f"เครดิตเพิ่ม {amount:,.2f} เครดิต", "wallet")
         notify_user(partner, "เติมเครดิตให้สมาชิกสำเร็จ", f"โอนให้ {member.username} จำนวน {amount:,.2f} เครดิต", "wallet")
         db.session.commit()
         flash(f"เติมเครดิตให้ {member.username} สำเร็จ {amount:,.2f} เครดิต", "success")
@@ -2306,6 +2657,59 @@ def partner_member_limits(member_id):
     return redirect(url_for("partner_members"))
 
 
+@app.route("/partner/agents", methods=["GET", "POST"])
+@partner_required
+def partner_agents():
+    """Agent เพิ่ม Agent ย่อยของตัวเองได้ — Agent ใหม่ทำงานเหมือน Agent ทุกอย่าง
+    (มี PartnerProfile ของตัวเอง, สร้างสมาชิก/Agent ย่อยต่อได้อีก, มีคอมมิชชัน/หุ้น
+    ของตัวเอง) เพียงแต่ partner_id ชี้มาที่ Agent ผู้สร้าง แทนที่จะมี senior_id ตรง —
+    คอมมิชชัน/หุ้นของ Agent ผู้สร้างจะไหลผ่าน create_agent_upline_commissions /
+    apply_agent_upline_stock_holding โดยอัตโนมัติ"""
+    partner = partner_owner(current_user())
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        full_name = request.form.get("full_name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        invite_code = request.form.get("invite_code", "").strip().upper()
+        try:
+            commission_rate = float(request.form.get("commission_rate", 3))
+        except ValueError:
+            commission_rate = 0
+
+        if len(username) < 4 or len(password) < 6 or not full_name:
+            flash("กรุณากรอกชื่อผู้ใช้ ชื่อ Agent และรหัสผ่านให้ถูกต้อง", "error")
+        elif commission_rate < 0 or commission_rate > 100:
+            flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
+        elif User.query.filter_by(username=username).first():
+            flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
+        elif invite_code and PartnerProfile.query.filter_by(invite_code=invite_code).first():
+            flash("รหัสแนะนำนี้ถูกใช้แล้ว", "error")
+        else:
+            if not invite_code:
+                invite_code = f"FLEET{random.randint(10000, 99999)}"
+            sub_agent = User(
+                username=username, full_name=full_name, phone=phone,
+                role="partner", partner_id=partner.id, points=0, credit_balance=0.0,
+            )
+            sub_agent.set_password(password)
+            db.session.add(sub_agent)
+            db.session.flush()
+            db.session.add(PartnerProfile(
+                user_id=sub_agent.id,
+                invite_code=invite_code,
+                commission_rate=commission_rate,
+            ))
+            audit_admin(current_user(), "create_sub_agent", "user", sub_agent.id,
+                        f"invite={invite_code}, upline_agent={partner.id}")
+            db.session.commit()
+            flash(f"เพิ่ม Agent ย่อย {username} แล้ว รหัสแนะนำ: {invite_code}", "success")
+        return redirect(url_for("partner_agents"))
+
+    sub_agents = User.query.filter_by(partner_id=partner.id, role="partner").order_by(User.created_at.desc()).all()
+    return render_template("partner_manage.html", view="agents", partner=partner, sub_agents=sub_agents)
+
+
 @app.route("/partner/finance")
 @partner_required
 def partner_finance():
@@ -2366,7 +2770,7 @@ def partner_request_payout():
     ).scalar() or 0
     available = round(float(partner.partner_profile.commission_balance) - float(pending), 2)
     if not account or account.user_id != partner.id or not account.is_active:
-        flash("กรุณาเลือกบัญชีธนาคารของ Partner เท่านั้น", "error")
+        flash("กรุณาเลือกบัญชีธนาคารของ Agent เท่านั้น", "error")
     elif amount <= 0 or amount > available:
         flash(f"คอมมิชชันที่เบิกได้คงเหลือ {available:,.2f}", "error")
     else:
@@ -2626,6 +3030,298 @@ def partner_delete_blocked_number(item_id):
         db.session.commit()
         flash("ลบเลขอั้นเฉพาะสายแล้ว", "success")
     return redirect(url_for("partner_blocked_numbers"))
+
+
+# ==========================================================
+# ระบบหลังบ้าน Senior — ดูแล Agent หลายคน ไม่ได้ดูแล Member โดยตรง
+# ==========================================================
+def senior_owner(user=None):
+    """Return the current Senior — no assistant-account concept for Senior."""
+    user = user or current_user()
+    return user
+
+
+def senior_agent_ids(senior):
+    return [row.id for row in User.query.filter_by(senior_id=senior.id, role="partner").with_entities(User.id).all()]
+
+
+def senior_bet_query(senior, agent_ids):
+    """เหมือน partner_bet_query แต่ไล่ทุก Agent ในสาย Senior คนนี้ + กรองเพิ่มด้วย agent_id ได้"""
+    query = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).join(
+        ThaiLotteryPeriod, ThaiLotteryBet.period_id == ThaiLotteryPeriod.id
+    ).filter(User.partner_id.in_(agent_ids)) if agent_ids else ThaiLotteryBet.query.filter(db.false())
+    agent_id = request.args.get("agent_id", type=int)
+    member_id = request.args.get("member_id", type=int)
+    room_id = request.args.get("room_id", type=int)
+    status = request.args.get("status", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    if agent_id:
+        query = query.filter(User.partner_id == agent_id)
+    if member_id:
+        query = query.filter(ThaiLotteryBet.user_id == member_id)
+    if room_id:
+        query = query.filter(ThaiLotteryPeriod.room_id == room_id)
+    if status in {"pending", "win", "lose"}:
+        query = query.filter(ThaiLotteryBet.status == status)
+    for raw_date, operator in ((date_from, ">="), (date_to, "<")):
+        if raw_date:
+            try:
+                parsed_date = datetime.strptime(raw_date, "%Y-%m-%d")
+                if operator == "<":
+                    parsed_date += timedelta(days=1)
+                query = query.filter(
+                    ThaiLotteryBet.created_at >= parsed_date if operator == ">="
+                    else ThaiLotteryBet.created_at < parsed_date
+                )
+            except ValueError:
+                pass
+    return query.order_by(ThaiLotteryBet.created_at.desc())
+
+
+@app.route("/senior")
+@senior_required
+def senior_dashboard():
+    user = current_user()
+    if user.is_admin and not user.senior_profile:
+        flash("กรุณาเข้าสู่ระบบด้วยบัญชี Senior เพื่อเปิดหน้านี้", "info")
+        return redirect(url_for("admin"))
+    senior = senior_owner(user)
+    agents = User.query.filter_by(senior_id=senior.id, role="partner").order_by(User.created_at.desc()).all()
+    agent_ids = [a.id for a in agents]
+    member_count = User.query.filter(User.partner_id.in_(agent_ids)).count() if agent_ids else 0
+    entries = SeniorCommissionLedger.query.filter_by(senior_id=senior.id).order_by(
+        SeniorCommissionLedger.created_at.desc()
+    ).limit(50).all()
+    profile = senior.senior_profile
+    return render_template("senior_dashboard.html", senior=senior, profile=profile,
+                           agents=agents, member_count=member_count, entries=entries)
+
+
+@app.route("/senior/agents", methods=["GET", "POST"])
+@senior_required
+def senior_agents():
+    senior = senior_owner(current_user())
+    if request.method == "POST":
+        abort(405)  # การสร้าง Agent เป็นสิทธิ์ของ Admin เท่านั้น ที่นี่แก้ได้แค่ agent ที่มีอยู่แล้ว
+    agents = User.query.filter_by(senior_id=senior.id, role="partner").order_by(User.created_at.desc()).all()
+    return render_template("senior_manage.html", view="agents", senior=senior, agents=agents)
+
+
+@app.route("/senior/agents/<int:agent_id>/update", methods=["POST"])
+@senior_required
+def senior_update_agent(agent_id):
+    senior = senior_owner(current_user())
+    agent = User.query.filter_by(id=agent_id, senior_id=senior.id, role="partner").first()
+    if not agent or not agent.partner_profile:
+        abort(404)
+    try:
+        rate = float(request.form.get("commission_rate", agent.partner_profile.commission_rate))
+    except ValueError:
+        rate = -1
+    if not 0 <= rate <= 100:
+        flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
+    else:
+        status = request.form.get("status", "active")
+        if status not in {"active", "suspended"}:
+            status = "active"
+        agent.partner_profile.commission_rate = rate
+        agent.partner_profile.status = status
+        audit_admin(current_user(), "senior_update_agent", "user", agent.id, f"rate={rate}, status={status}")
+        db.session.commit()
+        flash(f"อัปเดต Agent {agent.username} แล้ว", "success")
+    return redirect(url_for("senior_agents"))
+
+
+@app.route("/senior/bets")
+@senior_required
+def senior_bets():
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    agents = User.query.filter_by(senior_id=senior.id, role="partner").order_by(User.username.asc()).all()
+    rooms = active_lottery_rooms().all()
+    bets = senior_bet_query(senior, agent_ids).limit(500).all()
+    return render_template(
+        "senior_manage.html", view="bets", senior=senior, agents=agents,
+        rooms=rooms, bets=bets,
+        filters={key: request.args.get(key, "") for key in ("agent_id", "member_id", "room_id", "status", "date_from", "date_to")},
+    )
+
+
+@app.route("/senior/reports")
+@senior_required
+def senior_reports():
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    bets = senior_bet_query(senior, agent_ids).limit(200).all()
+    summary = {
+        "total": len(bets),
+        "amount": sum(float(bet.amount) for bet in bets),
+        "wins": sum(1 for bet in bets if bet.status == "win"),
+        "losses": sum(1 for bet in bets if bet.status == "lose"),
+        "commission": sum(float(entry.commission_amount) for entry in SeniorCommissionLedger.query.filter_by(senior_id=senior.id).all()),
+    }
+    return render_template("senior_manage.html", view="reports", senior=senior,
+                           bets=bets, summary=summary)
+
+
+@app.route("/senior/reports/chart")
+@senior_required
+def senior_reports_chart():
+    senior = senior_owner(current_user())
+    return render_template("senior_manage.html", view="reports_chart", senior=senior)
+
+
+@app.route("/senior/reports/chart-data")
+@senior_required
+def senior_reports_chart_data():
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    since = app_now() - timedelta(days=13)
+    bets = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).filter(
+        User.partner_id.in_(agent_ids), ThaiLotteryBet.created_at >= since
+    ).all() if agent_ids else []
+    days = [(since + timedelta(days=i)).date() for i in range(14)]
+    bet_by_day = {d.isoformat(): 0.0 for d in days}
+    win_by_day = {d.isoformat(): 0.0 for d in days}
+    for bet in bets:
+        key = bet.created_at.date().isoformat()
+        if key not in bet_by_day:
+            continue
+        bet_by_day[key] += float(bet.amount)
+        if bet.status == "win":
+            win_by_day[key] += float(bet.reward_amount)
+    labels = list(bet_by_day.keys())
+    return jsonify({
+        "labels": labels,
+        "bet_amounts": [round(bet_by_day[d], 2) for d in labels],
+        "win_amounts": [round(win_by_day[d], 2) for d in labels],
+        "net": [round(bet_by_day[d] - win_by_day[d], 2) for d in labels],
+    })
+
+
+@app.route("/senior/reports/winners")
+@senior_required
+def senior_reports_winners():
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    bets = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).filter(
+        User.partner_id.in_(agent_ids), ThaiLotteryBet.status == "win"
+    ).order_by(ThaiLotteryBet.created_at.desc()).limit(200).all() if agent_ids else []
+    return render_template("senior_manage.html", view="reports_winners", senior=senior, bets=bets)
+
+
+@app.route("/senior/finance")
+@senior_required
+def senior_finance():
+    senior = senior_owner(current_user())
+    transactions = WalletTransaction.query.filter_by(user_id=senior.id).order_by(
+        WalletTransaction.created_at.desc()
+    ).limit(100).all()
+    accounts = UserBankAccount.query.filter_by(user_id=senior.id, is_active=True).order_by(
+        UserBankAccount.created_at.asc()
+    ).all()
+    pending_payout = db.session.query(func.coalesce(func.sum(WithdrawalRequest.amount), 0.0)).filter(
+        WithdrawalRequest.user_id == senior.id,
+        WithdrawalRequest.method == "commission_payout",
+        WithdrawalRequest.status == "pending",
+    ).scalar()
+    return render_template("senior_manage.html", view="finance", senior=senior,
+                           transactions=transactions, bank_accounts=accounts,
+                           bank_catalog=get_bank_catalog(), pending_payout=float(pending_payout or 0))
+
+
+@app.route("/senior/finance/bank-account", methods=["POST"])
+@senior_required
+def senior_add_bank_account():
+    senior = senior_owner(current_user())
+    bank_code = request.form.get("bank_code", "").strip()
+    account_number = request.form.get("account_number", "").strip()
+    account_name = request.form.get("account_name", "").strip()
+    bank = get_bank_catalog().get(bank_code)
+    if not bank or not account_number or not account_name:
+        flash("กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วน", "error")
+    elif UserBankAccount.query.filter_by(user_id=senior.id, bank_code=bank_code,
+                                         account_number=account_number, is_active=True).first():
+        flash("บัญชีธนาคารนี้ถูกผูกไว้แล้ว", "error")
+    else:
+        db.session.add(UserBankAccount(
+            user_id=senior.id, bank_code=bank_code, bank_name=bank["name"],
+            account_number=account_number, account_name=account_name, logo_url=bank["logo"],
+        ))
+        db.session.commit()
+        flash("ผูกบัญชีธนาคารสำหรับรับคอมมิชชันแล้ว", "success")
+    return redirect(url_for("senior_finance"))
+
+
+@app.route("/senior/finance/payout", methods=["POST"])
+@senior_required
+def senior_request_payout():
+    senior = senior_owner(current_user())
+    account_id = request.form.get("bank_account_id", type=int)
+    account = db.session.get(UserBankAccount, account_id) if account_id else None
+    try:
+        amount = round(float(request.form.get("amount", 0)), 2)
+    except (TypeError, ValueError):
+        amount = 0
+    pending = db.session.query(func.coalesce(func.sum(WithdrawalRequest.amount), 0.0)).filter(
+        WithdrawalRequest.user_id == senior.id,
+        WithdrawalRequest.method == "commission_payout",
+        WithdrawalRequest.status == "pending",
+    ).scalar() or 0
+    available = round(float(senior.senior_profile.commission_balance) - float(pending), 2)
+    if not account or account.user_id != senior.id or not account.is_active:
+        flash("กรุณาเลือกบัญชีธนาคารของ Senior เท่านั้น", "error")
+    elif amount <= 0 or amount > available:
+        flash(f"คอมมิชชันที่เบิกได้คงเหลือ {available:,.2f}", "error")
+    else:
+        db.session.add(WithdrawalRequest(
+            user_id=senior.id, amount=amount, method="commission_payout",
+            payout_account=f"{account.bank_name} {account.account_number} ({account.account_name})",
+            note=request.form.get("note", "").strip(),
+        ))
+        notify_user(senior, "ส่งคำขอเบิกคอมมิชชันแล้ว", f"รอตรวจสอบจำนวน {amount:,.2f}", "wallet")
+        db.session.commit()
+        flash("ส่งคำขอเบิกคอมมิชชันแล้ว", "success")
+    return redirect(url_for("senior_finance"))
+
+
+@app.route("/senior/login-history")
+@senior_required
+def senior_login_history():
+    senior = senior_owner(current_user())
+    history = LoginHistory.query.filter_by(user_id=senior.id).order_by(LoginHistory.created_at.desc()).limit(100).all()
+    return render_template("senior_manage.html", view="login_history", senior=senior, history=history)
+
+
+@app.route("/senior/stock", methods=["GET", "POST"])
+@senior_required
+def senior_stock():
+    senior = senior_owner(current_user())
+    if request.method == "POST":
+        room_id = request.form.get("room_id", type=int)
+        room = db.session.get(LotteryRoom, room_id) if room_id else None
+        if not room:
+            abort(404)
+        try:
+            hold_percent = float(request.form.get("hold_percent", 0))
+        except (TypeError, ValueError):
+            hold_percent = 0
+        hold_percent = max(0.0, min(100.0, hold_percent))
+        share = SeniorStockShare.query.filter_by(senior_id=senior.id, room_id=room.id).first()
+        if share is None:
+            share = SeniorStockShare(senior_id=senior.id, room_id=room.id)
+            db.session.add(share)
+        share.hold_percent = hold_percent
+        db.session.commit()
+        flash(f"ตั้งค่าถือหุ้นห้อง {room.name} เป็น {hold_percent:g}% แล้ว", "success")
+        return redirect(url_for("senior_stock"))
+
+    rooms = active_lottery_rooms().all()
+    shares = {item.room_id: item for item in SeniorStockShare.query.filter_by(senior_id=senior.id).all()}
+    return render_template("senior_manage.html", view="stock", senior=senior,
+                           rooms=rooms, stock_shares=shares,
+                           stock_balance=senior.senior_profile.stock_balance if senior.senior_profile else 0.0)
 
 
 @app.route("/admin/credits/<int:user_id>", methods=["POST"])
@@ -3599,6 +4295,10 @@ def seed_data():
         if "partner_id" not in user_columns:
             db.session.execute(text("ALTER TABLE users ADD COLUMN partner_id INTEGER"))
             db.session.commit()
+        senior_id_just_added = "senior_id" not in user_columns
+        if senior_id_just_added:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN senior_id INTEGER"))
+            db.session.commit()
         if "vip_tier_id" not in user_columns:
             db.session.execute(text("ALTER TABLE users ADD COLUMN vip_tier_id INTEGER"))
             db.session.commit()
@@ -3642,6 +4342,31 @@ def seed_data():
         partner_profile_columns = [col["name"] for col in inspect(db.engine).get_columns("partner_profiles")]
         if "stock_balance" not in partner_profile_columns:
             db.session.execute(text("ALTER TABLE partner_profiles ADD COLUMN stock_balance FLOAT NOT NULL DEFAULT 0.0"))
+            db.session.commit()
+
+        # ทุก Agent ต้องมี Senior — สร้าง Senior เริ่มต้นให้อัตโนมัติครั้งเดียวตอน
+        # เพิ่มคอลัมน์ senior_id เป็นครั้งแรก แล้วผูก Agent เดิมทั้งหมดเข้ากับ Senior
+        # นี้ (commission_rate=0% ไม่มี stock share เลย จึงไม่กระทบตัวเลขใดๆ ที่มีอยู่
+        # แอดมินค่อยย้าย Agent ไปหา Senior ตัวจริงทีหลังผ่านหน้า admin_partners ได้)
+        if senior_id_just_added:
+            default_senior = User.query.filter_by(role="senior").order_by(User.id.asc()).first()
+            if default_senior is None:
+                default_senior = User(
+                    username="senior_default", full_name="Senior เริ่มต้น (ระบบสร้างอัตโนมัติ)",
+                    role="senior", points=0, credit_balance=0.0,
+                )
+                default_senior.set_password(secrets.token_urlsafe(16))
+                db.session.add(default_senior)
+                db.session.flush()
+                db.session.add(SeniorProfile(
+                    user_id=default_senior.id,
+                    invite_code=f"SNR{random.randint(10000, 99999)}",
+                    commission_rate=0.0,
+                ))
+                db.session.commit()
+            User.query.filter_by(role="partner", senior_id=None).update(
+                {User.senior_id: default_senior.id}, synchronize_session=False
+            )
             db.session.commit()
 
         for user in User.query.all():

@@ -7,7 +7,7 @@ from werkzeug.security import check_password_hash
 
 from models import (
     db, User, HeroBanner, LotteryRoom, DepositRequest, WithdrawalRequest,
-    CommissionLedger, PartnerPresence, ThaiLotteryBet, WalletTransaction, LoginHistory,
+    CommissionLedger, SeniorCommissionLedger, PartnerPresence, ThaiLotteryBet, WalletTransaction, LoginHistory,
     Announcement, SystemSetting,
 )
 from app import app as main_app
@@ -70,10 +70,13 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and user.is_active and check_password_hash(user.password_hash, password):
             partner_inactive = user.is_partner and user.partner_profile and user.partner_profile.status != "active"
-            if not user.is_admin and not user.is_partner:
+            senior_inactive = user.is_senior and user.senior_profile and user.senior_profile.status != "active"
+            if not user.is_admin and not user.is_partner and not user.is_senior:
                 flash("บัญชีนี้ไม่มีสิทธิ์เข้าหลังบ้าน", "error")
             elif partner_inactive:
                 flash("บัญชี Partner นี้ถูกพักการใช้งาน", "error")
+            elif senior_inactive:
+                flash("บัญชี Senior นี้ถูกพักการใช้งาน", "error")
             else:
                 session.permanent = True
                 session["user_id"] = user.id
@@ -100,7 +103,7 @@ def main_app_proxy(path):
     user = logged_user()
     if not user:
         return redirect(url_for("login"))
-    if not user.is_admin and not user.is_partner:
+    if not user.is_admin and not user.is_partner and not user.is_senior:
         return "Forbidden", 403
     is_admin_path = path == "admin" or path.startswith("admin/")
     if is_admin_path and not user.is_admin:
@@ -159,8 +162,34 @@ def dashboard():
     user = logged_user()
     if not user:
         return redirect(url_for("login"))
-    if not user.is_admin and not user.is_partner:
+    if not user.is_admin and not user.is_partner and not user.is_senior:
         return "Forbidden", 403
+    if user.is_senior:
+        agents = User.query.filter_by(senior_id=user.id, role="partner").order_by(User.created_at.desc()).all()
+        agent_ids = [a.id for a in agents]
+        entries = SeniorCommissionLedger.query.filter_by(senior_id=user.id).order_by(
+            SeniorCommissionLedger.created_at.desc()
+        ).limit(8).all()
+        bets = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).filter(
+            User.partner_id.in_(agent_ids)
+        ).order_by(ThaiLotteryBet.created_at.desc()).limit(200).all() if agent_ids else []
+        transactions = WalletTransaction.query.filter_by(user_id=user.id).order_by(
+            WalletTransaction.created_at.desc()
+        ).limit(8).all()
+        return render_template(
+            "backoffice_senior.html",
+            senior=user,
+            profile=user.senior_profile,
+            agents=agents,
+            entries=entries,
+            transactions=transactions,
+            report={
+                "bets": len(bets),
+                "amount": sum(float(bet.amount) for bet in bets),
+                "wins": sum(1 for bet in bets if bet.status == "win"),
+                "losses": sum(1 for bet in bets if bet.status == "lose"),
+            },
+        )
     if user.is_partner:
         members = User.query.filter_by(partner_id=user.id, role="member").order_by(User.created_at.desc()).all()
         online_cutoff = datetime.utcnow() - timedelta(minutes=10)

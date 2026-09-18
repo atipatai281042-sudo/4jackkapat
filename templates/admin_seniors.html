@@ -1,0 +1,61 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}จัดการ Senior — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block content %}
+<section class="admin-section">
+  <div class="container">
+    <header class="page-head">
+      <div><span class="eyebrow">FLEET CONTROL</span><h1 class="page-title">จัดการ Senior</h1><p class="section-desc">สร้าง Senior ผู้ดูแล Agent หลายคน กำหนดรหัสแนะนำและอัตราคอมมิชชัน</p></div>
+      <a href="{{ url_for('admin') }}" class="btn btn-ghost">กลับศูนย์ควบคุม</a>
+    </header>
+
+    <div class="dashboard-layout">
+      <article class="panel">
+        <h2 class="panel-title">สร้าง Senior ใหม่</h2>
+        <form method="post" class="admin-form">
+          <div class="form-group"><label class="form-label">ชื่อผู้ใช้</label><input class="form-input" name="username" minlength="4" required></div>
+          <div class="form-group"><label class="form-label">ชื่อ Senior</label><input class="form-input" name="full_name" required></div>
+          <div class="form-group"><label class="form-label">รหัสผ่านเริ่มต้น</label><input class="form-input" type="password" name="password" minlength="6" required></div>
+          <div class="form-group"><label class="form-label">เบอร์โทรศัพท์</label><input class="form-input" name="phone"></div>
+          <div class="form-group"><label class="form-label">รหัสแนะนำ</label><input class="form-input" name="invite_code" placeholder="ว่างไว้ให้ระบบสร้างอัตโนมัติ"></div>
+          <div class="form-group"><label class="form-label">คอมมิชชัน (%)</label><input class="form-input" type="number" name="commission_rate" min="0" max="100" step="0.01" value="1" required></div>
+          <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-user-plus"></i> สร้าง Senior</button>
+        </form>
+      </article>
+
+      <article class="panel">
+        <h2 class="panel-title">Senior ในระบบ</h2>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>ผู้ใช้</th><th>รหัสแนะนำ</th><th>Agent ในสาย</th><th>คอมสะสม</th><th>ถือหุ้นสะสม</th><th>บัญชีธนาคาร</th><th>ตั้งค่า</th><th>จ่ายคอม</th></tr></thead><tbody>
+        {% for senior in seniors %}
+        <tr><td><strong>{{ senior.full_name }}</strong><small class="table-subtext">{{ senior.username }}</small></td><td><code class="code-chip">{{ senior.senior_profile.invite_code }}</code></td><td>{{ senior.managed_agents|length }}</td><td>{{ "{:,.2f}".format(senior.senior_profile.commission_balance) }}</td><td class="{{ 'text-positive' if senior.senior_profile.stock_balance >= 0 else 'text-negative' }}">{{ "{:,.2f}".format(senior.senior_profile.stock_balance) }}</td>
+          <td style="min-width:220px;">
+            {% for account in senior_bank_accounts.get(senior.id, []) %}
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:12px;">
+                <span>{{ account.bank_name }} {{ account.account_number }}<small class="table-subtext">({{ account.account_name }})</small></span>
+                <form method="post" action="{{ url_for('admin_delete_senior_bank_account', user_id=senior.id, account_id=account.id) }}" onsubmit="return confirm('ยืนยันลบบัญชีนี้?');">
+                  <button class="btn btn-ghost btn-xs" type="submit" title="ลบ"><i class="fas fa-times"></i></button>
+                </form>
+              </div>
+            {% else %}
+              <small class="empty-state-text">ยังไม่มีบัญชี</small>
+            {% endfor %}
+            <details>
+              <summary class="btn btn-ghost btn-xs" style="cursor:pointer;display:inline-block;margin-top:2px;">+ เพิ่มบัญชี</summary>
+              <form method="post" action="{{ url_for('admin_add_senior_bank_account', user_id=senior.id) }}" style="display:grid;gap:4px;margin-top:6px;min-width:180px;">
+                <select class="form-input form-input-sm" name="bank_code" required>
+                  <option value="">เลือกธนาคาร</option>
+                  {% for code, bank in bank_catalog.items() %}<option value="{{ code }}">{{ bank.name }}</option>{% endfor %}
+                </select>
+                <input class="form-input form-input-sm" name="account_number" inputmode="numeric" placeholder="เลขที่บัญชี" required>
+                <input class="form-input form-input-sm" name="account_name" placeholder="ชื่อบัญชี" required>
+                <button class="btn btn-primary btn-xs" type="submit">บันทึก</button>
+              </form>
+            </details>
+          </td>
+          <td><form method="post" action="{{ url_for('admin_update_senior', user_id=senior.id) }}" class="partner-inline-form"><input class="form-input form-input-sm" type="number" name="commission_rate" value="{{ senior.senior_profile.commission_rate }}" min="0" max="100" step="0.01"><select class="form-input form-input-sm" name="status"><option value="active" {% if senior.senior_profile.status == 'active' %}selected{% endif %}>ใช้งาน</option><option value="suspended" {% if senior.senior_profile.status == 'suspended' %}selected{% endif %}>พักใช้งาน</option></select><button class="btn btn-ghost btn-xs" type="submit">บันทึก</button></form></td><td><form method="post" action="{{ url_for('admin_senior_payout', user_id=senior.id) }}" onsubmit="return confirm('ยืนยันบันทึกการจ่ายคอมมิชชัน?');"><button class="btn btn-success btn-xs" type="submit">จ่ายแล้ว</button></form></td></tr>
+        {% else %}<tr><td colspan="8" class="empty-state-text">ยังไม่มี Senior</td></tr>{% endfor %}
+        </tbody></table></div>
+      </article>
+    </div>
+  </div>
+</section>
+{% endblock %}

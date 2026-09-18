@@ -1,0 +1,29 @@
+{% extends "backoffice_shell_senior.html" %}
+{% block title %}ภาพรวม Senior — mklotto{% endblock %}
+{% block content %}
+      <main class="partner-dashboard-main">
+        <header class="partner-dashboard-head" id="senior-overview">
+          <div><span class="eyebrow">FLEET SENIOR</span><h1 class="page-title">ภาพรวม Senior</h1><p class="section-desc">ดูแลทีม Agent ทั้งสาย และติดตามคอมมิชชัน/หุ้นของตัวเองจากที่เดียว</p></div>
+          <div class="partner-balance"><span>คอมมิชชันสะสม</span><strong>{{ "{:,.2f}".format(profile.commission_balance) }}</strong></div>
+        </header>
+
+        <div class="partner-stat-grid">
+          <div class="partner-stat-card accent-gold"><span>Agent ในสาย</span><strong>{{ agents|length }}</strong><small>Agent ทั้งหมด</small></div>
+          <div class="partner-stat-card accent-green"><span>สมาชิกในสาย</span><strong>{{ member_count }}</strong><small>ผ่านทุก Agent</small></div>
+          <div class="partner-stat-card accent-blue"><span>อัตราคอมมิชชัน</span><strong>{{ "{:,.2f}".format(profile.commission_rate) }}%</strong><small>อัตราปัจจุบัน</small></div>
+          <div class="partner-stat-card accent-red"><span>ถือหุ้นสะสม</span><strong>{{ "{:,.2f}".format(profile.stock_balance) }}</strong><small>กำไร/ขาดทุนสะสม</small></div>
+        </div>
+
+        <div class="partner-content-grid">
+          <article class="panel partner-commission-panel" id="senior-commission">
+            <div class="partner-panel-heading"><div><span class="eyebrow">RECENT COMMISSION</span><h2 class="panel-title">คอมมิชชันล่าสุด</h2></div><i class="fas fa-chart-line partner-muted-icon"></i></div>
+            <div class="activity-list">{% for entry in entries %}<div class="activity-item"><span class="activity-tag plus">+{{ "{:,.2f}".format(entry.commission_amount) }}</span><div><strong>{{ entry.reason }}</strong><small>{{ entry.created_at.strftime('%d/%m/%Y %H:%M') }} · จาก Agent {{ entry.agent.username if entry.agent else '-' }}</small></div></div>{% else %}<p class="empty-state-text">ยังไม่มีรายการคอมมิชชัน</p>{% endfor %}</div>
+          </article>
+        </div>
+
+        <article class="panel partner-members-panel" id="senior-agents">
+          <div class="partner-panel-heading"><div><span class="eyebrow">AGENT FLEET</span><h2 class="panel-title">Agent ในสาย</h2></div><span class="partner-count-chip">{{ agents|length }} คน</span></div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Agent</th><th>วันที่เข้าร่วม</th><th>สมาชิก</th><th>คอมมิชชัน (%)</th><th>สถานะ</th></tr></thead><tbody>{% for agent in agents %}<tr><td><strong>{{ agent.full_name or agent.username }}</strong><small class="table-subtext">{{ agent.username }}</small></td><td>{{ agent.created_at.strftime('%d/%m/%Y') }}</td><td>{{ agent.referred_members|length }}</td><td>{{ "{:,.2f}".format(agent.partner_profile.commission_rate) if agent.partner_profile else '-' }}</td><td>{{ agent.partner_profile.status if agent.partner_profile else '-' }}</td></tr>{% else %}<tr><td colspan="5" class="empty-state-text">ยังไม่มี Agent ในสาย</td></tr>{% endfor %}</tbody></table></div>
+        </article>
+      </main>
+{% endblock %}

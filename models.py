@@ -31,8 +31,9 @@ class User(db.Model):
     phone         = db.Column(db.String(20), default="")
     points        = db.Column(db.Integer, default=0, nullable=False)
     credit_balance = db.Column(db.Float, default=0.0, nullable=False)
-    role          = db.Column(db.String(20), default="member", nullable=False)  # member | partner | admin
-    partner_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    role          = db.Column(db.String(20), default="member", nullable=False)  # member | partner | senior | admin
+    partner_id    = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)  # member -> agent (partner)
+    senior_id     = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)  # agent (partner) -> senior
     vip_tier_id   = db.Column(db.Integer, db.ForeignKey("vip_tiers.id"), nullable=True)
     is_active     = db.Column(db.Boolean, default=True, nullable=False)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
@@ -49,9 +50,17 @@ class User(db.Model):
         "PartnerProfile", backref="user", uselist=False,
         cascade="all, delete-orphan", foreign_keys="PartnerProfile.user_id"
     )
+    senior_profile = db.relationship(
+        "SeniorProfile", backref="user", uselist=False,
+        cascade="all, delete-orphan", foreign_keys="SeniorProfile.user_id"
+    )
     referred_members = db.relationship(
         "User", backref=db.backref("partner", remote_side=[id]),
         foreign_keys=[partner_id], lazy=True
+    )
+    managed_agents = db.relationship(
+        "User", backref=db.backref("senior", remote_side=[id]),
+        foreign_keys=[senior_id], lazy=True
     )
     partner_limits = db.relationship(
         "PartnerMemberLimit", backref="member", lazy=True,
@@ -73,6 +82,10 @@ class User(db.Model):
     @property
     def is_partner(self) -> bool:
         return self.role == "partner"
+
+    @property
+    def is_senior(self) -> bool:
+        return self.role == "senior"
 
     def __repr__(self):
         return f"<User {self.username} (points={self.points}, credit={self.credit_balance})>"
@@ -295,6 +308,20 @@ class PartnerProfile(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class SeniorProfile(db.Model):
+    __tablename__ = "senior_profiles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+    invite_code = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    commission_rate = db.Column(db.Float, nullable=False, default=1.0)
+    status = db.Column(db.String(20), nullable=False, default="active")
+    commission_balance = db.Column(db.Float, nullable=False, default=0.0)
+    stock_balance = db.Column(db.Float, nullable=False, default=0.0)
+    notes = db.Column(db.String(255), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class PartnerAssistant(db.Model):
     __tablename__ = "partner_assistants"
     __table_args__ = (db.UniqueConstraint("partner_id", "assistant_user_id", name="uq_partner_assistant"),)
@@ -361,6 +388,38 @@ class PartnerStockLedger(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     partner = db.relationship("User", foreign_keys=[partner_id])
+    member = db.relationship("User", foreign_keys=[member_id])
+
+
+class SeniorStockShare(db.Model):
+    __tablename__ = "senior_stock_shares"
+    __table_args__ = (db.UniqueConstraint("senior_id", "room_id", name="uq_senior_stock_share"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
+    hold_percent = db.Column(db.Float, nullable=False, default=0.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    room = db.relationship("LotteryRoom")
+
+
+class SeniorStockLedger(db.Model):
+    __tablename__ = "senior_stock_ledger"
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    agent_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    bet_id = db.Column(db.Integer, db.ForeignKey("thai_lottery_bets.id"), nullable=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=True)
+    hold_percent = db.Column(db.Float, nullable=False, default=0.0)
+    stake_amount = db.Column(db.Float, nullable=False, default=0.0)
+    pnl_amount = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    senior = db.relationship("User", foreign_keys=[senior_id])
+    agent = db.relationship("User", foreign_keys=[agent_id])
     member = db.relationship("User", foreign_keys=[member_id])
 
 
@@ -442,6 +501,26 @@ class CommissionLedger(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     partner = db.relationship("User", foreign_keys=[partner_id], backref="commission_entries")
+    member = db.relationship("User", foreign_keys=[member_id])
+
+
+class SeniorCommissionLedger(db.Model):
+    __tablename__ = "senior_commission_ledger"
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    agent_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    bet_id = db.Column(db.Integer, db.ForeignKey("thai_lottery_bets.id"), nullable=True)
+    base_amount = db.Column(db.Float, nullable=False, default=0.0)
+    rate = db.Column(db.Float, nullable=False, default=0.0)
+    commission_amount = db.Column(db.Float, nullable=False, default=0.0)
+    status = db.Column(db.String(20), nullable=False, default="approved")
+    reason = db.Column(db.String(255), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    senior = db.relationship("User", foreign_keys=[senior_id], backref="senior_commission_entries")
+    agent = db.relationship("User", foreign_keys=[agent_id])
     member = db.relationship("User", foreign_keys=[member_id])
 
 

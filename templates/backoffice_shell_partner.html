@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   {% block viewport %}<meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes" />{% endblock %}
   {% block head %}{% endblock %}
-  <title>{% block title %}Partner Backoffice — mklotto{% endblock %}</title>
+  <title>{% block title %}Agent Backoffice — mklotto{% endblock %}</title>
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
@@ -17,7 +17,7 @@
       <div class="bo-side-top">
         <a class="bo-brand" href="__BACKOFFICE_HOME__">
           <img src="{{ url_for('static', filename='brand-logo.png') }}" alt="mklotto">
-          <div><strong>mklotto</strong><small>PARTNER BACKOFFICE</small></div>
+          <div><strong>mklotto</strong><small>AGENT BACKOFFICE</small></div>
         </a>
         <button class="bo-collapse-btn" id="bo-collapse-toggle" type="button" aria-label="ยุบเมนู"><i class="fas fa-chevron-left"></i></button>
         <a class="bo-mobile-logout" href="__BACKOFFICE_LOGOUT__" aria-label="ออกจากระบบ"><i class="fas fa-power-off"></i></a>
@@ -25,15 +25,16 @@
       <div class="bo-profile">
         <span>ระดับบัญชี</span>
         <strong>{{ partner.full_name or partner.username }}</strong>
-        <small>PARTNER · {{ (partner.partner_profile.status if partner.partner_profile else '')|upper }}</small>
+        <small>AGENT · {{ (partner.partner_profile.status if partner.partner_profile else '')|upper }}</small>
       </div>
-      <nav class="bo-nav" aria-label="เมนู Partner">
-        <span class="bo-nav-label">PARTNER CENTER</span>
+      <nav class="bo-nav" aria-label="เมนู Agent">
+        <span class="bo-nav-label">AGENT CENTER</span>
         <a href="__BACKOFFICE_HOME__"><i class="fas fa-chart-pie"></i><span>ภาพรวม</span></a>
         <a href="{{ url_for('partner_bets') }}" class="{{ 'is-active' if request.endpoint == 'partner_bets' else '' }}"><i class="fas fa-ticket"></i><span>รายการแทง</span></a>
         <a href="{{ url_for('partner_pending_bets') }}" class="{{ 'is-active' if request.endpoint == 'partner_pending_bets' else '' }}"><i class="fas fa-hourglass-half"></i><span>รอผลเดิมพัน</span></a>
         <a href="{{ url_for('partner_bet_acceptance_by_type') }}" class="{{ 'is-active' if request.endpoint == 'partner_bet_acceptance_by_type' else '' }}"><i class="fas fa-sliders"></i><span>ตั้งค่ารับของ</span></a>
         <a href="{{ url_for('partner_members') }}" class="{{ 'is-active' if request.endpoint == 'partner_members' else '' }}"><i class="fas fa-users"></i><span>จัดการสมาชิก</span></a>
+        <a href="{{ url_for('partner_agents') }}" class="{{ 'is-active' if request.endpoint == 'partner_agents' else '' }}"><i class="fas fa-user-plus"></i><span>Agent ย่อย</span></a>
         {% if partner.id == current_user.id %}<a href="{{ url_for('partner_assistants') }}" class="{{ 'is-active' if request.endpoint == 'partner_assistants' else '' }}"><i class="fas fa-user-shield"></i><span>ผู้ช่วย</span></a>{% endif %}
         <a href="{{ url_for('partner_deposit') }}" class="{{ 'is-active' if request.endpoint == 'partner_deposit' else '' }}"><i class="fas fa-money-bill-transfer"></i><span>เติมเงิน</span></a>
         <a href="{{ url_for('partner_finance') }}" class="{{ 'is-active' if request.endpoint == 'partner_finance' else '' }}"><i class="fas fa-wallet"></i><span>ประวัติการเงิน</span></a>

@@ -1,0 +1,93 @@
+{% extends "backoffice_shell_senior.html" %}
+{% block title %}ระบบ Senior — mklotto{% endblock %}
+{% block content %}
+      <main class="partner-dashboard-main">
+        <header class="partner-dashboard-head">
+          <div><span class="eyebrow">SENIOR CONTROL</span><h1 class="page-title">{% if view == 'agents' %}Agent ในสาย{% elif view == 'finance' %}ประวัติการเงิน{% elif view == 'reports' %}รายงานแพ้ชนะ{% elif view == 'reports_chart' %}แพ้-ชนะ สุทธิ (กราฟ){% elif view == 'reports_winners' %}รายการที่ถูกรางวัล{% elif view == 'login_history' %}ประวัติการเข้าสู่ระบบ{% elif view == 'stock' %}% ถือหุ้น{% else %}รายการแทงทั้งสาย{% endif %}</h1><p class="section-desc">จัดการข้อมูลของทีม Agent ทั้งสายอย่างเป็นระบบ</p></div>
+          <div class="partner-balance"><span>คอมมิชชันสะสม</span><strong>{{ "{:,.2f}".format(senior.senior_profile.commission_balance) }}</strong></div>
+        </header>
+
+        {% if view == 'agents' %}
+        <article class="panel">
+          <div class="partner-panel-heading"><div><span class="eyebrow">AGENT FLEET</span><h2 class="panel-title">Agent ในสาย</h2></div><span class="partner-count-chip">{{ agents|length }} คน</span></div>
+          <p class="section-desc">แก้ไขได้เฉพาะคอมมิชชัน (%) และสถานะของ Agent ในสายตัวเอง — การเพิ่ม Agent ใหม่หรือย้าย Senior ทำได้จากหลังบ้าน Admin เท่านั้น</p>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Agent</th><th>สมาชิกในสาย</th><th>คอมสะสม</th><th>ถือหุ้นสะสม</th><th>ตั้งค่า</th></tr></thead><tbody>
+          {% for agent in agents %}
+          <tr>
+            <td><strong>{{ agent.full_name or agent.username }}</strong><small class="table-subtext">{{ agent.username }}</small></td>
+            <td>{{ agent.referred_members|length }}</td>
+            <td>{{ "{:,.2f}".format(agent.partner_profile.commission_balance) if agent.partner_profile else '-' }}</td>
+            <td class="{{ 'text-positive' if agent.partner_profile and agent.partner_profile.stock_balance >= 0 else 'text-negative' }}">{{ "{:,.2f}".format(agent.partner_profile.stock_balance) if agent.partner_profile else '-' }}</td>
+            <td>
+              <form method="post" action="{{ url_for('senior_update_agent', agent_id=agent.id) }}" class="partner-inline-form">
+                <input class="form-input form-input-sm" type="number" name="commission_rate" value="{{ agent.partner_profile.commission_rate if agent.partner_profile else 0 }}" min="0" max="100" step="0.01">
+                <select class="form-input form-input-sm" name="status">
+                  <option value="active" {% if agent.partner_profile and agent.partner_profile.status == 'active' %}selected{% endif %}>ใช้งาน</option>
+                  <option value="suspended" {% if agent.partner_profile and agent.partner_profile.status == 'suspended' %}selected{% endif %}>พักใช้งาน</option>
+                </select>
+                <button class="btn btn-ghost btn-xs" type="submit">บันทึก</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}<tr><td colspan="5" class="empty-state-text">ยังไม่มี Agent ในสาย</td></tr>{% endfor %}
+          </tbody></table></div>
+        </article>
+
+        {% elif view == 'bets' %}
+        <article class="panel">
+          <div class="partner-panel-heading"><div><span class="eyebrow">BETTING LOG</span><h2 class="panel-title">รายการแทงทั้งสาย</h2></div><span class="partner-count-chip">{{ bets|length }} รายการ</span></div>
+          <form method="get" class="partner-filter-grid">
+            <select class="form-input" name="agent_id"><option value="">Agent ทั้งหมด</option>{% for agent in agents %}<option value="{{ agent.id }}" {% if filters.agent_id == agent.id|string %}selected{% endif %}>{{ agent.full_name or agent.username }}</option>{% endfor %}</select>
+            <select class="form-input" name="room_id"><option value="">ห้องหวยทั้งหมด</option>{% for room in rooms %}<option value="{{ room.id }}" {% if filters.room_id == room.id|string %}selected{% endif %}>{{ room.name }}</option>{% endfor %}</select>
+            <select class="form-input" name="status"><option value="">ทุกสถานะ</option><option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>รอตรวจ</option><option value="win" {% if filters.status == 'win' %}selected{% endif %}>ถูกรางวัล</option><option value="lose" {% if filters.status == 'lose' %}selected{% endif %}>ไม่ถูกรางวัล</option></select>
+            <input class="form-input" type="date" name="date_from" value="{{ filters.date_from }}" aria-label="วันที่เริ่มต้น">
+            <input class="form-input" type="date" name="date_to" value="{{ filters.date_to }}" aria-label="วันที่สิ้นสุด">
+            <button class="btn btn-primary" type="submit"><i class="fas fa-filter"></i> ค้นหา</button>
+            <a class="btn btn-ghost" href="{{ url_for('senior_bets') }}">ล้างตัวกรอง</a>
+          </form>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>เวลา</th><th>Agent</th><th>สมาชิก</th><th>ห้อง/งวด</th><th>เลข</th><th>ยอดแทง</th><th>เรท</th><th>สถานะ</th></tr></thead><tbody>{% for bet in bets %}<tr><td>{{ bet.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ bet.user.partner.username if bet.user.partner else '-' }}</td><td>{{ bet.user.username }}</td><td>{{ bet.period.room.name if bet.period.room else '-' }}<small class="table-subtext">{{ bet.period.period_date }}</small></td><td>{{ bet.number }}<small class="table-subtext">{{ bet.bet_type }}</small></td><td>{{ "{:,.2f}".format(bet.amount) }}</td><td>{{ "{:,.2f}".format(bet.rate) }}x</td><td><span class="status status-{{ bet.status }}">{{ bet.status }}</span></td></tr>{% else %}<tr><td colspan="8" class="empty-state-text">ไม่พบรายการตามตัวกรอง</td></tr>{% endfor %}</tbody></table></div>
+        </article>
+
+        {% elif view == 'reports' %}
+        <div class="partner-stat-grid"><div class="partner-stat-card accent-gold"><span>รายการทั้งหมด</span><strong>{{ summary.total }}</strong><small>โพยทั้งสาย</small></div><div class="partner-stat-card accent-blue"><span>ยอดเดิมพัน</span><strong>{{ "{:,.2f}".format(summary.amount) }}</strong><small>เครดิตรวม</small></div><div class="partner-stat-card accent-green"><span>ถูกรางวัล</span><strong>{{ summary.wins }}</strong><small>รายการ</small></div><div class="partner-stat-card accent-red"><span>แพ้</span><strong>{{ summary.losses }}</strong><small>รายการ</small></div></div>
+        <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">WIN / LOSS</span><h2 class="panel-title">รายการแพ้ชนะล่าสุด</h2></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Agent</th><th>สมาชิก</th><th>ห้อง/งวด</th><th>เลข</th><th>ยอดแทง</th><th>สถานะ</th></tr></thead><tbody>{% for bet in bets %}<tr><td>{{ bet.user.partner.username if bet.user.partner else '-' }}</td><td>{{ bet.user.username }}</td><td>{{ bet.period.room.name if bet.period.room else '-' }}<small class="table-subtext">{{ bet.period.period_date }}</small></td><td>{{ bet.number }}</td><td>{{ "{:,.2f}".format(bet.amount) }}</td><td><span class="status status-{{ bet.status }}">{{ bet.status }}</span></td></tr>{% else %}<tr><td colspan="6" class="empty-state-text">ยังไม่มีข้อมูลการเดิมพัน</td></tr>{% endfor %}</tbody></table></div></article>
+
+        {% elif view == 'reports_chart' %}
+        <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">NET WIN / LOSS</span><h2 class="panel-title">กราฟแพ้-ชนะ สุทธิ 14 วันล่าสุด (ทั้งสาย)</h2></div></div><canvas id="seniorReportChart" height="90"></canvas><a id="seniorReportChartDataUrl" href="{{ url_for('senior_reports_chart_data') }}" style="display:none"></a></article>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+        <script>
+        fetch(document.getElementById('seniorReportChartDataUrl').getAttribute('href')).then(r => r.json()).then(data => {
+          new Chart(document.getElementById('seniorReportChart'), {
+            type: 'bar',
+            data: {
+              labels: data.labels,
+              datasets: [
+                { label: 'ยอดแทง', data: data.bet_amounts, backgroundColor: 'rgba(94,158,214,.55)' },
+                { label: 'จ่ายรางวัล', data: data.win_amounts, backgroundColor: 'rgba(229,106,111,.55)' },
+                { label: 'กำไรสุทธิ (ทั้งสาย)', data: data.net, type: 'line', borderColor: '#e4bd5b', backgroundColor: 'transparent', tension: .3 },
+              ]
+            },
+            options: { responsive: true, scales: { x: { ticks: { color: '#8190a5' } }, y: { ticks: { color: '#8190a5' } } }, plugins: { legend: { labels: { color: '#dbe4ef' } } } }
+          });
+        });
+        </script>
+
+        {% elif view == 'reports_winners' %}
+        <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">WINNERS</span><h2 class="panel-title">รายการที่ถูกรางวัลทั้งสาย</h2></div><span class="partner-count-chip">{{ bets|length }} รายการ</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>เวลา</th><th>Agent</th><th>สมาชิก</th><th>ห้อง/งวด</th><th>เลข</th><th>ยอดแทง</th><th>ได้รับ</th></tr></thead><tbody>{% for bet in bets %}<tr><td>{{ bet.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ bet.user.partner.username if bet.user.partner else '-' }}</td><td>{{ bet.user.username }}</td><td>{{ bet.period.room.name if bet.period.room else '-' }}<small class="table-subtext">{{ bet.period.period_date }}</small></td><td class="text-strong">{{ bet.number }}</td><td>{{ "{:,.2f}".format(bet.amount) }}</td><td class="text-positive">{{ "{:,.2f}".format(bet.reward_amount) }}</td></tr>{% else %}<tr><td colspan="7" class="empty-state-text">ยังไม่มีรายการที่ถูกรางวัล</td></tr>{% endfor %}</tbody></table></div></article>
+
+        {% elif view == 'finance' %}
+        <div class="partner-content-grid">
+          <article class="panel partner-topup-panel"><div class="partner-panel-heading"><div><span class="eyebrow">COMMISSION PAYOUT</span><h2 class="panel-title">เบิกคอมมิชชัน</h2></div><i class="fas fa-money-bill-transfer partner-muted-icon"></i></div><p class="section-desc">ยอดคอมมิชชันสะสม {{ "{:,.2f}".format(senior.senior_profile.commission_balance) }} เครดิต · รอเบิก {{ "{:,.2f}".format(pending_payout) }}</p><form method="post" action="{{ url_for('senior_request_payout') }}" class="partner-topup-form"><select class="form-input" name="bank_account_id" required><option value="">เลือกบัญชีรับเงิน</option>{% for account in bank_accounts %}<option value="{{ account.id }}">{{ account.bank_name }} {{ account.account_number }} ({{ account.account_name }})</option>{% endfor %}</select><input class="form-input" type="number" name="amount" min="0.01" max="{{ [senior.senior_profile.commission_balance - pending_payout, 0]|max }}" step="0.01" placeholder="จำนวนที่ต้องการเบิก" required><input class="form-input" name="note" maxlength="255" placeholder="หมายเหตุ (ถ้ามี)"><button class="btn btn-success btn-block" type="submit" {% if not bank_accounts or senior.senior_profile.commission_balance <= pending_payout %}disabled{% endif %}>ส่งคำขอเบิกคอมมิชชัน</button></form></article>
+          <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">PAYOUT ACCOUNT</span><h2 class="panel-title">บัญชีรับคอมมิชชัน</h2></div></div><form method="post" action="{{ url_for('senior_add_bank_account') }}" class="partner-topup-form"><select class="form-input" name="bank_code" required><option value="">เลือกธนาคาร</option>{% for code, bank in bank_catalog.items() %}<option value="{{ code }}">{{ bank.name }}</option>{% endfor %}</select><input class="form-input" name="account_number" inputmode="numeric" placeholder="เลขที่บัญชี" required><input class="form-input" name="account_name" placeholder="ชื่อบัญชี" required><button class="btn btn-primary btn-block" type="submit">ผูกบัญชีธนาคาร</button></form></article>
+        </div>
+        <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">FINANCE HISTORY</span><h2 class="panel-title">ประวัติการเงินของ Senior</h2></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>รายการ</th><th>เปลี่ยนแปลง</th><th>คงเหลือ</th></tr></thead><tbody>{% for item in transactions %}<tr><td>{{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ item.wallet_type }}</td><td>{{ item.reason or '-' }}</td><td class="{{ 'text-positive' if item.change >= 0 else 'text-negative' }}">{{ '+' if item.change >= 0 else '' }}{{ "{:,.2f}".format(item.change) }}</td><td>{{ "{:,.2f}".format(item.balance_after) }}</td></tr>{% else %}<tr><td colspan="5" class="empty-state-text">ยังไม่มีประวัติการเงิน</td></tr>{% endfor %}</tbody></table></div></article>
+
+        {% elif view == 'login_history' %}
+        <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">SECURITY</span><h2 class="panel-title">ประวัติการเข้าสู่ระบบ</h2></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>วันที่</th><th>IP Address</th><th>Browser</th></tr></thead><tbody>{% for item in history %}<tr><td>{{ item.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</td><td>{{ item.ip_address or '-' }}</td><td class="table-subtext">{{ item.user_agent or '-' }}</td></tr>{% else %}<tr><td colspan="3" class="empty-state-text">ยังไม่มีประวัติการเข้าสู่ระบบ</td></tr>{% endfor %}</tbody></table></div></article>
+
+        {% elif view == 'stock' %}
+        <div class="partner-stat-grid"><div class="partner-stat-card accent-gold"><span>ยอดถือหุ้นสะสม</span><strong>{{ "{:,.2f}".format(stock_balance) }}</strong><small>บวก = กำไรจากการถือหุ้น, ลบ = ต้องจ่ายคืน</small></div></div>
+        <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">STOCK HOLDING</span><h2 class="panel-title">ตั้งค่า % ถือหุ้นต่อห้องหวย (ทั้งสาย)</h2></div></div><p class="section-desc">คำนวณจากยอดเดิมพันเดียวกับที่ Agent ถือหุ้นอยู่แล้ว แยกอิสระจากกัน ไม่หักลบกัน — ตั้ง 0% คือไม่ถือหุ้น (ค่าเริ่มต้น)</p><div class="table-wrap"><table class="data-table"><thead><tr><th>ห้องหวย</th><th>% ถือหุ้นปัจจุบัน</th><th>ตั้งค่าใหม่</th></tr></thead><tbody>{% for room in rooms %}{% set share = stock_shares.get(room.id) %}<tr><td><strong>{{ room.name }}</strong></td><td>{{ "%g"|format(share.hold_percent if share else 0) }}%</td><td><form method="post" action="{{ url_for('senior_stock') }}" class="partner-inline-rate-form"><input type="hidden" name="room_id" value="{{ room.id }}"><input class="form-input form-input-sm" type="number" name="hold_percent" min="0" max="100" step="0.01" value="{{ share.hold_percent if share else 0 }}" style="max-width:110px;"><button class="btn btn-primary btn-xs" type="submit">บันทึก</button></form></td></tr>{% else %}<tr><td colspan="3" class="empty-state-text">ยังไม่มีห้องหวย</td></tr>{% endfor %}</tbody></table></div></article>
+        {% endif %}
+      </main>
+{% endblock %}
