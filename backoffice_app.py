@@ -11,6 +11,7 @@ from models import (
     Announcement, SystemSetting,
 )
 from app import app as main_app
+from app import senior_agent_ids
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 SECRET_KEY = os.environ.get("SECRET_KEY") or "loyalty-app-session-secret-v1"
@@ -165,8 +166,8 @@ def dashboard():
     if not user.is_admin and not user.is_partner and not user.is_senior:
         return "Forbidden", 403
     if user.is_senior:
-        agents = User.query.filter_by(senior_id=user.id, role="partner").order_by(User.created_at.desc()).all()
-        agent_ids = [a.id for a in agents]
+        agent_ids = senior_agent_ids(user)
+        agents = User.query.filter(User.id.in_(agent_ids)).order_by(User.created_at.desc()).all() if agent_ids else []
         entries = SeniorCommissionLedger.query.filter_by(senior_id=user.id).order_by(
             SeniorCommissionLedger.created_at.desc()
         ).limit(8).all()

@@ -361,6 +361,32 @@ class PartnerRoomSetting(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SeniorAssistant(db.Model):
+    __tablename__ = "senior_assistants"
+    __table_args__ = (db.UniqueConstraint("senior_id", "assistant_user_id", name="uq_senior_assistant"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    assistant_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    permissions = db.Column(db.String(255), nullable=False, default="agents,bets,reports")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    senior = db.relationship("User", foreign_keys=[senior_id])
+    assistant = db.relationship("User", foreign_keys=[assistant_user_id])
+
+
+class SeniorPayoutRule(db.Model):
+    __tablename__ = "senior_payout_rules"
+    __table_args__ = (db.UniqueConstraint("senior_id", "bet_type", name="uq_senior_payout_rule"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    bet_type = db.Column(db.String(30), nullable=False)
+    payout_multiplier = db.Column(db.Float, nullable=False, default=1.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class SeniorMemberLimit(db.Model):
     __tablename__ = "senior_member_limits"
     __table_args__ = (db.UniqueConstraint("senior_id", "member_id", name="uq_senior_member_limit"),)

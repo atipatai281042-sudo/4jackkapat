@@ -31,12 +31,18 @@
         <span class="bo-nav-label">SENIOR CENTER</span>
         <a href="__BACKOFFICE_HOME__"><i class="fas fa-chart-pie"></i><span>ภาพรวม</span></a>
         <a href="{{ url_for('senior_agents') }}" class="{{ 'is-active' if request.endpoint == 'senior_agents' else '' }}"><i class="fas fa-users-gear"></i><span>Agent ในสาย</span></a>
+        <a href="{{ url_for('senior_assistants') }}" class="{{ 'is-active' if request.endpoint == 'senior_assistants' else '' }}"><i class="fas fa-user-shield"></i><span>ผู้ช่วย</span></a>
         <a href="{{ url_for('senior_members') }}" class="{{ 'is-active' if request.endpoint == 'senior_members' else '' }}"><i class="fas fa-users"></i><span>สมาชิกทั้งสาย</span></a>
+        <a href="{{ url_for('senior_online_members') }}" class="{{ 'is-active' if request.endpoint == 'senior_online_members' else '' }}"><i class="fas fa-signal"></i><span>สมาชิกออนไลน์</span></a>
         <a href="{{ url_for('senior_bets') }}" class="{{ 'is-active' if request.endpoint == 'senior_bets' else '' }}"><i class="fas fa-ticket"></i><span>รายการแทง</span></a>
+        <a href="{{ url_for('senior_bet_summary') }}" class="{{ 'is-active' if request.endpoint == 'senior_bet_summary' else '' }}"><i class="fas fa-calculator"></i><span>ยอดรวม/คาดได้เสีย</span></a>
+        <a href="{{ url_for('senior_bet_member_types') }}" class="{{ 'is-active' if request.endpoint == 'senior_bet_member_types' else '' }}"><i class="fas fa-table-cells"></i><span>สมาชิก/ประเภทเดิมพัน</span></a>
         <a href="{{ url_for('senior_pending_bets') }}" class="{{ 'is-active' if request.endpoint == 'senior_pending_bets' else '' }}"><i class="fas fa-hourglass-half"></i><span>รอผลเดิมพัน</span></a>
+        <a href="{{ url_for('senior_results') }}" class="{{ 'is-active' if request.endpoint == 'senior_results' else '' }}"><i class="fas fa-clipboard-list"></i><span>ผลการออกรางวัล</span></a>
         <a href="{{ url_for('senior_bet_acceptance_by_type') }}" class="{{ 'is-active' if request.endpoint == 'senior_bet_acceptance_by_type' else '' }}"><i class="fas fa-sliders"></i><span>ตั้งค่ารับของ</span></a>
-        <a href="{{ url_for('senior_settings') }}" class="{{ 'is-active' if request.endpoint == 'senior_settings' else '' }}"><i class="fas fa-toggle-on"></i><span>เปิด-ปิดห้องหวย</span></a>
+        <a href="{{ url_for('senior_settings') }}" class="{{ 'is-active' if request.endpoint == 'senior_settings' else '' }}"><i class="fas fa-toggle-on"></i><span>เปิด-ปิดห้อง/อัตราจ่าย</span></a>
         <a href="{{ url_for('senior_blocked_numbers') }}" class="{{ 'is-active' if request.endpoint == 'senior_blocked_numbers' else '' }}"><i class="fas fa-ban"></i><span>เลขอั้นทั้งสาย</span></a>
+        <a href="{{ url_for('senior_deposit') }}" class="{{ 'is-active' if request.endpoint == 'senior_deposit' else '' }}"><i class="fas fa-money-bill-transfer"></i><span>เติมเงิน</span></a>
         <a href="{{ url_for('senior_finance') }}" class="{{ 'is-active' if request.endpoint == 'senior_finance' else '' }}"><i class="fas fa-wallet"></i><span>ประวัติการเงิน</span></a>
         <a href="{{ url_for('senior_reports') }}" class="{{ 'is-active' if request.endpoint == 'senior_reports' else '' }}"><i class="fas fa-chart-line"></i><span>รายงานแพ้ชนะ</span></a>
         <a href="{{ url_for('senior_reports_chart') }}" class="{{ 'is-active' if request.endpoint == 'senior_reports_chart' else '' }}"><i class="fas fa-chart-column"></i><span>กราฟแพ้-ชนะ</span></a>
