@@ -60,9 +60,9 @@ body.bo-body {
 .bo-nav a:hover, .bo-nav a.is-active { background: #1a2a3d; color: #fff; }
 .bo-nav i { width: 16px; color: #e4bd5b; text-align: center; flex: none; }
 
-.bo-logout { display: flex; align-items: center; gap: 9px; margin-top: auto; padding-top: 13px; border-top: 1px solid #ffffff12; color: #aeb9c9; text-decoration: none; font-size: 12px; }
-.bo-logout:hover { color: #fff; }
-.bo-logout i { width: 16px; color: #e4bd5b; text-align: center; }
+.bo-logout { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 7px; margin-top: 8px; border-top: 1px solid #ffffff12; color: #ff6b6b; text-decoration: none; font-size: 12px; font-weight: 600; }
+.bo-logout:hover { color: #ff9b9b; background: rgba(255,107,107,.08); }
+.bo-logout i { width: 16px; color: #ff6b6b; text-align: center; }
 
 .bo-shell.is-collapsed .bo-brand strong, .bo-shell.is-collapsed .bo-brand small,
 .bo-shell.is-collapsed .bo-profile, .bo-shell.is-collapsed .bo-nav-label,

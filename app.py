@@ -1742,7 +1742,52 @@ def admin_partners():
         return redirect(url_for("admin_partners"))
 
     partners = User.query.filter_by(role="partner").order_by(User.created_at.desc()).all()
-    return render_template("admin_partners.html", partners=partners)
+    partner_bank_accounts = {
+        partner.id: UserBankAccount.query.filter_by(user_id=partner.id).order_by(UserBankAccount.created_at.asc()).all()
+        for partner in partners
+    }
+    return render_template("admin_partners.html", partners=partners,
+                           partner_bank_accounts=partner_bank_accounts, bank_catalog=get_bank_catalog())
+
+
+@app.route("/admin/partners/<int:user_id>/bank-account", methods=["POST"])
+@admin_required
+def admin_add_partner_bank_account(user_id):
+    partner = db.session.get(User, user_id)
+    if not partner or not partner.is_partner:
+        abort(404)
+    bank_code = request.form.get("bank_code", "").strip()
+    account_number = request.form.get("account_number", "").strip()
+    account_name = request.form.get("account_name", "").strip()
+    bank = get_bank_catalog().get(bank_code)
+    if not bank or not account_number or not account_name:
+        flash("กรุณากรอกข้อมูลบัญชีธนาคารให้ครบถ้วน", "error")
+    elif UserBankAccount.query.filter_by(user_id=partner.id, bank_code=bank_code,
+                                          account_number=account_number).first():
+        flash("มีบัญชีธนาคารนี้อยู่แล้ว", "error")
+    else:
+        db.session.add(UserBankAccount(
+            user_id=partner.id, bank_code=bank_code, bank_name=bank["name"],
+            account_number=account_number, account_name=account_name,
+            logo_url=bank.get("logo", ""),
+        ))
+        audit_admin(current_user(), "add_partner_bank_account", "user", partner.id,
+                    f"{bank['name']} {account_number}")
+        db.session.commit()
+        flash(f"เพิ่มบัญชีธนาคารให้ {partner.username} แล้ว", "success")
+    return redirect(url_for("admin_partners"))
+
+
+@app.route("/admin/partners/<int:user_id>/bank-account/<int:account_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_partner_bank_account(user_id, account_id):
+    account = db.session.get(UserBankAccount, account_id)
+    if account and account.user_id == user_id:
+        db.session.delete(account)
+        audit_admin(current_user(), "delete_partner_bank_account", "user", user_id, str(account_id))
+        db.session.commit()
+        flash("ลบบัญชีธนาคารแล้ว", "success")
+    return redirect(url_for("admin_partners"))
 
 
 @app.route("/admin/reports")

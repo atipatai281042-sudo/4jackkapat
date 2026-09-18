@@ -44,12 +44,12 @@
       <a href="{{ main_app_url }}/partner/stock"><i class="fas fa-chart-pie"></i><span>% ถือหุ้น</span></a>
       <a href="{{ main_app_url }}/partner/blocked"><i class="fas fa-ban"></i><span>เลขอั้นในสาย</span></a>
       <a href="{{ main_app_url }}/partner/login-history"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
+      <a class="bo-logout" href="{{ url_for('logout') }}"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
     </nav>
     <div class="bo-profile">
       <span>รหัสแนะนำ</span>
       <strong>{{ profile.invite_code }}</strong>
     </div>
-    <a class="bo-logout" href="{{ url_for('logout') }}"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
   </aside>
   <main class="bo-main">
     <header class="bo-topbar">

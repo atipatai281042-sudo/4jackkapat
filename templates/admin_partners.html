@@ -24,10 +24,35 @@
 
       <article class="panel">
         <h2 class="panel-title">Partner ในระบบ</h2>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>ผู้ใช้</th><th>รหัสแนะนำ</th><th>สมาชิก</th><th>คอมสะสม</th><th>ถือหุ้นสะสม</th><th>ตั้งค่า</th><th>จ่ายคอม</th></tr></thead><tbody>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>ผู้ใช้</th><th>รหัสแนะนำ</th><th>สมาชิก</th><th>คอมสะสม</th><th>ถือหุ้นสะสม</th><th>บัญชีธนาคาร</th><th>ตั้งค่า</th><th>จ่ายคอม</th></tr></thead><tbody>
         {% for partner in partners %}
-        <tr><td><strong>{{ partner.full_name }}</strong><small class="table-subtext">{{ partner.username }}</small></td><td><code class="code-chip">{{ partner.partner_profile.invite_code }}</code></td><td>{{ partner.referred_members|length }}</td><td>{{ "{:,.2f}".format(partner.partner_profile.commission_balance) }}</td><td class="{{ 'text-positive' if partner.partner_profile.stock_balance >= 0 else 'text-negative' }}">{{ "{:,.2f}".format(partner.partner_profile.stock_balance) }}</td><td><form method="post" action="{{ url_for('admin_update_partner', user_id=partner.id) }}" class="partner-inline-form"><input class="form-input form-input-sm" type="number" name="commission_rate" value="{{ partner.partner_profile.commission_rate }}" min="0" max="100" step="0.01"><select class="form-input form-input-sm" name="status"><option value="active" {% if partner.partner_profile.status == 'active' %}selected{% endif %}>ใช้งาน</option><option value="suspended" {% if partner.partner_profile.status == 'suspended' %}selected{% endif %}>พักใช้งาน</option></select><button class="btn btn-ghost btn-xs" type="submit">บันทึก</button></form></td><td><form method="post" action="{{ url_for('admin_partner_payout', user_id=partner.id) }}" onsubmit="return confirm('ยืนยันบันทึกการจ่ายคอมมิชชัน?');"><button class="btn btn-success btn-xs" type="submit">จ่ายแล้ว</button></form></td></tr>
-        {% else %}<tr><td colspan="6" class="empty-state-text">ยังไม่มี Partner</td></tr>{% endfor %}
+        <tr><td><strong>{{ partner.full_name }}</strong><small class="table-subtext">{{ partner.username }}</small></td><td><code class="code-chip">{{ partner.partner_profile.invite_code }}</code></td><td>{{ partner.referred_members|length }}</td><td>{{ "{:,.2f}".format(partner.partner_profile.commission_balance) }}</td><td class="{{ 'text-positive' if partner.partner_profile.stock_balance >= 0 else 'text-negative' }}">{{ "{:,.2f}".format(partner.partner_profile.stock_balance) }}</td>
+          <td style="min-width:220px;">
+            {% for account in partner_bank_accounts.get(partner.id, []) %}
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:12px;">
+                <span>{{ account.bank_name }} {{ account.account_number }}<small class="table-subtext">({{ account.account_name }})</small></span>
+                <form method="post" action="{{ url_for('admin_delete_partner_bank_account', user_id=partner.id, account_id=account.id) }}" onsubmit="return confirm('ยืนยันลบบัญชีนี้?');">
+                  <button class="btn btn-ghost btn-xs" type="submit" title="ลบ"><i class="fas fa-times"></i></button>
+                </form>
+              </div>
+            {% else %}
+              <small class="empty-state-text">ยังไม่มีบัญชี</small>
+            {% endfor %}
+            <details>
+              <summary class="btn btn-ghost btn-xs" style="cursor:pointer;display:inline-block;margin-top:2px;">+ เพิ่มบัญชี</summary>
+              <form method="post" action="{{ url_for('admin_add_partner_bank_account', user_id=partner.id) }}" style="display:grid;gap:4px;margin-top:6px;min-width:180px;">
+                <select class="form-input form-input-sm" name="bank_code" required>
+                  <option value="">เลือกธนาคาร</option>
+                  {% for code, bank in bank_catalog.items() %}<option value="{{ code }}">{{ bank.name }}</option>{% endfor %}
+                </select>
+                <input class="form-input form-input-sm" name="account_number" inputmode="numeric" placeholder="เลขที่บัญชี" required>
+                <input class="form-input form-input-sm" name="account_name" placeholder="ชื่อบัญชี" required>
+                <button class="btn btn-primary btn-xs" type="submit">บันทึก</button>
+              </form>
+            </details>
+          </td>
+          <td><form method="post" action="{{ url_for('admin_update_partner', user_id=partner.id) }}" class="partner-inline-form"><input class="form-input form-input-sm" type="number" name="commission_rate" value="{{ partner.partner_profile.commission_rate }}" min="0" max="100" step="0.01"><select class="form-input form-input-sm" name="status"><option value="active" {% if partner.partner_profile.status == 'active' %}selected{% endif %}>ใช้งาน</option><option value="suspended" {% if partner.partner_profile.status == 'suspended' %}selected{% endif %}>พักใช้งาน</option></select><button class="btn btn-ghost btn-xs" type="submit">บันทึก</button></form></td><td><form method="post" action="{{ url_for('admin_partner_payout', user_id=partner.id) }}" onsubmit="return confirm('ยืนยันบันทึกการจ่ายคอมมิชชัน?');"><button class="btn btn-success btn-xs" type="submit">จ่ายแล้ว</button></form></td></tr>
+        {% else %}<tr><td colspan="7" class="empty-state-text">ยังไม่มี Partner</td></tr>{% endfor %}
         </tbody></table></div>
       </article>
     </div>
