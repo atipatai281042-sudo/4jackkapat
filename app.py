@@ -2538,7 +2538,7 @@ def partner_stock():
     shares = {item.room_id: item for item in PartnerStockShare.query.filter_by(partner_id=partner.id).all()}
     return render_template("partner_manage.html", view="stock", partner=partner,
                            rooms=rooms, stock_shares=shares,
-                           stock_balance=partner.partner_profile.stock_balance)
+                           stock_balance=partner.partner_profile.stock_balance if partner.partner_profile else 0.0)
 
 
 @app.route("/partner/blocked", methods=["GET", "POST"])
