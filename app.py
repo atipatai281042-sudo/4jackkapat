@@ -28,10 +28,11 @@ from models import (
     HeroBanner, MediaImage, LotteryRoom, BlockedNumber,
     LotteryPayoutRule, ThaiLotteryPeriod, ThaiLotteryBet,
     PartnerProfile, PartnerAssistant, PartnerMemberLimit, PartnerRoomSetting, PartnerPayoutRule,
-    PartnerAcceptanceLimit, PartnerAcceptanceNumber,
+    PartnerAcceptanceLimit, PartnerAcceptanceNumber, PartnerStockShare, PartnerStockLedger,
     PartnerBlockedNumber, PartnerPresence, CommissionLedger, VipTier,
     WalletTransaction, Notification, AdminAuditLog, ResponsiblePlayProfile,
-    SystemSetting, DepositRequest, WithdrawalRequest, UserBankAccount, LotteryCategory
+    SystemSetting, DepositRequest, WithdrawalRequest, UserBankAccount, LotteryCategory,
+    LoginHistory, Announcement
 )
 
 # ==========================================================
@@ -376,6 +377,7 @@ def settle_lottery_period(period, admin_user):
             or (bet.bet_type == "3back" and bet.number in result_3back)
         )
         bet.status = "win" if is_win else "lose"
+        apply_partner_stock_holding(bet, is_win)
         if is_win:
             adjust_credit(
                 bet.user, bet.reward_amount,
@@ -521,6 +523,35 @@ def create_partner_commission(bet):
     )
     db.session.add(entry)
     return entry
+
+
+def apply_partner_stock_holding(bet, is_win):
+    """บันทึกกำไร/ขาดทุนของ Partner ที่เลือก "ถือหุ้น" บางส่วนของห้องนี้ไว้เอง
+    แยกจากคอมมิชชันโดยสิ้นเชิง — ถ้าไม่ได้ตั้งค่า % ถือหุ้นไว้ จะไม่มีผลใดๆ"""
+    member = bet.user
+    partner = member.partner
+    if not partner or not partner.partner_profile or partner.partner_profile.status != "active":
+        return
+    room_id = bet.period.room_id if bet.period else None
+    if not room_id:
+        return
+    share = PartnerStockShare.query.filter_by(partner_id=partner.id, room_id=room_id).first()
+    if not share or share.hold_percent <= 0:
+        return
+    house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
+    pnl = round(house_pnl * share.hold_percent / 100, 2)
+    if pnl == 0:
+        return
+    partner.partner_profile.stock_balance = round(partner.partner_profile.stock_balance + pnl, 2)
+    record_wallet_transaction(
+        partner, "stock", pnl, partner.partner_profile.stock_balance,
+        f"ถือหุ้น {share.hold_percent:g}% โพย {bet.number} ({bet.bet_type})",
+        reference_type="bet", reference_id=bet.id,
+    )
+    db.session.add(PartnerStockLedger(
+        partner_id=partner.id, member_id=member.id, bet_id=bet.id, room_id=room_id,
+        hold_percent=share.hold_percent, stake_amount=bet.amount, pnl_amount=pnl,
+    ))
 
 
 def record_wallet_transaction(user, wallet_type, change, balance_after, reason,
@@ -1202,6 +1233,12 @@ def login():
                 return render_template("login.html")
             session["user_id"] = user.id
             session.permanent = True
+            db.session.add(LoginHistory(
+                user_id=user.id,
+                ip_address=request.headers.get("X-Forwarded-For", request.remote_addr or ""),
+                user_agent=request.headers.get("User-Agent", "")[:255],
+            ))
+            db.session.commit()
             flash(f"ยินดีต้อนรับ {user.username}", "success")
             if user.is_admin or user.is_partner:
                 return redirect(f"{app.config['BACKOFFICE_URL']}/dashboard")
@@ -2322,6 +2359,66 @@ def partner_reports():
                            bets=bets, summary=summary)
 
 
+@app.route("/partner/reports/chart")
+@partner_required
+def partner_reports_chart():
+    partner = partner_owner(current_user())
+    return render_template("partner_manage.html", view="reports_chart", partner=partner)
+
+
+@app.route("/partner/reports/chart-data")
+@partner_required
+def partner_reports_chart_data():
+    partner = partner_owner(current_user())
+    since = app_now() - timedelta(days=13)
+    bets = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).filter(
+        User.partner_id == partner.id, ThaiLotteryBet.created_at >= since
+    ).all()
+    days = [(since + timedelta(days=i)).date() for i in range(14)]
+    bet_by_day = {d.isoformat(): 0.0 for d in days}
+    win_by_day = {d.isoformat(): 0.0 for d in days}
+    for bet in bets:
+        key = bet.created_at.date().isoformat()
+        if key not in bet_by_day:
+            continue
+        bet_by_day[key] += float(bet.amount)
+        if bet.status == "win":
+            win_by_day[key] += float(bet.reward_amount)
+    labels = list(bet_by_day.keys())
+    return jsonify({
+        "labels": labels,
+        "bet_amounts": [round(bet_by_day[d], 2) for d in labels],
+        "win_amounts": [round(win_by_day[d], 2) for d in labels],
+        "net": [round(bet_by_day[d] - win_by_day[d], 2) for d in labels],
+    })
+
+
+@app.route("/partner/reports/winners")
+@partner_required
+def partner_reports_winners():
+    partner = partner_owner(current_user())
+    bets = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).filter(
+        User.partner_id == partner.id, ThaiLotteryBet.status == "win"
+    ).order_by(ThaiLotteryBet.created_at.desc()).limit(200).all()
+    return render_template("partner_manage.html", view="reports_winners", partner=partner, bets=bets)
+
+
+@app.route("/partner/results")
+@partner_required
+def partner_results():
+    partner = partner_owner(current_user())
+    rooms = active_lottery_rooms().all()
+    latest_periods = {}
+    grouped_results = {}
+    for room in rooms:
+        period = ThaiLotteryPeriod.query.filter_by(room_id=room.id).order_by(ThaiLotteryPeriod.id.desc()).first()
+        latest_periods[room.id] = period
+        category_name = room.category_ref.name if room.category_ref else (room.category or "อื่นๆ")
+        grouped_results.setdefault(category_name, []).append(room)
+    return render_template("partner_manage.html", view="results", partner=partner,
+                           grouped_results=grouped_results, latest_periods=latest_periods)
+
+
 @app.route("/partner/online")
 @partner_required
 def partner_online_members():
@@ -2332,6 +2429,43 @@ def partner_online_members():
     ).order_by(PartnerPresence.last_seen_at.desc()).all()
     return render_template("partner_manage.html", view="online", partner=partner,
                            online_members=[item.member for item in presence])
+
+
+@app.route("/partner/deposit", methods=["GET", "POST"])
+@partner_required
+def partner_deposit():
+    partner = partner_owner(current_user())
+    if request.method == "POST":
+        try:
+            amount = float(request.form.get("amount", 0))
+        except (TypeError, ValueError):
+            amount = 0
+        note = request.form.get("note", "").strip()
+        reference = request.form.get("reference", "").strip()
+        if amount <= 0:
+            flash("กรุณากรอกจำนวนเงินให้ถูกต้อง", "error")
+        else:
+            db.session.add(DepositRequest(
+                user_id=partner.id, amount=amount, method="partner_topup",
+                reference=reference, note=note,
+            ))
+            db.session.commit()
+            flash("ส่งคำขอเติมเงินแล้ว รอแอดมินตรวจสอบ", "success")
+        return redirect(url_for("partner_deposit"))
+
+    requests_history = DepositRequest.query.filter_by(user_id=partner.id).order_by(
+        DepositRequest.created_at.desc()
+    ).limit(50).all()
+    return render_template("partner_manage.html", view="deposit", partner=partner,
+                           deposit_requests=requests_history)
+
+
+@app.route("/partner/login-history")
+@partner_required
+def partner_login_history():
+    partner = partner_owner(current_user())
+    history = LoginHistory.query.filter_by(user_id=partner.id).order_by(LoginHistory.created_at.desc()).limit(100).all()
+    return render_template("partner_manage.html", view="login_history", partner=partner, history=history)
 
 
 @app.route("/partner/settings", methods=["GET", "POST"])
@@ -2375,6 +2509,36 @@ def partner_settings():
     return render_template("partner_manage.html", view="settings", partner=partner,
                            rooms=rooms, room_settings=settings, rates=get_lottery_rates(),
                            partner_rates=get_partner_payout_rates(partner))
+
+
+@app.route("/partner/stock", methods=["GET", "POST"])
+@partner_required
+def partner_stock():
+    partner = partner_owner(current_user())
+    if request.method == "POST":
+        room_id = request.form.get("room_id", type=int)
+        room = db.session.get(LotteryRoom, room_id) if room_id else None
+        if not room:
+            abort(404)
+        try:
+            hold_percent = float(request.form.get("hold_percent", 0))
+        except (TypeError, ValueError):
+            hold_percent = 0
+        hold_percent = max(0.0, min(100.0, hold_percent))
+        share = PartnerStockShare.query.filter_by(partner_id=partner.id, room_id=room.id).first()
+        if share is None:
+            share = PartnerStockShare(partner_id=partner.id, room_id=room.id)
+            db.session.add(share)
+        share.hold_percent = hold_percent
+        db.session.commit()
+        flash(f"ตั้งค่าถือหุ้นห้อง {room.name} เป็น {hold_percent:g}% แล้ว", "success")
+        return redirect(url_for("partner_stock"))
+
+    rooms = active_lottery_rooms().all()
+    shares = {item.room_id: item for item in PartnerStockShare.query.filter_by(partner_id=partner.id).all()}
+    return render_template("partner_manage.html", view="stock", partner=partner,
+                           rooms=rooms, stock_shares=shares,
+                           stock_balance=partner.partner_profile.stock_balance)
 
 
 @app.route("/partner/blocked", methods=["GET", "POST"])
@@ -3186,6 +3350,44 @@ def admin_delete_banner(banner_id):
     return redirect(url_for("admin"))
 
 
+@app.route("/admin/announcements", methods=["GET", "POST"])
+@admin_required
+def admin_announcements():
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        if not title:
+            flash("กรุณากรอกหัวข้อประกาศ", "error")
+        else:
+            db.session.add(Announcement(title=title, body=body, is_active=True))
+            db.session.commit()
+            flash("เพิ่มประกาศสำเร็จ", "success")
+        return redirect(url_for("admin_announcements"))
+    announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
+    return render_template("admin_announcements.html", announcements=announcements)
+
+
+@app.route("/admin/announcements/<int:announcement_id>/toggle", methods=["POST"])
+@admin_required
+def admin_toggle_announcement(announcement_id):
+    item = db.session.get(Announcement, announcement_id)
+    if item:
+        item.is_active = not item.is_active
+        db.session.commit()
+    return redirect(url_for("admin_announcements"))
+
+
+@app.route("/admin/announcements/<int:announcement_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_announcement(announcement_id):
+    item = db.session.get(Announcement, announcement_id)
+    if item:
+        db.session.delete(item)
+        db.session.commit()
+        flash("ลบประกาศเรียบร้อย", "success")
+    return redirect(url_for("admin_announcements"))
+
+
 @app.route("/admin/uploaded-banners/<filename>/delete", methods=["POST"])
 @admin_required
 def admin_delete_uploaded_banner(filename):
@@ -3395,6 +3597,11 @@ def seed_data():
         if "ticket_code" not in bet_columns:
             db.session.execute(text("ALTER TABLE thai_lottery_bets ADD COLUMN ticket_code VARCHAR(40)"))
             db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_thai_lottery_bets_ticket_code ON thai_lottery_bets (ticket_code)"))
+            db.session.commit()
+
+        partner_profile_columns = [col["name"] for col in inspect(db.engine).get_columns("partner_profiles")]
+        if "stock_balance" not in partner_profile_columns:
+            db.session.execute(text("ALTER TABLE partner_profiles ADD COLUMN stock_balance FLOAT NOT NULL DEFAULT 0.0"))
             db.session.commit()
 
         for user in User.query.all():

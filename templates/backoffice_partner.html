@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/backoffice.css') }}">
 </head>
 <body class="bo-body">
+{% if admin_contact_url %}<a class="bo-floating-chat" href="{{ admin_contact_url }}" target="_blank" rel="noopener" aria-label="ติดต่อทีมงาน"><i class="fab fa-line"></i></a>{% endif %}
 <div class="bo-shell" id="bo-shell">
   <aside class="bo-side">
     <div class="bo-side-top">
@@ -32,11 +33,17 @@
       <a href="{{ main_app_url }}/partner/bets/acceptance-by-type"><i class="fas fa-sliders"></i><span>ตั้งค่ารับของ</span></a>
       <a href="{{ main_app_url }}/partner/members"><i class="fas fa-users"></i><span>จัดการสมาชิก</span></a>
       <a href="{{ main_app_url }}/partner/assistants"><i class="fas fa-user-shield"></i><span>ผู้ช่วย</span></a>
+      <a href="{{ main_app_url }}/partner/deposit"><i class="fas fa-money-bill-transfer"></i><span>เติมเงิน</span></a>
       <a href="{{ main_app_url }}/partner/finance"><i class="fas fa-wallet"></i><span>ประวัติการเงิน</span></a>
       <a href="{{ main_app_url }}/partner/reports"><i class="fas fa-chart-line"></i><span>รายงานแพ้ชนะ</span></a>
+      <a href="{{ main_app_url }}/partner/reports/chart"><i class="fas fa-chart-column"></i><span>กราฟแพ้-ชนะ</span></a>
+      <a href="{{ main_app_url }}/partner/reports/winners"><i class="fas fa-trophy"></i><span>รายการที่ถูกรางวัล</span></a>
+      <a href="{{ main_app_url }}/partner/results"><i class="fas fa-square-poll-vertical"></i><span>ผลการออกรางวัล</span></a>
       <a href="{{ main_app_url }}/partner/online"><i class="fas fa-circle"></i><span>สมาชิกออนไลน์</span></a>
       <a href="{{ main_app_url }}/partner/settings"><i class="fas fa-sliders"></i><span>อัตราจ่าย/กลุ่มหวย</span></a>
+      <a href="{{ main_app_url }}/partner/stock"><i class="fas fa-chart-pie"></i><span>% ถือหุ้น</span></a>
       <a href="{{ main_app_url }}/partner/blocked"><i class="fas fa-ban"></i><span>เลขอั้นในสาย</span></a>
+      <a href="{{ main_app_url }}/partner/login-history"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
     </nav>
     <div class="bo-profile">
       <span>รหัสแนะนำ</span>
@@ -54,6 +61,15 @@
       <article class="bo-statcard"><span><i class="fas fa-wallet"></i> เครดิตสำหรับเติม</span><strong>{{ "{:,.2f}".format(partner.credit_balance) }}</strong><small>ยอดคงเหลือ</small></article>
       <article class="bo-statcard"><span><i class="fas fa-percent"></i> อัตราคอมมิชชัน</span><strong>{{ "{:,.2f}".format(profile.commission_rate) }}%</strong><small>อัตราปัจจุบัน</small></article>
       <article class="bo-statcard"><span><i class="fas fa-circle"></i> สมาชิกออนไลน์</span><strong>{{ online_count }}</strong><small>ใน 10 นาทีล่าสุด</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-chart-pie"></i> ถือหุ้น</span><strong>{{ "{:,.2f}".format(profile.stock_balance) }}</strong><small>บวก=กำไร ลบ=ต้องจ่ายคืน</small></article>
+    </section>
+    <section class="bo-panel" style="margin-bottom:17px;">
+      <div class="bo-panel-head"><div><span class="bo-panel-label">ANNOUNCEMENT</span><h2>ข้อความประกาศ</h2></div><i class="fas fa-bullhorn"></i></div>
+      {% for item in announcements %}
+      <div class="bo-list-row"><span class="bo-list-row-icon"><i class="fas fa-bullhorn"></i></span><div><strong>{{ item.title }}</strong><small>{{ item.body }} · {{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</small></div></div>
+      {% else %}
+      <small>ยังไม่มีประกาศ</small>
+      {% endfor %}
     </section>
     <section class="bo-grid">
       <article class="bo-panel" id="reports">

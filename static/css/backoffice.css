@@ -39,6 +39,15 @@ body.bo-body {
 .bo-brand small { display: block; font-size: 8px; letter-spacing: .16em; color: #a58c55; white-space: nowrap; }
 .bo-collapse-btn { width: 26px; height: 26px; flex: none; border: 1px solid #ffffff1c; border-radius: 6px; background: #151d28; color: #e4bd5b; cursor: pointer; }
 .bo-mobile-logout { display: none; }
+.bo-floating-chat {
+  position: fixed; right: 20px; bottom: 20px; z-index: 50;
+  width: 52px; height: 52px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, #ead39d, #a98236);
+  color: #17130c; font-size: 22px; box-shadow: 0 10px 24px rgba(0,0,0,.4);
+  text-decoration: none; transition: transform .15s ease;
+}
+.bo-floating-chat:hover { transform: scale(1.08); color: #17130c; }
 
 .bo-profile { display: grid; gap: 3px; padding: 12px; border: 1px solid #ffffff12; border-radius: 10px; background: #151d28; }
 .bo-profile span { font-size: 10px; color: #8190a5; letter-spacing: .08em; }
@@ -71,7 +80,7 @@ body.bo-body {
 
 /* Small chrome-only widgets (dashboard landing page). Namespaced to avoid
    colliding with Bootstrap's/style.css's own `.card`/`.row` etc. */
-.bo-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; margin-bottom: 17px; }
+.bo-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 11px; margin-bottom: 17px; }
 .bo-statcard { padding: 14px; border: 1px solid #ffffff12; border-radius: 10px; background: #151d28; }
 .bo-statcard span { display: block; color: #99a7b9; font-size: 11px; }
 .bo-statcard span i { margin-right: 6px; color: #e4bd5b; }

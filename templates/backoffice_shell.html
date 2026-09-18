@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/backoffice.css') }}" />
 </head>
 <body class="bo-body">
+  {% if admin_contact_url %}<a class="bo-floating-chat" href="{{ admin_contact_url }}" target="_blank" rel="noopener" aria-label="ติดต่อทีมงาน"><i class="fab fa-line"></i></a>{% endif %}
   <div class="bo-shell" id="bo-shell">
     <aside class="bo-side">
       <div class="bo-side-top">
@@ -50,6 +51,7 @@
         <a href="{{ url_for('admin_contact') }}" class="{{ 'is-active' if request.endpoint == 'admin_contact' else '' }}"><i class="fas fa-headset"></i><span>ติดต่อเรา</span></a>
         <a href="{{ url_for('admin_deposit_account') }}" class="{{ 'is-active' if request.endpoint == 'admin_deposit_account' else '' }}"><i class="fas fa-building-columns"></i><span>บัญชีรับฝาก</span></a>
         <a href="{{ url_for('admin_branding') }}" class="{{ 'is-active' if request.endpoint == 'admin_branding' else '' }}"><i class="fas fa-palette"></i><span>แบรนด์</span></a>
+        <a href="{{ url_for('admin_announcements') }}" class="{{ 'is-active' if request.endpoint == 'admin_announcements' else '' }}"><i class="fas fa-bullhorn"></i><span>ประกาศถึง Partner</span></a>
       </nav>
       <a class="bo-logout" href="__BACKOFFICE_LOGOUT__"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
     </aside>

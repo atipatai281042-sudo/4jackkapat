@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/backoffice.css') }}" />
 </head>
 <body class="bo-body">
+  {% if admin_contact_url %}<a class="bo-floating-chat" href="{{ admin_contact_url }}" target="_blank" rel="noopener" aria-label="ติดต่อทีมงาน"><i class="fab fa-line"></i></a>{% endif %}
   <div class="bo-shell" id="bo-shell">
     <aside class="bo-side">
       <div class="bo-side-top">
@@ -34,11 +35,17 @@
         <a href="{{ url_for('partner_bet_acceptance_by_type') }}" class="{{ 'is-active' if request.endpoint == 'partner_bet_acceptance_by_type' else '' }}"><i class="fas fa-sliders"></i><span>ตั้งค่ารับของ</span></a>
         <a href="{{ url_for('partner_members') }}" class="{{ 'is-active' if request.endpoint == 'partner_members' else '' }}"><i class="fas fa-users"></i><span>จัดการสมาชิก</span></a>
         {% if partner.id == current_user.id %}<a href="{{ url_for('partner_assistants') }}" class="{{ 'is-active' if request.endpoint == 'partner_assistants' else '' }}"><i class="fas fa-user-shield"></i><span>ผู้ช่วย</span></a>{% endif %}
+        <a href="{{ url_for('partner_deposit') }}" class="{{ 'is-active' if request.endpoint == 'partner_deposit' else '' }}"><i class="fas fa-money-bill-transfer"></i><span>เติมเงิน</span></a>
         <a href="{{ url_for('partner_finance') }}" class="{{ 'is-active' if request.endpoint == 'partner_finance' else '' }}"><i class="fas fa-wallet"></i><span>ประวัติการเงิน</span></a>
         <a href="{{ url_for('partner_reports') }}" class="{{ 'is-active' if request.endpoint == 'partner_reports' else '' }}"><i class="fas fa-chart-line"></i><span>รายงานแพ้ชนะ</span></a>
+        <a href="{{ url_for('partner_reports_chart') }}" class="{{ 'is-active' if request.endpoint == 'partner_reports_chart' else '' }}"><i class="fas fa-chart-column"></i><span>กราฟแพ้-ชนะ</span></a>
+        <a href="{{ url_for('partner_reports_winners') }}" class="{{ 'is-active' if request.endpoint == 'partner_reports_winners' else '' }}"><i class="fas fa-trophy"></i><span>รายการที่ถูกรางวัล</span></a>
+        <a href="{{ url_for('partner_results') }}" class="{{ 'is-active' if request.endpoint == 'partner_results' else '' }}"><i class="fas fa-square-poll-vertical"></i><span>ผลการออกรางวัล</span></a>
         <a href="{{ url_for('partner_online_members') }}" class="{{ 'is-active' if request.endpoint == 'partner_online_members' else '' }}"><i class="fas fa-circle"></i><span>สมาชิกออนไลน์</span></a>
         <a href="{{ url_for('partner_settings') }}" class="{{ 'is-active' if request.endpoint == 'partner_settings' else '' }}"><i class="fas fa-sliders"></i><span>อัตราจ่าย/กลุ่มหวย</span></a>
+        <a href="{{ url_for('partner_stock') }}" class="{{ 'is-active' if request.endpoint == 'partner_stock' else '' }}"><i class="fas fa-chart-pie"></i><span>% ถือหุ้น</span></a>
         <a href="{{ url_for('partner_blocked_numbers') }}" class="{{ 'is-active' if request.endpoint == 'partner_blocked_numbers' else '' }}"><i class="fas fa-ban"></i><span>เลขอั้นในสาย</span></a>
+        <a href="{{ url_for('partner_login_history') }}" class="{{ 'is-active' if request.endpoint == 'partner_login_history' else '' }}"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
       </nav>
       <div class="bo-profile">
         <span>รหัสแนะนำ</span>

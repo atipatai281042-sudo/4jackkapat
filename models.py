@@ -174,6 +174,28 @@ class Notification(db.Model):
     user = db.relationship("User", backref="notifications")
 
 
+class LoginHistory(db.Model):
+    __tablename__ = "login_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    ip_address = db.Column(db.String(64), default="")
+    user_agent = db.Column(db.String(255), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", backref="login_history")
+
+
+class Announcement(db.Model):
+    __tablename__ = "announcements"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    body = db.Column(db.Text, default="")
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class AdminAuditLog(db.Model):
     __tablename__ = "admin_audit_logs"
 
@@ -268,6 +290,7 @@ class PartnerProfile(db.Model):
     commission_rate = db.Column(db.Float, nullable=False, default=3.0)
     status = db.Column(db.String(20), nullable=False, default="active")
     commission_balance = db.Column(db.Float, nullable=False, default=0.0)
+    stock_balance = db.Column(db.Float, nullable=False, default=0.0)
     notes = db.Column(db.String(255), default="")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -309,6 +332,36 @@ class PartnerRoomSetting(db.Model):
     room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
     is_enabled = db.Column(db.Boolean, nullable=False, default=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PartnerStockShare(db.Model):
+    __tablename__ = "partner_stock_shares"
+    __table_args__ = (db.UniqueConstraint("partner_id", "room_id", name="uq_partner_stock_share"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
+    hold_percent = db.Column(db.Float, nullable=False, default=0.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    room = db.relationship("LotteryRoom")
+
+
+class PartnerStockLedger(db.Model):
+    __tablename__ = "partner_stock_ledger"
+
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    bet_id = db.Column(db.Integer, db.ForeignKey("thai_lottery_bets.id"), nullable=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=True)
+    hold_percent = db.Column(db.Float, nullable=False, default=0.0)
+    stake_amount = db.Column(db.Float, nullable=False, default=0.0)
+    pnl_amount = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    partner = db.relationship("User", foreign_keys=[partner_id])
+    member = db.relationship("User", foreign_keys=[member_id])
 
 
 class PartnerPayoutRule(db.Model):

@@ -7,7 +7,8 @@ from werkzeug.security import check_password_hash
 
 from models import (
     db, User, HeroBanner, LotteryRoom, DepositRequest, WithdrawalRequest,
-    CommissionLedger, PartnerPresence, ThaiLotteryBet, WalletTransaction,
+    CommissionLedger, PartnerPresence, ThaiLotteryBet, WalletTransaction, LoginHistory,
+    Announcement, SystemSetting,
 )
 from app import app as main_app
 
@@ -48,7 +49,12 @@ def logged_user():
 @backoffice_app.context_processor
 def inject_backoffice_globals():
     main_app_url = request.script_root.rstrip("/") + "/main"
-    return {"current_user": logged_user(), "main_app_url": main_app_url}
+    contact_setting = SystemSetting.query.filter_by(key="admin_contact_url").first()
+    return {
+        "current_user": logged_user(),
+        "main_app_url": main_app_url,
+        "admin_contact_url": contact_setting.value if contact_setting and contact_setting.value else "",
+    }
 
 
 @backoffice_app.route("/")
@@ -71,6 +77,12 @@ def login():
             else:
                 session.permanent = True
                 session["user_id"] = user.id
+                db.session.add(LoginHistory(
+                    user_id=user.id,
+                    ip_address=request.headers.get("X-Forwarded-For", request.remote_addr or ""),
+                    user_agent=request.headers.get("User-Agent", "")[:255],
+                ))
+                db.session.commit()
                 return redirect(url_for("dashboard"))
         else:
             flash("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", "error")
@@ -164,6 +176,9 @@ def dashboard():
         transactions = WalletTransaction.query.filter_by(user_id=user.id).order_by(
             WalletTransaction.created_at.desc()
         ).limit(8).all()
+        announcements = Announcement.query.filter_by(is_active=True).order_by(
+            Announcement.created_at.desc()
+        ).limit(5).all()
         return render_template(
             "backoffice_partner.html",
             partner=user,
@@ -172,6 +187,7 @@ def dashboard():
             online_count=online_count,
             entries=entries,
             transactions=transactions,
+            announcements=announcements,
             report={
                 "bets": len(bets),
                 "amount": sum(float(bet.amount) for bet in bets),
