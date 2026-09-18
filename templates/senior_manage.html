@@ -24,7 +24,7 @@
           <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">AGENT FLEET</span><h2 class="panel-title">Agent ในสาย</h2></div><span class="partner-count-chip">{{ agents|length }} คน</span></div><p class="section-desc">แก้ไขคอมมิชชัน (%) และสถานะของ Agent แต่ละคนได้จากตารางด้านล่าง</p></article>
         </div>
         <article class="panel">
-          <div class="table-wrap"><table class="data-table"><thead><tr><th>Agent</th><th>ขึ้นกับ</th><th>สมาชิกในสาย</th><th>คอมสะสม</th><th>ถือหุ้นสะสม</th><th>ตั้งค่า</th></tr></thead><tbody>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Agent</th><th>ขึ้นกับ</th><th>สมาชิกในสาย</th><th>คอมสะสม</th><th>ถือหุ้นสะสม</th><th>ตั้งค่า</th><th>% ถือหุ้นต่อห้อง</th></tr></thead><tbody>
           {% for agent in agents %}
           <tr>
             <td><strong>{{ agent.full_name or agent.username }}</strong><small class="table-subtext">{{ agent.username }}</small></td>
@@ -42,8 +42,24 @@
                 <button class="btn btn-ghost btn-xs" type="submit">บันทึก</button>
               </form>
             </td>
+            <td>
+              <details class="admin-collapsible-panel" style="background:transparent;border:none;padding:0;box-shadow:none;">
+                <summary class="admin-collapsible-summary" style="padding:2px 0;font-size:12px;"><span>ดู/แก้ % ถือหุ้น <i class="fas fa-chevron-down"></i></span></summary>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;min-width:220px;">
+                  {% set agent_shares = agent_stock_shares.get(agent.id, {}) %}
+                  {% for room in rooms %}
+                  <form method="post" action="{{ url_for('senior_agent_stock', agent_id=agent.id) }}" style="display:flex;gap:4px;align-items:center;">
+                    <input type="hidden" name="room_id" value="{{ room.id }}">
+                    <small class="table-subtext" style="min-width:70px;">{{ room.name }}</small>
+                    <input class="form-input form-input-sm" type="number" name="hold_percent" min="0" max="100" step="0.01" value="{{ agent_shares.get(room.id, 0) }}" style="max-width:80px;">
+                    <button class="btn btn-ghost btn-xs" type="submit">บันทึก</button>
+                  </form>
+                  {% else %}<small class="empty-state-text">ยังไม่มีห้องหวย</small>{% endfor %}
+                </div>
+              </details>
+            </td>
           </tr>
-          {% else %}<tr><td colspan="6" class="empty-state-text">ยังไม่มี Agent ในสาย</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="7" class="empty-state-text">ยังไม่มี Agent ในสาย</td></tr>{% endfor %}
           </tbody></table></div>
         </article>
 
@@ -82,7 +98,25 @@
             </form>
           </article>
         </div>
-        <article class="panel partner-members-panel"><div class="partner-panel-heading"><div><span class="eyebrow">MEMBER FLEET</span><h2 class="panel-title">สมาชิกทั้งสาย</h2></div><span class="partner-count-chip">{{ members|length }} คน</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>สมาชิก</th><th>Agent</th><th>เครดิต</th><th>ขั้นต่ำ</th><th>สูงสุด/รายการ</th><th>สูงสุด/เลข</th><th>บันทึก</th></tr></thead><tbody>{% for member in members %}<tr><td><strong>{{ member.full_name or member.username }}</strong><small class="table-subtext">{{ member.username }}</small></td><td>{{ member.partner.username if member.partner else '-' }}</td><td>{{ "{:,.2f}".format(member.credit_balance) }}</td><form method="post" action="{{ url_for('senior_member_limits', member_id=member.id) }}"><td><input class="form-input form-input-sm" type="number" name="min_bet" min="0" step="0.01" value="0"></td><td><input class="form-input form-input-sm" type="number" name="max_bet" min="0" step="0.01" value="1000000"></td><td><input class="form-input form-input-sm" type="number" name="max_number_bet" min="0" step="0.01" value="1000000"></td><td><button class="btn btn-ghost btn-xs" type="submit">บันทึก</button></td></form></tr>{% else %}<tr><td colspan="7" class="empty-state-text">ยังไม่มีสมาชิกในสาย</td></tr>{% endfor %}</tbody></table></div></article>
+        <article class="panel partner-members-panel"><div class="partner-panel-heading"><div><span class="eyebrow">MEMBER FLEET</span><h2 class="panel-title">สมาชิกทั้งสาย</h2></div><span class="partner-count-chip">{{ members|length }} คน</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>สมาชิก</th><th>Agent</th><th>เครดิต</th><th>ขั้นต่ำ</th><th>สูงสุด/รายการ</th><th>สูงสุด/เลข</th><th>บันทึก</th><th>เรท/หุ้นเฉพาะคน</th></tr></thead><tbody>{% for member in members %}<tr><td><strong>{{ member.full_name or member.username }}</strong><small class="table-subtext">{{ member.username }}</small></td><td>{{ member.partner.username if member.partner else '-' }}</td><td>{{ "{:,.2f}".format(member.credit_balance) }}</td><form method="post" action="{{ url_for('senior_member_limits', member_id=member.id) }}"><td><input class="form-input form-input-sm" type="number" name="min_bet" min="0" step="0.01" value="0"></td><td><input class="form-input form-input-sm" type="number" name="max_bet" min="0" step="0.01" value="1000000"></td><td><input class="form-input form-input-sm" type="number" name="max_number_bet" min="0" step="0.01" value="1000000"></td><td><button class="btn btn-ghost btn-xs" type="submit">บันทึก</button></td></form><td>
+          <details class="admin-collapsible-panel" style="background:transparent;border:none;padding:0;box-shadow:none;">
+            <summary class="admin-collapsible-summary" style="padding:2px 0;font-size:12px;"><span>ตั้งค่า{% if member.senior_member_rates or member.senior_member_stock_shares %} ({{ member.senior_member_rates|length + member.senior_member_stock_shares|length }}){% endif %} <i class="fas fa-chevron-down"></i></span></summary>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;min-width:230px;">
+              <form method="post" action="{{ url_for('senior_member_rate', member_id=member.id) }}" style="display:flex;gap:4px;">
+                <select name="bet_type" class="form-input form-input-sm">{% for key, label in [('3up','3 ตัวบน'),('3down','3 ตัวล่าง'),('3toad','3 ตัวโต๊ด'),('2up','2 ตัวบน'),('2down','2 ตัวล่าง'),('runup','วิ่งบน'),('rundown','วิ่งล่าง')] %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+                <input class="form-input form-input-sm" type="number" name="payout_multiplier" min="0" step="0.01" placeholder="เรท (0=ยกเลิก)" style="max-width:100px;">
+                <button class="btn btn-ghost btn-xs" type="submit" title="บันทึกเรทพิเศษ"><i class="fas fa-save"></i></button>
+              </form>
+              {% for r in member.senior_member_rates %}<small class="table-subtext">เรทพิเศษ {{ r.bet_type }} = {{ "{:,.2f}".format(r.payout_multiplier) }}</small>{% endfor %}
+              <form method="post" action="{{ url_for('senior_member_stock', member_id=member.id) }}" style="display:flex;gap:4px;">
+                <select name="room_id" class="form-input form-input-sm">{% for room in rooms %}<option value="{{ room.id }}">{{ room.name }}</option>{% endfor %}</select>
+                <input class="form-input form-input-sm" type="number" name="hold_percent" min="0" max="100" step="0.01" placeholder="% หุ้น (0=ยกเลิก)" style="max-width:100px;">
+                <button class="btn btn-ghost btn-xs" type="submit" title="บันทึกถือหุ้นเฉพาะคน"><i class="fas fa-save"></i></button>
+              </form>
+              {% for s in member.senior_member_stock_shares %}<small class="table-subtext">ถือหุ้น {{ s.room.name if s.room else '-' }} = {{ "%g"|format(s.hold_percent) }}%</small>{% endfor %}
+            </div>
+          </details>
+        </td></tr>{% else %}<tr><td colspan="8" class="empty-state-text">ยังไม่มีสมาชิกในสาย</td></tr>{% endfor %}</tbody></table></div></article>
 
         {% elif view == 'pending_bets' %}
         <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">WAITING RESULTS</span><h2 class="panel-title">รายการรอผลเดิมพันทั้งสาย</h2></div><span class="partner-count-chip">{{ bets|length }} รายการ · {{ "{:,.2f}".format(total_amount) }}</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>เวลา</th><th>Agent</th><th>สมาชิก</th><th>งวด</th><th>เลข/ประเภท</th><th>ยอด</th></tr></thead><tbody>{% for bet in bets %}<tr><td>{{ bet.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ bet.user.partner.username if bet.user.partner else '-' }}</td><td>{{ bet.user.username }}</td><td>{{ bet.period.room.name if bet.period.room else '-' }}<small class="table-subtext">{{ bet.period.period_date }}</small></td><td>{{ bet.number }} / {{ bet.bet_type }}</td><td>{{ "{:,.2f}".format(bet.amount) }}</td></tr>{% else %}<tr><td colspan="6" class="empty-state-text">ไม่มีรายการรอผล</td></tr>{% endfor %}</tbody></table></div></article>

@@ -66,6 +66,22 @@ class User(db.Model):
         "PartnerMemberLimit", backref="member", lazy=True,
         foreign_keys="PartnerMemberLimit.member_id", cascade="all, delete-orphan"
     )
+    partner_member_rates = db.relationship(
+        "PartnerMemberRate", backref="member", lazy=True,
+        foreign_keys="PartnerMemberRate.member_id", cascade="all, delete-orphan"
+    )
+    senior_member_rates = db.relationship(
+        "SeniorMemberRate", backref="member", lazy=True,
+        foreign_keys="SeniorMemberRate.member_id", cascade="all, delete-orphan"
+    )
+    partner_member_stock_shares = db.relationship(
+        "PartnerMemberStockShare", backref="member", lazy=True,
+        foreign_keys="PartnerMemberStockShare.member_id", cascade="all, delete-orphan"
+    )
+    senior_member_stock_shares = db.relationship(
+        "SeniorMemberStockShare", backref="member", lazy=True,
+        foreign_keys="SeniorMemberStockShare.member_id", cascade="all, delete-orphan"
+    )
     vip_tier = db.relationship("VipTier", backref="members", foreign_keys=[vip_tier_id])
 
     # ---- จัดการรหัสผ่าน (เข้ารหัสเสมอ ไม่เก็บ plain text) ----
@@ -564,6 +580,58 @@ class PartnerBlockedNumber(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     room = db.relationship("LotteryRoom", backref="partner_blocked_numbers")
+
+
+class PartnerMemberRate(db.Model):
+    __tablename__ = "partner_member_rates"
+    __table_args__ = (db.UniqueConstraint("partner_id", "member_id", "bet_type", name="uq_partner_member_rate"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    bet_type = db.Column(db.String(30), nullable=False)
+    payout_multiplier = db.Column(db.Float, nullable=False, default=1.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SeniorMemberRate(db.Model):
+    __tablename__ = "senior_member_rates"
+    __table_args__ = (db.UniqueConstraint("senior_id", "member_id", "bet_type", name="uq_senior_member_rate"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    bet_type = db.Column(db.String(30), nullable=False)
+    payout_multiplier = db.Column(db.Float, nullable=False, default=1.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PartnerMemberStockShare(db.Model):
+    __tablename__ = "partner_member_stock_shares"
+    __table_args__ = (db.UniqueConstraint("partner_id", "member_id", "room_id", name="uq_partner_member_stock_share"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    partner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
+    hold_percent = db.Column(db.Float, nullable=False, default=0.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    room = db.relationship("LotteryRoom")
+
+
+class SeniorMemberStockShare(db.Model):
+    __tablename__ = "senior_member_stock_shares"
+    __table_args__ = (db.UniqueConstraint("senior_id", "member_id", "room_id", name="uq_senior_member_stock_share"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    senior_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    room_id = db.Column(db.Integer, db.ForeignKey("lottery_rooms.id"), nullable=False, index=True)
+    hold_percent = db.Column(db.Float, nullable=False, default=0.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    room = db.relationship("LotteryRoom")
 
 
 class PartnerPresence(db.Model):

@@ -78,6 +78,18 @@
         button.setAttribute('aria-label', collapsed ? 'ขยายเมนู' : 'ยุบเมนู');
       });
     })();
+    document.querySelectorAll('.admin-collapsible-panel').forEach(function (panel, index) {
+      var key = 'partner-panel:' + (panel.id || index);
+      if (sessionStorage.getItem(key) === 'open') panel.open = true;
+      panel.addEventListener('toggle', function () {
+        sessionStorage.setItem(key, panel.open ? 'open' : 'closed');
+      });
+      panel.querySelectorAll('form').forEach(function (form) {
+        form.addEventListener('submit', function () {
+          sessionStorage.setItem(key, 'open');
+        });
+      });
+    });
   </script>
   {% block scripts %}{% endblock %}
 </body>

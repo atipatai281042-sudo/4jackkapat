@@ -35,6 +35,7 @@ from models import (
     SeniorProfile, SeniorStockShare, SeniorStockLedger, SeniorCommissionLedger,
     SeniorMemberLimit, SeniorRoomSetting, SeniorBlockedNumber, SeniorAcceptanceLimit, SeniorAcceptanceNumber,
     SeniorAssistant, SeniorPayoutRule,
+    PartnerMemberRate, SeniorMemberRate, PartnerMemberStockShare, SeniorMemberStockShare,
     WalletTransaction, Notification, AdminAuditLog, ResponsiblePlayProfile,
     SystemSetting, DepositRequest, WithdrawalRequest, UserBankAccount, LotteryCategory,
     LoginHistory, Announcement
@@ -660,7 +661,9 @@ def create_senior_commission(bet):
 
 def apply_partner_stock_holding(bet, is_win):
     """บันทึกกำไร/ขาดทุนของ Partner ที่เลือก "ถือหุ้น" บางส่วนของห้องนี้ไว้เอง
-    แยกจากคอมมิชชันโดยสิ้นเชิง — ถ้าไม่ได้ตั้งค่า % ถือหุ้นไว้ จะไม่มีผลใดๆ"""
+    แยกจากคอมมิชชันโดยสิ้นเชิง — ถ้าไม่ได้ตั้งค่า % ถือหุ้นไว้ จะไม่มีผลใดๆ
+    ถ้าตั้ง % ถือหุ้นเฉพาะสมาชิกคนนี้ไว้ (PartnerMemberStockShare) ใช้ค่านั้นแทนค่า
+    ระดับห้องปกติ (เฉพาะเจาะจงกว่าชนะ ไม่รวมกัน)"""
     member = bet.user
     partner = member.partner
     if not partner or not partner.partner_profile or partner.partner_profile.status != "active":
@@ -668,22 +671,29 @@ def apply_partner_stock_holding(bet, is_win):
     room_id = bet.period.room_id if bet.period else None
     if not room_id:
         return
-    share = PartnerStockShare.query.filter_by(partner_id=partner.id, room_id=room_id).first()
-    if not share or share.hold_percent <= 0:
+    member_share = PartnerMemberStockShare.query.filter_by(
+        partner_id=partner.id, member_id=member.id, room_id=room_id
+    ).first()
+    if member_share is not None:
+        hold_percent = member_share.hold_percent
+    else:
+        share = PartnerStockShare.query.filter_by(partner_id=partner.id, room_id=room_id).first()
+        hold_percent = share.hold_percent if share else 0.0
+    if hold_percent <= 0:
         return
     house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
-    pnl = round(house_pnl * share.hold_percent / 100, 2)
+    pnl = round(house_pnl * hold_percent / 100, 2)
     if pnl == 0:
         return
     partner.partner_profile.stock_balance = round(partner.partner_profile.stock_balance + pnl, 2)
     record_wallet_transaction(
         partner, "stock", pnl, partner.partner_profile.stock_balance,
-        f"ถือหุ้น {share.hold_percent:g}% โพย {bet.number} ({bet.bet_type})",
+        f"ถือหุ้น {hold_percent:g}% โพย {bet.number} ({bet.bet_type})",
         reference_type="bet", reference_id=bet.id,
     )
     db.session.add(PartnerStockLedger(
         partner_id=partner.id, member_id=member.id, bet_id=bet.id, room_id=room_id,
-        hold_percent=share.hold_percent, stake_amount=bet.amount, pnl_amount=pnl,
+        hold_percent=hold_percent, stake_amount=bet.amount, pnl_amount=pnl,
     ))
 
 
@@ -733,22 +743,29 @@ def apply_senior_stock_holding(bet, is_win):
     room_id = bet.period.room_id if bet.period else None
     if not room_id:
         return
-    share = SeniorStockShare.query.filter_by(senior_id=senior.id, room_id=room_id).first()
-    if not share or share.hold_percent <= 0:
+    member_share = SeniorMemberStockShare.query.filter_by(
+        senior_id=senior.id, member_id=member.id, room_id=room_id
+    ).first()
+    if member_share is not None:
+        hold_percent = member_share.hold_percent
+    else:
+        share = SeniorStockShare.query.filter_by(senior_id=senior.id, room_id=room_id).first()
+        hold_percent = share.hold_percent if share else 0.0
+    if hold_percent <= 0:
         return
     house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
-    pnl = round(house_pnl * share.hold_percent / 100, 2)
+    pnl = round(house_pnl * hold_percent / 100, 2)
     if pnl == 0:
         return
     senior.senior_profile.stock_balance = round(senior.senior_profile.stock_balance + pnl, 2)
     record_wallet_transaction(
         senior, "stock", pnl, senior.senior_profile.stock_balance,
-        f"ถือหุ้น Senior {share.hold_percent:g}% โพย {bet.number} ({bet.bet_type}) จากเอเจ้น {agent.username}",
+        f"ถือหุ้น Senior {hold_percent:g}% โพย {bet.number} ({bet.bet_type}) จากเอเจ้น {agent.username}",
         reference_type="bet", reference_id=bet.id,
     )
     db.session.add(SeniorStockLedger(
         senior_id=senior.id, agent_id=agent.id, member_id=member.id, bet_id=bet.id, room_id=room_id,
-        hold_percent=share.hold_percent, stake_amount=bet.amount, pnl_amount=pnl,
+        hold_percent=hold_percent, stake_amount=bet.amount, pnl_amount=pnl,
     ))
 
 
@@ -979,7 +996,8 @@ def add_thai_lottery_bets(user, period, entries):
         elif blocked and blocked.payout_multiplier > 0:
             rate = blocked.payout_multiplier
         else:
-            rate = rates[bet_type]
+            personal_rate = member_specific_rate(user, bet_type)
+            rate = personal_rate if personal_rate is not None else rates[bet_type]
 
         total_reward = int(amount * rate)
         adjust_credit(user, -amount, f"แทงหวยรัฐบาล งวด {period.period_date} ({bet_type}: {raw_number})")
@@ -1057,6 +1075,29 @@ def get_partner_member_limit(user, member):
         max_bet=min(agent_limit.max_bet, senior_limit.max_bet),
         max_number_bet=min(agent_limit.max_number_bet, senior_limit.max_number_bet),
     )
+
+
+def member_specific_rate(user, bet_type):
+    """เรทพิเศษเฉพาะสมาชิกคนนี้คนเดียว — Agent ตรงตั้งไว้ก่อน ถ้าไม่มีค่อยเช็คของ
+    Senior บนสุดของสาย เอาค่าที่เจอก่อนเลย ไม่รวมกัน (เป็นอัตราจ่าย ไม่ใช่วงเงิน)
+    ใช้เป็นชั้นรองจาก "เลขอั้น" เสมอ — ถ้าเลขนั้นถูกอั้นไว้ เลขอั้นชนะเสมอไม่ว่าจะตั้ง
+    เรทพิเศษเฉพาะคนไว้หรือไม่ (ดู add_thai_lottery_bets)"""
+    if not user or not user.partner_id:
+        return None
+    agent_rate = PartnerMemberRate.query.filter_by(
+        partner_id=user.partner_id, member_id=user.id, bet_type=bet_type
+    ).first()
+    if agent_rate:
+        return agent_rate.payout_multiplier
+    agent = user.partner
+    senior = agent_upline_senior(agent) if agent else None
+    if senior:
+        senior_rate = SeniorMemberRate.query.filter_by(
+            senior_id=senior.id, member_id=user.id, bet_type=bet_type
+        ).first()
+        if senior_rate:
+            return senior_rate.payout_multiplier
+    return None
 
 
 def partner_room_is_enabled(user, room_id):
@@ -2688,8 +2729,9 @@ def partner_members():
         return redirect(url_for("partner_members"))
 
     members = User.query.filter_by(partner_id=partner.id).order_by(User.created_at.desc()).all()
+    rooms = active_lottery_rooms().all()
     return render_template("partner_manage.html", view="members", partner=partner,
-                           members=members)
+                           members=members, rooms=rooms)
 
 
 @app.route("/partner/members/<int:member_id>/limits", methods=["POST"])
@@ -2716,6 +2758,73 @@ def partner_member_limits(member_id):
     limit.min_bet, limit.max_bet, limit.max_number_bet = min_bet, max_bet, max_number_bet
     db.session.commit()
     flash(f"บันทึกวงเงินของ {member.username} แล้ว", "success")
+    return redirect(url_for("partner_members"))
+
+
+@app.route("/partner/members/<int:member_id>/rate", methods=["POST"])
+@partner_required
+def partner_member_rate(member_id):
+    partner = partner_owner(current_user())
+    member = User.query.filter_by(id=member_id, partner_id=partner.id, role="member").first()
+    if not member:
+        abort(404)
+    bet_type = normalize_bet_type(request.form.get("bet_type"))
+    if not bet_type:
+        flash("ประเภทเดิมพันไม่ถูกต้อง", "error")
+        return redirect(url_for("partner_members"))
+    try:
+        payout_multiplier = float(request.form.get("payout_multiplier", 0))
+    except (TypeError, ValueError):
+        payout_multiplier = 0
+    rate = PartnerMemberRate.query.filter_by(
+        partner_id=partner.id, member_id=member.id, bet_type=bet_type
+    ).first()
+    if payout_multiplier <= 0:
+        if rate:
+            db.session.delete(rate)
+            db.session.commit()
+            flash(f"ยกเลิกเรทพิเศษของ {member.username} ({bet_type}) แล้ว", "success")
+        return redirect(url_for("partner_members"))
+    if rate is None:
+        rate = PartnerMemberRate(partner_id=partner.id, member_id=member.id, bet_type=bet_type)
+        db.session.add(rate)
+    rate.payout_multiplier = payout_multiplier
+    db.session.commit()
+    flash(f"บันทึกเรทพิเศษของ {member.username} ({bet_type} = {payout_multiplier:g}) แล้ว", "success")
+    return redirect(url_for("partner_members"))
+
+
+@app.route("/partner/members/<int:member_id>/stock", methods=["POST"])
+@partner_required
+def partner_member_stock(member_id):
+    partner = partner_owner(current_user())
+    member = User.query.filter_by(id=member_id, partner_id=partner.id, role="member").first()
+    if not member:
+        abort(404)
+    room_id = request.form.get("room_id", type=int)
+    room = db.session.get(LotteryRoom, room_id) if room_id else None
+    if not room:
+        abort(404)
+    try:
+        hold_percent = float(request.form.get("hold_percent", 0))
+    except (TypeError, ValueError):
+        hold_percent = 0
+    hold_percent = max(0.0, min(100.0, hold_percent))
+    share = PartnerMemberStockShare.query.filter_by(
+        partner_id=partner.id, member_id=member.id, room_id=room.id
+    ).first()
+    if hold_percent <= 0:
+        if share:
+            db.session.delete(share)
+            db.session.commit()
+            flash(f"ยกเลิกถือหุ้นเฉพาะ {member.username} ห้อง {room.name} แล้ว", "success")
+        return redirect(url_for("partner_members"))
+    if share is None:
+        share = PartnerMemberStockShare(partner_id=partner.id, member_id=member.id, room_id=room.id)
+        db.session.add(share)
+    share.hold_percent = hold_percent
+    db.session.commit()
+    flash(f"ตั้งถือหุ้นเฉพาะ {member.username} ห้อง {room.name} เป็น {hold_percent:g}% แล้ว", "success")
     return redirect(url_for("partner_members"))
 
 
@@ -3244,7 +3353,13 @@ def senior_agents():
 
     agent_ids = senior_agent_ids(senior)
     agents = User.query.filter(User.id.in_(agent_ids)).order_by(User.created_at.desc()).all() if agent_ids else []
-    return render_template("senior_manage.html", view="agents", senior=senior, agents=agents)
+    rooms = active_lottery_rooms().all()
+    agent_stock_shares = {}
+    if agent_ids:
+        for item in PartnerStockShare.query.filter(PartnerStockShare.partner_id.in_(agent_ids)).all():
+            agent_stock_shares.setdefault(item.partner_id, {})[item.room_id] = item.hold_percent
+    return render_template("senior_manage.html", view="agents", senior=senior, agents=agents,
+                           rooms=rooms, agent_stock_shares=agent_stock_shares)
 
 
 @app.route("/senior/agents/<int:agent_id>/update", methods=["POST"])
@@ -3665,8 +3780,9 @@ def senior_members():
     members = User.query.filter(User.partner_id.in_(agent_ids)).order_by(
         User.created_at.desc()
     ).all() if agent_ids else []
+    rooms = active_lottery_rooms().all()
     return render_template("senior_manage.html", view="members", senior=senior,
-                           agents=agents, members=members)
+                           agents=agents, members=members, rooms=rooms)
 
 
 @app.route("/senior/members/<int:member_id>/limits", methods=["POST"])
@@ -3696,6 +3812,107 @@ def senior_member_limits(member_id):
     db.session.commit()
     flash(f"บันทึกวงเงินของ {member.username} แล้ว", "success")
     return redirect(url_for("senior_members"))
+
+
+@app.route("/senior/members/<int:member_id>/rate", methods=["POST"])
+@senior_required
+def senior_member_rate(member_id):
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    member = User.query.filter(User.id == member_id, User.role == "member",
+                               User.partner_id.in_(agent_ids)).first() if agent_ids else None
+    if not member:
+        abort(404)
+    bet_type = normalize_bet_type(request.form.get("bet_type"))
+    if not bet_type:
+        flash("ประเภทเดิมพันไม่ถูกต้อง", "error")
+        return redirect(url_for("senior_members"))
+    try:
+        payout_multiplier = float(request.form.get("payout_multiplier", 0))
+    except (TypeError, ValueError):
+        payout_multiplier = 0
+    rate = SeniorMemberRate.query.filter_by(
+        senior_id=senior.id, member_id=member.id, bet_type=bet_type
+    ).first()
+    if payout_multiplier <= 0:
+        if rate:
+            db.session.delete(rate)
+            db.session.commit()
+            flash(f"ยกเลิกเรทพิเศษของ {member.username} ({bet_type}) แล้ว", "success")
+        return redirect(url_for("senior_members"))
+    if rate is None:
+        rate = SeniorMemberRate(senior_id=senior.id, member_id=member.id, bet_type=bet_type)
+        db.session.add(rate)
+    rate.payout_multiplier = payout_multiplier
+    db.session.commit()
+    flash(f"บันทึกเรทพิเศษของ {member.username} ({bet_type} = {payout_multiplier:g}) แล้ว", "success")
+    return redirect(url_for("senior_members"))
+
+
+@app.route("/senior/members/<int:member_id>/stock", methods=["POST"])
+@senior_required
+def senior_member_stock(member_id):
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    member = User.query.filter(User.id == member_id, User.role == "member",
+                               User.partner_id.in_(agent_ids)).first() if agent_ids else None
+    if not member:
+        abort(404)
+    room_id = request.form.get("room_id", type=int)
+    room = db.session.get(LotteryRoom, room_id) if room_id else None
+    if not room:
+        abort(404)
+    try:
+        hold_percent = float(request.form.get("hold_percent", 0))
+    except (TypeError, ValueError):
+        hold_percent = 0
+    hold_percent = max(0.0, min(100.0, hold_percent))
+    share = SeniorMemberStockShare.query.filter_by(
+        senior_id=senior.id, member_id=member.id, room_id=room.id
+    ).first()
+    if hold_percent <= 0:
+        if share:
+            db.session.delete(share)
+            db.session.commit()
+            flash(f"ยกเลิกถือหุ้นเฉพาะ {member.username} ห้อง {room.name} แล้ว", "success")
+        return redirect(url_for("senior_members"))
+    if share is None:
+        share = SeniorMemberStockShare(senior_id=senior.id, member_id=member.id, room_id=room.id)
+        db.session.add(share)
+    share.hold_percent = hold_percent
+    db.session.commit()
+    flash(f"ตั้งถือหุ้นเฉพาะ {member.username} ห้อง {room.name} เป็น {hold_percent:g}% แล้ว", "success")
+    return redirect(url_for("senior_members"))
+
+
+@app.route("/senior/agents/<int:agent_id>/stock", methods=["POST"])
+@senior_required
+def senior_agent_stock(agent_id):
+    """Senior ดู/แก้ % ถือหุ้นของ Agent แต่ละคนในสายได้โดยตรง — เขียนลงตาราง
+    PartnerStockShare ตัวเดียวกับที่ Agent ใช้ self-service เอง (เป็นค่าเดียวกัน
+    จุดเดียวกัน ไม่ใช่ค่าซ้อนทับใหม่) เพื่อให้ Senior ช่วยตั้งแทน Agent ที่ตั้งไม่เป็นได้"""
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    agent = User.query.filter(User.id == agent_id, User.id.in_(agent_ids), User.role == "partner").first() if agent_ids else None
+    if not agent:
+        abort(404)
+    room_id = request.form.get("room_id", type=int)
+    room = db.session.get(LotteryRoom, room_id) if room_id else None
+    if not room:
+        abort(404)
+    try:
+        hold_percent = float(request.form.get("hold_percent", 0))
+    except (TypeError, ValueError):
+        hold_percent = 0
+    hold_percent = max(0.0, min(100.0, hold_percent))
+    share = PartnerStockShare.query.filter_by(partner_id=agent.id, room_id=room.id).first()
+    if share is None:
+        share = PartnerStockShare(partner_id=agent.id, room_id=room.id)
+        db.session.add(share)
+    share.hold_percent = hold_percent
+    db.session.commit()
+    flash(f"ตั้งค่าถือหุ้นของ {agent.username} ห้อง {room.name} เป็น {hold_percent:g}% แล้ว", "success")
+    return redirect(url_for("senior_agents"))
 
 
 @app.route("/senior/topup", methods=["POST"])
