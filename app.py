@@ -2702,6 +2702,34 @@ def partner_topup_member():
     return redirect(url_for("partner_dashboard"))
 
 
+@app.route("/partner/agents/topup", methods=["POST"])
+@partner_required
+def partner_topup_agent():
+    partner = partner_owner(current_user())
+    agent_id = request.form.get("agent_id", type=int)
+    agent = User.query.filter_by(id=agent_id, partner_id=partner.id, role="partner").first() if agent_id else None
+    try:
+        amount = round(float(request.form.get("amount", 0)), 2)
+    except (TypeError, ValueError):
+        amount = 0
+
+    if not agent:
+        flash("เลือก Agent ย่อยในสายของคุณเท่านั้น", "error")
+    elif amount <= 0:
+        flash("กรุณาระบุจำนวนเครดิตมากกว่า 0", "error")
+    elif amount > partner.credit_balance:
+        flash("เครดิตของคุณไม่พอสำหรับเติมให้ Agent ย่อย", "error")
+    else:
+        reason = request.form.get("reason", "").strip() or "Agent เติมเครดิตให้ Agent ย่อย"
+        adjust_credit(partner, -amount, f"โอนเครดิตให้ {agent.username}: {reason}")
+        adjust_credit(agent, amount, f"ได้รับเครดิตจาก Agent {partner.username}: {reason}")
+        notify_user(agent, "ได้รับเครดิตจาก Agent", f"เครดิตเพิ่ม {amount:,.2f} เครดิต", "wallet")
+        notify_user(partner, "เติมเครดิตให้ Agent ย่อยสำเร็จ", f"โอนให้ {agent.username} จำนวน {amount:,.2f} เครดิต", "wallet")
+        db.session.commit()
+        flash(f"เติมเครดิตให้ {agent.username} สำเร็จ {amount:,.2f} เครดิต", "success")
+    return redirect(url_for("partner_agents"))
+
+
 @app.route("/partner/members", methods=["GET", "POST"])
 @partner_required
 def partner_members():
@@ -3943,6 +3971,35 @@ def senior_topup_member():
         db.session.commit()
         flash(f"เติมเครดิตให้ {member.username} แล้ว", "success")
     return redirect(url_for("senior_members"))
+
+
+@app.route("/senior/agents/topup", methods=["POST"])
+@senior_required
+def senior_topup_agent():
+    senior = senior_owner(current_user())
+    agent_ids = senior_agent_ids(senior)
+    agent_id = request.form.get("agent_id", type=int)
+    agent = User.query.filter(User.id == agent_id, User.id.in_(agent_ids), User.role == "partner").first() if agent_id and agent_ids else None
+    try:
+        amount = round(float(request.form.get("amount", 0)), 2)
+    except (TypeError, ValueError):
+        amount = 0
+
+    if not agent:
+        flash("เลือก Agent ในสายของคุณเท่านั้น", "error")
+    elif amount <= 0:
+        flash("กรุณาระบุจำนวนเครดิตมากกว่า 0", "error")
+    elif amount > senior.credit_balance:
+        flash("เครดิตของ Senior ไม่พอสำหรับเติมให้ Agent", "error")
+    else:
+        reason = request.form.get("reason", "").strip() or "Senior เติมเครดิตให้ Agent"
+        adjust_credit(senior, -amount, f"โอนเครดิตให้ {agent.username}: {reason}")
+        adjust_credit(agent, amount, f"ได้รับเครดิตจาก Senior {senior.username}: {reason}")
+        notify_user(agent, "ได้รับเครดิตจาก Senior", f"เครดิตเพิ่ม {amount:,.2f} เครดิต", "wallet")
+        notify_user(senior, "เติมเครดิตให้ Agent สำเร็จ", f"โอนให้ {agent.username} จำนวน {amount:,.2f} เครดิต", "wallet")
+        db.session.commit()
+        flash(f"เติมเครดิตให้ {agent.username} สำเร็จ {amount:,.2f} เครดิต", "success")
+    return redirect(url_for("senior_agents"))
 
 
 @app.route("/senior/settings", methods=["GET", "POST"])

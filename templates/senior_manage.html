@@ -21,9 +21,19 @@
               <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-user-plus"></i> เพิ่ม Agent</button>
             </form>
           </article>
-          <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">AGENT FLEET</span><h2 class="panel-title">Agent ในสาย</h2></div><span class="partner-count-chip">{{ agents|length }} คน</span></div><p class="section-desc">แก้ไขคอมมิชชัน (%) และสถานะของ Agent แต่ละคนได้จากตารางด้านล่าง</p></article>
+          <article class="panel partner-topup-panel">
+            <div class="partner-panel-heading"><div><span class="eyebrow">CREDIT TRANSFER</span><h2 class="panel-title">เติมเครดิตให้ Agent</h2></div><i class="fas fa-coins partner-muted-icon"></i></div>
+            <p class="section-desc">โอนจากเครดิตของ Senior เอง ({{ "{:,.2f}".format(senior.credit_balance) }}) ให้ Agent คนใดก็ได้ทั้งสาย</p>
+            <form method="post" action="{{ url_for('senior_topup_agent') }}" class="partner-topup-form">
+              <select name="agent_id" class="form-input" required><option value="">เลือก Agent</option>{% for a in agents %}<option value="{{ a.id }}">{{ a.full_name or a.username }} · เครดิต {{ "{:,.2f}".format(a.credit_balance) }}</option>{% endfor %}</select>
+              <input class="form-input" type="number" name="amount" min="0.01" step="0.01" max="{{ senior.credit_balance }}" placeholder="จำนวนเครดิต" required>
+              <input class="form-input" name="reason" maxlength="255" placeholder="หมายเหตุ (ถ้ามี)">
+              <button class="btn btn-success btn-block" type="submit" {% if not agents or senior.credit_balance <= 0 %}disabled{% endif %}>เติมเครดิต</button>
+            </form>
+          </article>
         </div>
         <article class="panel">
+          <div class="partner-panel-heading"><div><span class="eyebrow">AGENT FLEET</span><h2 class="panel-title">Agent ในสาย</h2></div><span class="partner-count-chip">{{ agents|length }} คน</span></div>
           <div class="table-wrap"><table class="data-table"><thead><tr><th>Agent</th><th>ขึ้นกับ</th><th>สมาชิกในสาย</th><th>คอมสะสม</th><th>ถือหุ้นสะสม</th><th>ตั้งค่า</th><th>% ถือหุ้นต่อห้อง</th></tr></thead><tbody>
           {% for agent in agents %}
           <tr>
