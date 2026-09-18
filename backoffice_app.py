@@ -8,7 +8,7 @@ from werkzeug.security import check_password_hash
 from models import (
     db, User, HeroBanner, LotteryRoom, DepositRequest, WithdrawalRequest,
     CommissionLedger, SeniorCommissionLedger, PartnerPresence, ThaiLotteryBet, WalletTransaction, LoginHistory,
-    Announcement, SystemSetting,
+    Announcement, SystemSetting, PartnerProfile, SeniorProfile,
 )
 from app import app as main_app
 from app import senior_agent_ids
@@ -230,6 +230,11 @@ def dashboard():
         "total_rooms": LotteryRoom.query.filter_by(is_active=True).count(),
         "pending_deposits": DepositRequest.query.filter_by(status="pending").count(),
         "pending_withdrawals": WithdrawalRequest.query.filter_by(status="pending").count(),
+        "total_credit": db.session.query(db.func.coalesce(db.func.sum(User.credit_balance), 0.0)).scalar(),
+        "total_commission_pending": (
+            db.session.query(db.func.coalesce(db.func.sum(PartnerProfile.commission_balance), 0.0)).scalar()
+            + db.session.query(db.func.coalesce(db.func.sum(SeniorProfile.commission_balance), 0.0)).scalar()
+        ),
     }
     announcements = HeroBanner.query.order_by(HeroBanner.created_at.desc()).limit(5).all()
     recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()

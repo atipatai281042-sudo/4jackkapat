@@ -61,8 +61,9 @@
     </header>
     <section class="bo-stats">
       <article class="bo-statcard"><span><i class="fas fa-users-gear"></i> Agent ในสาย</span><strong>{{ agents|length }}</strong><small>Agent ทั้งหมด</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-wallet"></i> เครดิตสำหรับเติม</span><strong>{{ "{:,.2f}".format(senior.credit_balance) }}</strong><small>ยอดคงเหลือ</small></article>
       <article class="bo-statcard"><span><i class="fas fa-percent"></i> อัตราคอมมิชชัน</span><strong>{{ "{:,.2f}".format(profile.commission_rate) }}%</strong><small>อัตราปัจจุบัน</small></article>
-      <article class="bo-statcard"><span><i class="fas fa-wallet"></i> คอมมิชชันสะสม</span><strong>{{ "{:,.2f}".format(profile.commission_balance) }}</strong><small>ยอดคงเหลือ</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-hand-holding-dollar"></i> คอมมิชชันสะสม</span><strong>{{ "{:,.2f}".format(profile.commission_balance) }}</strong><small>ยอดที่เบิกได้</small></article>
       <article class="bo-statcard"><span><i class="fas fa-chart-pie"></i> ถือหุ้น</span><strong>{{ "{:,.2f}".format(profile.stock_balance) }}</strong><small>บวก=กำไร ลบ=ต้องจ่ายคืน</small></article>
     </section>
     <section class="bo-grid">

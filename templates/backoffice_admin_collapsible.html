@@ -60,6 +60,8 @@
     <section class="bo-stats">
       <article class="bo-statcard"><span><i class="fas fa-users"></i> สมาชิกทั้งหมด</span><strong>{{ stats.total_users }}</strong><small>บัญชีสมาชิก</small></article>
       <article class="bo-statcard"><span><i class="fas fa-ticket"></i> ห้องหวยเปิดใช้งาน</span><strong>{{ stats.total_rooms }}</strong><small>ห้องในระบบ</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-wallet"></i> เครดิตรวมในระบบ</span><strong>{{ "{:,.2f}".format(stats.total_credit) }}</strong><small>เครดิตของผู้ใช้ทั้งหมดรวมกัน</small></article>
+      <article class="bo-statcard"><span><i class="fas fa-hand-holding-dollar"></i> คอมมิชชันค้างจ่าย</span><strong>{{ "{:,.2f}".format(stats.total_commission_pending) }}</strong><small>Agent + Senior รวมกัน</small></article>
       <article class="bo-statcard"><span><i class="fas fa-arrow-down"></i> ฝากรอตรวจ</span><strong>{{ stats.pending_deposits }}</strong><small>รายการรอดำเนินการ</small></article>
       <article class="bo-statcard"><span><i class="fas fa-arrow-up"></i> ถอนรอตรวจ</span><strong>{{ stats.pending_withdrawals }}</strong><small>รายการรอดำเนินการ</small></article>
     </section>
