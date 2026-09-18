@@ -8,9 +8,22 @@
         </header>
 
         {% if view == 'agents' %}
+        <div class="partner-content-grid">
+          <article class="panel partner-topup-panel">
+            <div class="partner-panel-heading"><div><span class="eyebrow">ADD AGENT</span><h2 class="panel-title">เพิ่ม Agent เข้าสาย</h2></div><i class="fas fa-user-plus partner-muted-icon"></i></div>
+            <p class="section-desc">Agent ที่เพิ่มจะเข้าสายของคุณโดยตรง (senior_id ชี้มาที่คุณทันที) — ย้าย Senior ของ Agent ที่มีอยู่แล้วยังทำได้จากหลังบ้าน Admin เท่านั้น</p>
+            <form method="post" class="partner-topup-form">
+              <div class="form-group"><label class="form-label">ชื่อผู้ใช้</label><input class="form-input" name="username" minlength="4" required></div>
+              <div class="form-group"><label class="form-label">ชื่อ Agent</label><input class="form-input" name="full_name" required></div>
+              <div class="partner-form-row"><div class="form-group"><label class="form-label">รหัสผ่านเริ่มต้น</label><input class="form-input" type="password" name="password" minlength="6" required></div><div class="form-group"><label class="form-label">เบอร์โทรศัพท์</label><input class="form-input" name="phone"></div></div>
+              <div class="form-group"><label class="form-label">รหัสแนะนำ</label><input class="form-input" name="invite_code" placeholder="ว่างไว้ให้ระบบสร้างอัตโนมัติ"></div>
+              <div class="form-group"><label class="form-label">คอมมิชชัน (%)</label><input class="form-input" type="number" name="commission_rate" min="0" max="100" step="0.01" value="3" required></div>
+              <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-user-plus"></i> เพิ่ม Agent</button>
+            </form>
+          </article>
+          <article class="panel"><div class="partner-panel-heading"><div><span class="eyebrow">AGENT FLEET</span><h2 class="panel-title">Agent ในสาย</h2></div><span class="partner-count-chip">{{ agents|length }} คน</span></div><p class="section-desc">แก้ไขคอมมิชชัน (%) และสถานะของ Agent แต่ละคนได้จากตารางด้านล่าง</p></article>
+        </div>
         <article class="panel">
-          <div class="partner-panel-heading"><div><span class="eyebrow">AGENT FLEET</span><h2 class="panel-title">Agent ในสาย</h2></div><span class="partner-count-chip">{{ agents|length }} คน</span></div>
-          <p class="section-desc">แก้ไขได้เฉพาะคอมมิชชัน (%) และสถานะของ Agent ในสายตัวเอง — การเพิ่ม Agent ใหม่หรือย้าย Senior ทำได้จากหลังบ้าน Admin เท่านั้น</p>
           <div class="table-wrap"><table class="data-table"><thead><tr><th>Agent</th><th>สมาชิกในสาย</th><th>คอมสะสม</th><th>ถือหุ้นสะสม</th><th>ตั้งค่า</th></tr></thead><tbody>
           {% for agent in agents %}
           <tr>

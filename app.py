@@ -3101,9 +3101,50 @@ def senior_dashboard():
 @app.route("/senior/agents", methods=["GET", "POST"])
 @senior_required
 def senior_agents():
+    """Senior เพิ่ม Agent ระดับบนสุดเข้าสายตัวเองได้โดยตรง (เหมือนที่ Agent เพิ่ม
+    Agent ย่อยของตัวเองได้) — Agent ที่สร้างจากตรงนี้จะมี senior_id ชี้มาที่ Senior
+    คนนี้ทันที (partner_id เป็น None เพราะเป็น Agent ระดับบนสุด ไม่ใช่ Agent ย่อย)"""
     senior = senior_owner(current_user())
     if request.method == "POST":
-        abort(405)  # การสร้าง Agent เป็นสิทธิ์ของ Admin เท่านั้น ที่นี่แก้ได้แค่ agent ที่มีอยู่แล้ว
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        full_name = request.form.get("full_name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        invite_code = request.form.get("invite_code", "").strip().upper()
+        try:
+            commission_rate = float(request.form.get("commission_rate", 3))
+        except ValueError:
+            commission_rate = 0
+
+        if len(username) < 4 or len(password) < 6 or not full_name:
+            flash("กรุณากรอกชื่อผู้ใช้ ชื่อ Agent และรหัสผ่านให้ถูกต้อง", "error")
+        elif commission_rate < 0 or commission_rate > 100:
+            flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
+        elif User.query.filter_by(username=username).first():
+            flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
+        elif invite_code and PartnerProfile.query.filter_by(invite_code=invite_code).first():
+            flash("รหัสแนะนำนี้ถูกใช้แล้ว", "error")
+        else:
+            if not invite_code:
+                invite_code = f"FLEET{random.randint(10000, 99999)}"
+            agent = User(
+                username=username, full_name=full_name, phone=phone,
+                role="partner", senior_id=senior.id, points=0, credit_balance=0.0,
+            )
+            agent.set_password(password)
+            db.session.add(agent)
+            db.session.flush()
+            db.session.add(PartnerProfile(
+                user_id=agent.id,
+                invite_code=invite_code,
+                commission_rate=commission_rate,
+            ))
+            audit_admin(current_user(), "senior_create_agent", "user", agent.id,
+                        f"invite={invite_code}, senior_id={senior.id}")
+            db.session.commit()
+            flash(f"เพิ่ม Agent {username} เข้าสายแล้ว รหัสแนะนำ: {invite_code}", "success")
+        return redirect(url_for("senior_agents"))
+
     agents = User.query.filter_by(senior_id=senior.id, role="partner").order_by(User.created_at.desc()).all()
     return render_template("senior_manage.html", view="agents", senior=senior, agents=agents)
 
