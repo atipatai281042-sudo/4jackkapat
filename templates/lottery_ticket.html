@@ -19,6 +19,7 @@
     <article class="panel">
       <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
         <div class="dashboard-card accent-gold"><span class="dashboard-label">ยอดเดิมพันรวม</span><strong>{{ "{:,.2f}".format(total_amount) }}</strong></div>
+        {% if total_discount %}<div class="dashboard-card accent-green"><span class="dashboard-label">ส่วนลด</span><strong>{{ "{:,.2f}".format(total_discount) }}</strong></div>{% endif %}
         <div class="dashboard-card accent-blue"><span class="dashboard-label">รางวัลที่ได้รับ</span><strong>{{ "{:,.2f}".format(total_reward) }}</strong></div>
         <div class="dashboard-card accent-green"><span class="dashboard-label">สถานะงวด</span><strong>{% if period.is_checked %}ตรวจผลแล้ว{% elif period.is_open %}รอตรวจผล{% else %}ปิดรับแทง{% endif %}</strong></div>
       </div>

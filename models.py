@@ -805,6 +805,38 @@ class LotteryPayoutRule(db.Model):
         return f"<LotteryPayoutRule {self.bet_type} x{self.payout_multiplier}>"
 
 
+class LotteryTypeRule(db.Model):
+    """ค่าตั้งต่อประเภทการแทง (ใช้ทุกห้อง): ส่วนลด % ของยอดแทง, ขั้นต่ำ, ขั้นสูงต่อรายการ"""
+    __tablename__ = "lottery_type_rules"
+
+    id = db.Column(db.Integer, primary_key=True)
+    bet_type = db.Column(db.String(30), unique=True, nullable=False)
+    discount_pct = db.Column(db.Float, nullable=False, default=0.0)
+    min_bet = db.Column(db.Integer, nullable=False, default=1)
+    max_bet = db.Column(db.Integer, nullable=False, default=1_000_000)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<LotteryTypeRule {self.bet_type} -{self.discount_pct}% {self.min_bet}-{self.max_bet}>"
+
+
+class LotteryRateSet(db.Model):
+    """อัตราจ่าย/ส่วนลดชุดที่ 2 ของหมวดหมู่หวย — สมาชิกเลือกใช้แทนชุดเริ่มต้นได้ตอนแทง
+    (ชุดเริ่มต้น = LotteryPayoutRule + LotteryTypeRule ที่ใช้ร่วมกันทุกหมวด)"""
+    __tablename__ = "lottery_rate_sets"
+    __table_args__ = (db.UniqueConstraint("category", "tier", "bet_type", name="uq_rate_set_cat_tier_type"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    category = db.Column(db.String(100), nullable=False, index=True)
+    tier = db.Column(db.Integer, nullable=False, default=2)
+    bet_type = db.Column(db.String(30), nullable=False)
+    payout_multiplier = db.Column(db.Float, nullable=False, default=0.0)
+    discount_pct = db.Column(db.Float, nullable=False, default=0.0)
+
+    def __repr__(self):
+        return f"<LotteryRateSet {self.category}#{self.tier} {self.bet_type} x{self.payout_multiplier} -{self.discount_pct}%>"
+
+
 class ThaiLotteryPeriod(db.Model):
     __tablename__ = "thai_lottery_periods"
 
@@ -839,6 +871,8 @@ class ThaiLotteryBet(db.Model):
     bet_type = db.Column(db.String(30), nullable=False)
     number = db.Column(db.String(10), nullable=False)
     amount = db.Column(db.Integer, nullable=False)
+    remark = db.Column(db.String(100), nullable=True)  # หมายเหตุที่สมาชิกใส่ตอนส่งโพย (ใช้เหมือนกันทั้งใบ)
+    discount_amount = db.Column(db.Float, nullable=False, default=0.0, server_default="0")  # ส่วนลดที่หักจากยอดแทงตอนส่งโพย
     rate = db.Column(db.Float, nullable=False)
     ticket_code = db.Column(db.String(40), nullable=True, index=True)
     

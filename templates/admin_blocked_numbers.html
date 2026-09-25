@@ -25,6 +25,7 @@
                                 <option value="">เลือกประเภท</option>
                                 <option value="3up">3 ตัวบน</option>
                                 <option value="3toad">3 ตัวโต๊ด</option>
+                                <option value="3down">3 ตัวล่าง</option>
                                 <option value="2up">2 ตัวบน</option>
                                 <option value="2down">2 ตัวล่าง</option>
                                 <option value="runup">วิ่งบน</option>
@@ -73,6 +74,7 @@
                                     <span class="blocked-type-badge">
                                         {% if item.bet_type == '3up' %}3 ตัวบน
                                         {% elif item.bet_type == '3toad' %}3 ตัวโต๊ด
+                                        {% elif item.bet_type == '3down' %}3 ตัวล่าง
                                         {% elif item.bet_type == '2up' %}2 ตัวบน
                                         {% elif item.bet_type == '2down' %}2 ตัวล่าง
                                         {% elif item.bet_type == 'runup' %}วิ่งบน

@@ -1,15 +1,32 @@
 {% extends "base.html" %}
 {% block title %}อัตราการจ่าย — สมบัติสี่จักรพรรดิ{% endblock %}
 {% block content %}
+<style>
+  .pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .pr-table { width: 100%; border-collapse: collapse; background: #fdecd2; color: #111; text-align: center; font-size: .9rem; border-radius: 6px; overflow: hidden; }
+  .pr-table th, .pr-table td { padding: 8px 6px; border-bottom: 1px solid #f1d6a8; }
+  .pr-table th { font-weight: 700; }
+  .pr-table td:first-child { text-align: left; font-weight: 600; }
+  .pr-cat { margin: 26px 0 10px; font-size: 1.15rem; font-weight: 700; }
+</style>
 <section class="page-section"><div class="container">
-  <header class="page-head"><div><h1 class="page-title">อัตราการจ่าย</h1><p class="section-desc">สรุปเรทจ่ายหลักของแต่ละประเภทการแทง</p></div></header>
-  <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-    <div class="dashboard-card accent-gold"><span class="dashboard-label">3 ตัวบน</span><strong>{{ payout_rates['3up'] }}</strong></div>
-    <div class="dashboard-card accent-blue"><span class="dashboard-label">3 ตัวโต๊ด</span><strong>{{ payout_rates['3toad'] }}</strong></div>
-    <div class="dashboard-card accent-green"><span class="dashboard-label">2 ตัวบน</span><strong>{{ payout_rates['2up'] }}</strong></div>
-    <div class="dashboard-card accent-red"><span class="dashboard-label">2 ตัวล่าง</span><strong>{{ payout_rates['2down'] }}</strong></div>
-    <div class="dashboard-card accent-blue"><span class="dashboard-label">วิ่งบน</span><strong>{{ payout_rates['runup'] }}</strong></div>
-    <div class="dashboard-card accent-green"><span class="dashboard-label">วิ่งล่าง</span><strong>{{ payout_rates['rundown'] }}</strong></div>
-  </div>
+  <header class="page-head"><div><h1 class="page-title">อัตราการจ่าย</h1><p class="section-desc">อัตราจ่ายและส่วนลดของแต่ละหมวดหมู่หวย{% if current_user and current_user.is_authenticated %} (ค่าที่บัญชีของคุณได้รับจริง){% endif %}</p></div></header>
+  {% for section in sections %}
+    <h2 class="pr-cat">{{ section.category }}</h2>
+    <div class="pr-grid">
+      {% for table in section.tables %}
+      <table class="pr-table">
+        <thead><tr><th>({{ table.name }})</th><th>จ่าย (บาท)</th><th>ลด (%)</th></tr></thead>
+        <tbody>
+          {% for row in table.rows %}
+          <tr><td>{{ row.label }}</td><td>{{ '%g'|format(row.rate) }}</td><td>{{ '%g'|format(row.discount) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="section-desc">ยังไม่มีห้องหวยที่เปิดให้บริการ</p>
+  {% endfor %}
 </div></section>
 {% endblock %}

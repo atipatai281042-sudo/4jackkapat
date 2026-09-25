@@ -1,12 +1,25 @@
 {% extends "base.html" %}
-{% block title %}ประวัติของฉัน — Yonko Rewards{% endblock %}
+{% block title %}รายการแทง — สมบัติสี่จักรพรรดิ{% endblock %}
 
 {% block content %}
+<style>
+  .hist-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .hist-filter a { padding: 6px 12px; border-radius: 6px; border: 1px solid #f59e0b; color: #fbbf24; text-decoration: none; font-size: .85rem; }
+  .hist-filter a.on { background: #f59e0b; color: #111; font-weight: 700; }
+  .hist-dates { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .hist-dates input { padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; color: #111; }
+  .hist-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .hist-summary > div { background: rgba(255,255,255,.06); border-radius: 8px; padding: 10px 12px; }
+  .hist-summary span { display: block; font-size: .78rem; opacity: .8; }
+  .hist-summary strong { font-size: 1.1rem; }
+  .hist-win { color: #22c55e; font-weight: 700; }
+  .hist-lose { color: #f87171; font-weight: 700; }
+</style>
 <section class="page-section">
   <div class="container">
 
     <header class="page-head">
-      <h1 class="page-title">ประวัติของฉัน</h1>
+      <h1 class="page-title">รายการแทง</h1>
       <div class="points-summary points-summary-success">
         <span class="points-summary-label">เครดิตคงเหลือ</span>
         <span class="points-summary-value">{{ "{:,.2f}".format(current_user.credit_balance) }}</span>
@@ -14,44 +27,68 @@
     </header>
 
     <article class="panel">
-      <h2 class="panel-title">ประวัติการแทงหวย</h2>
-      {% if thai_bets %}
+      <h2 class="panel-title">ตัวเลือกการค้นหา</h2>
+      <div class="hist-filter">
+        {% for key, label in [('today','วันนี้'),('yesterday','เมื่อวาน'),('week','สัปดาห์นี้ (จันทร์ - อาทิตย์)'),('lastweek','สัปดาห์ที่แล้ว (จันทร์ - อาทิตย์)'),('month','เดือนนี้')] %}
+        <a href="{{ url_for('history', range=key) }}" class="{{ 'on' if range_key == key else '' }}">{{ label }}</a>
+        {% endfor %}
+      </div>
+      <form method="get" action="{{ url_for('history') }}" class="hist-dates">
+        <label>ตั้งแต่วันที่ <input type="date" name="start" value="{{ start_day.isoformat() }}"></label>
+        <label>ถึง <input type="date" name="end" value="{{ end_day.isoformat() }}"></label>
+        <button type="submit" class="btn btn-primary btn-sm">ค้นหา</button>
+      </form>
+
+      <div class="hist-summary">
+        <div><span>ยอดแทงรวม</span><strong>{{ "{:,.2f}".format(totals.stake) }}</strong></div>
+        <div><span>ส่วนลดรวม</span><strong>{{ "{:,.2f}".format(totals.discount) }}</strong></div>
+        <div><span>ถูกรางวัลรวม</span><strong>{{ "{:,.2f}".format(totals.reward) }}</strong></div>
+        <div><span>แพ้/ชนะ (ที่ออกผลแล้ว)</span><strong class="{{ 'hist-win' if totals.profit >= 0 else 'hist-lose' }}">{{ "{:+,.2f}".format(totals.profit) }}</strong></div>
+      </div>
+
+      {% if tickets %}
       <div class="table-wrap">
         <table class="data-table">
           <thead>
-            <tr><th>งวด</th><th>ห้อง</th><th>เลขล่าสุด</th><th>ยอดแทง</th><th>สถานะ</th><th></th></tr>
+            <tr><th>วันที่</th><th>ชนิดหวย</th><th>งวดหวย</th><th>ยอด</th><th>ส่วนลด</th><th>ได้เสียสุทธิ</th><th>ถูกรางวัล</th><th>แพ้/ชนะ</th><th>หมายเหตุ</th><th></th></tr>
           </thead>
           <tbody>
-            {% set shown_tickets = [] %}
-            {% for bet in thai_bets %}
-              {% set ticket_key = bet.ticket_code or ('legacy-' ~ bet.period_id) %}
-              {% if ticket_key not in shown_tickets %}
-              {% set _ = shown_tickets.append(ticket_key) %}
-              {% set can_cancel = bet.status == 'pending' and bet.period and bet.period.is_open and bet.period.close_time > now %}
-              <tr>
-                <td>{{ bet.period.period_date }}</td>
-                <td>{{ bet.period.room.name if bet.period.room else '-' }}</td>
-                <td>{{ bet.number }} ({{ bet.bet_type }})</td>
-                <td class="text-negative">-{{ "{:,.2f}".format(bet.amount) }}</td>
-                <td><span class="status status-{{ bet.status }}">{{ bet.status }}</span></td>
-                <td>
-                  <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                    <a class="btn btn-ghost btn-xs" href="{{ url_for('lottery_ticket', period_id=bet.period_id, ticket_code=bet.ticket_code) if bet.ticket_code else url_for('lottery_ticket', period_id=bet.period_id) }}">ดูใบโพย</a>
-                    {% if bet.ticket_code and can_cancel %}
-                    <form method="post" action="{{ url_for('cancel_lottery_ticket', period_id=bet.period_id, ticket_code=bet.ticket_code) }}" onsubmit="return confirm('คืนโพยนี้และคืนเครดิตทั้งหมดเลยหรือไม่');">
-                      <button type="submit" class="btn btn-danger btn-xs">คืนโพย</button>
-                    </form>
-                    {% endif %}
-                  </div>
-                </td>
-              </tr>
+            {% for t in tickets %}
+            <tr>
+              <td>{{ t.time.strftime('%d/%m/%Y %H:%M') }}</td>
+              <td>{{ t.period.room.name if t.period and t.period.room else '-' }}</td>
+              <td>{{ t.period.period_date if t.period else '-' }}</td>
+              {% if t.state == 'cancelled' %}
+              <td colspan="5" style="text-align: center; opacity: .7;">ยกเลิกโพยแล้ว</td>
+              {% else %}
+              <td>{{ "{:,.2f}".format(t.stake) }}</td>
+              <td>{{ "{:,.2f}".format(t.discount) }}</td>
+              <td>{{ "{:,.2f}".format(t.paid) }}</td>
+              <td>{{ "{:,.2f}".format(t.reward) }}</td>
+              <td>
+                {% if t.state == 'pending' %}<span style="opacity: .75;">รอผล</span>
+                {% else %}<span class="{{ 'hist-win' if t.profit >= 0 else 'hist-lose' }}">{{ "{:+,.2f}".format(t.profit) }}</span>{% endif %}
+              </td>
               {% endif %}
+              <td>{{ t.remark or '-' }}</td>
+              <td>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <a class="btn btn-ghost btn-xs" href="{{ url_for('lottery_ticket', period_id=t.period.id, ticket_code=t.code) if t.code else url_for('lottery_ticket', period_id=t.period.id) }}">ดูใบโพย</a>
+                  {% if t.code %}<a class="btn btn-ghost btn-xs" href="{{ url_for('download_lottery_ticket', period_id=t.period.id, ticket_code=t.code) }}">โหลดไฟล์</a>{% endif %}
+                  {% if t.can_cancel %}
+                  <form method="post" action="{{ url_for('cancel_lottery_ticket', period_id=t.period.id, ticket_code=t.code) }}" onsubmit="return confirm('คืนโพยนี้และคืนเครดิตทั้งหมดเลยหรือไม่');">
+                    <button type="submit" class="btn btn-danger btn-xs">คืนโพย</button>
+                  </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
       {% else %}
-        <p class="empty-state-text">ยังไม่มีประวัติการแทงหวย</p>
+        <p class="empty-state-text">ไม่พบข้อมูลดังกล่าว</p>
       {% endif %}
     </article>
 
