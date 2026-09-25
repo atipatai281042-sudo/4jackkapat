@@ -29,6 +29,11 @@
     .bp-table.bp-plain th, .bp-table.bp-plain td { border-color: #f1e2c8; }
     .bp-table td.bp-red { color: #b91c1c; font-weight: 700; text-align: left; }
 
+    .bp-rates-head { display: flex; justify-content: space-between; font-weight: 700; font-size: .95rem; margin: 0 0 8px; cursor: pointer; list-style: none; }
+    .bp-rates-head::-webkit-details-marker { display: none; }
+    .bp-rates-hint { display: none; font-weight: 400; opacity: .7; }
+    .bp-back { min-height: 40px; }
+    .bp-bills .bp-cancel, .bp-del { min-width: 38px; min-height: 36px; }
     .bp-main { padding: 16px 20px 40px; min-width: 0; background: #fff; color: #111; }
     .bp-back { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: #111; text-decoration: none; margin: 8px 0 14px; }
     .bp-back i { color: var(--bp-orange); font-size: 1.5rem; }
@@ -84,6 +89,8 @@
     .bp-modal .bp-close { border: 1px solid #a7d7ab; background: #e8f5e9; color: #2e7d32; border-radius: 4px; padding: 6px 22px; font-family: inherit; cursor: pointer; }
 
     @media (max-width: 900px) {
+        .bp-tip { display: none; }   /* คำแนะนำ Enter/Tab/Spacebar ใช้กับคีย์บอร์ดเท่านั้น มือถือไม่มีปุ่มนี้ */
+        .bp-rates-hint { display: inline; }
         .bp-page { grid-template-columns: 1fr; }
         .bp-cols { grid-template-columns: 1fr; gap: 18px; }
         .bp-main { padding: 12px 10px 32px; }
@@ -111,8 +118,8 @@
     <div class="bp-user-links">
       <a href="{{ url_for('wallet') }}"><i class="fas fa-user"></i> ข้อมูลผู้ใช้</a>
     </div>
-    <div class="bp-side-rates">
-      <h3><span>อัตราจ่าย</span><span>{{ room.name }}</span></h3>
+    <details class="bp-side-rates" id="bp-rates" open>
+      <summary class="bp-rates-head"><span>อัตราจ่าย <small class="bp-rates-hint">(แตะเพื่อดู/ซ่อน)</small></span><span>{{ room.name }}</span></summary>
       {% if tier_tables|length > 1 %}
       <select id="bp-tier" class="bp-input" style="margin-bottom: 8px; padding: 6px 8px; font-size: .85rem;" aria-label="เลือกอัตราจ่าย">
         {% for t in tier_tables %}<option value="{{ t.tier }}">{{ t.name }}</option>{% endfor %}
@@ -129,7 +136,7 @@
         </tbody>
       </table>
       <a href="{{ url_for('payout_rates_page') }}" style="display: inline-block; margin-top: 8px; color: #fbbf24; font-size: .8rem;">ดูรายละเอียดอัตราจ่ายทั้งหมด</a>
-    </div>
+    </details>
   </aside>
 
   <main class="bp-main">
@@ -338,6 +345,9 @@
     const fmt = (n) => Number(n).toLocaleString('en-US');
 
     // ---------- นาฬิกา / นับถอยหลัง (ใช้เวลากรุงเทพ ไม่ขึ้นกับเครื่องผู้ใช้) ----------
+    let closed = false;      // งวดปิดรับแล้ว (หมดเวลาระหว่างที่กำลังกรอก)
+    let submitting = false;  // กำลังส่งโพย กันกดซ้ำ
+    if (window.matchMedia('(max-width: 900px)').matches) { const rates = document.getElementById('bp-rates'); if (rates) rates.open = false; }
     const bornAt = Date.now();
     const remaining0 = parseInt($('bp-countdown').dataset.remaining || '0', 10);
     const pad = (n) => String(n).padStart(2, '0');
@@ -348,13 +358,21 @@
         const text = left > 0 ? `${pad(Math.floor(left / 3600))}: ${pad(Math.floor(left % 3600 / 60))}: ${pad(left % 60)}` : 'ปิดรับแล้ว';
         $('bp-countdown-value').textContent = text;
         $('bp-left-value').textContent = text;
-        if (left === 0) { $('bp-save').disabled = true; if (!tick.reloaded) { tick.reloaded = true; setTimeout(() => location.reload(), 1500); } }
+        if (left === 0 && !closed) {
+            // ไม่โหลดหน้าใหม่ — โพยที่กำลังกรอกยังอยู่ให้ดู แต่ส่งไม่ได้แล้ว
+            closed = true;
+            $('bp-save').disabled = true;
+            $('bp-countdown').style.background = 'rgba(220,53,69,.12)';
+            if (typeof showModal === 'function') showModal('หมดเวลารับแทงของงวดนี้แล้ว\nโพยที่ยังไม่ได้บันทึกจะส่งไม่ได้ กรุณารอเปิดงวดถัดไป', { title: 'ปิดรับแทงแล้ว' });
+        }
     }
     tick(); setInterval(tick, 1000);
 
     // ---------- หน้าต่างแจ้งเตือน / ยืนยัน ----------
     let modalOk = null;
+    let modalAfter = null;
     function showModal(text, opts = {}) {
+        modalAfter = opts.after || null;
         $('bp-modal-title').textContent = opts.title || 'แจ้งเตือน';
         $('bp-modal-text').textContent = text;
         $('bp-modal-cancel').style.display = opts.confirm ? '' : 'none';
@@ -364,7 +382,7 @@
         $('bp-modal-ok').focus();
     }
     function closeModal() { $('bp-modal').classList.remove('show'); modalOk = null; }
-    $('bp-modal-ok').addEventListener('click', () => { const cb = modalOk; closeModal(); if (cb) cb(); });
+    $('bp-modal-ok').addEventListener('click', () => { const cb = modalOk; const after = modalAfter; closeModal(); if (cb) cb(); else if (after) after(); });
     $('bp-modal-cancel').addEventListener('click', closeModal);
 
     if (!HAS_PERIOD) return;
@@ -443,7 +461,7 @@
     $('bp-reverse').addEventListener('click', toggleReverse);
     $('bp-double').addEventListener('click', () => {
         const doubles = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99'];
-        const cur = groupDigits(digitsOf(numberEl.value), 2);
+        const cur = groupDigits(digitsOf(numberEl.value), 2).filter((t) => t.length === 2);
         numberEl.value = uniq(cur.concat(doubles)).join(' ');
         priceA.focus();
     });
@@ -515,6 +533,7 @@
     }
     function entryCount() { return bills.reduce((s, b) => s + b.entries.length, 0); }
     function pushBill(bill) {
+        if (!bill.entries.length) { showModal('ไม่มีรายการที่จะเพิ่ม กรุณาตรวจเลขและราคา'); return false; }
         if (entryCount() + bill.entries.length > MAX_ENTRIES) {
             showModal(`แทงได้ไม่เกิน ${fmt(MAX_ENTRIES)} รายการ ต่อ 1 โพย\nถ้าเกินกรุณาแยกโพยเพิ่ม`);
             return false;
@@ -544,6 +563,10 @@
         numbers.forEach((num) => cols.forEach(([, type], i) => {
             if (amounts[i] > 0) entries.push({ bet_type: type, number: num, amount: amounts[i] });
         }));
+        if (!entries.length) {
+            showModal(mode === 'win' ? 'วินเลขต้องกรอกเลขที่ต่างกันอย่างน้อย 2 ตัว เช่น 1 2 3' : 'ไม่มีรายการที่จะเพิ่ม กรุณาตรวจเลขและราคา');
+            return;
+        }
         if (!checkLimits(entries)) return;
         const ok = pushBill({
             title: cfg.label + (mode === '2' && reverse ? ' (กลับเลข)' : ''),
@@ -599,7 +622,7 @@
         $('bp-discount-line').style.display = discount > 0 ? '' : 'none';
         $('bp-discount').textContent = fmt(discount);
         $('bp-net').textContent = fmt(Math.round((total - discount) * 100) / 100);
-        $('bp-save').disabled = bills.length === 0;
+        $('bp-save').disabled = bills.length === 0 || closed || submitting;
     }
 
     $('bp-clear').addEventListener('click', () => {
@@ -616,21 +639,44 @@
         const discountText = discount > 0 ? `\nส่วนลด ${fmt(discount)} บาท · หักเครดิตจริง ${fmt(Math.round((total - discount) * 100) / 100)} บาท` : '';
         showModal(`ตรวจสอบรายการแล้วยืนยันส่งโพย\n${fmt(count)} รายการ รวม ${fmt(total)} บาท${discountText}\n(กดบันทึกแล้วยกเลิกได้จนกว่าจะปิดรับแทง)`, {
             title: 'ยืนยันการส่งโพย',
-            confirm: () => {
-                const form = $('bp-form');
-                form.querySelectorAll('input[name$="[]"], input[name="remark"]').forEach((el) => el.remove());
-                const remark = document.createElement('input');
-                remark.type = 'hidden'; remark.name = 'remark'; remark.value = $('bp-remark').value;
-                form.appendChild(remark);
+            confirm: async () => {
+                if (submitting || closed) return;
+                submitting = true;
+                renderBills();
+                const body = new URLSearchParams();
+                body.append('room_id', document.querySelector('#bp-form input[name="room_id"]').value);
+                body.append('rate_tier', $('bp-rate-tier').value);
+                body.append('remark', $('bp-remark').value);
                 bills.forEach((b) => b.entries.forEach((e) => {
-                    [['bet_types[]', e.bet_type], ['numbers[]', e.number], ['amounts[]', e.amount]].forEach(([name, value]) => {
-                        const input = document.createElement('input');
-                        input.type = 'hidden'; input.name = name; input.value = value;
-                        form.appendChild(input);
-                    });
+                    body.append('bet_types[]', e.bet_type);
+                    body.append('numbers[]', e.number);
+                    body.append('amounts[]', e.amount);
                 }));
-                $('bp-save').disabled = true;
-                form.submit();
+                try {
+                    const res = await fetch($('bp-form').action, {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' },
+                        body,
+                    });
+                    let data = null;
+                    try { data = await res.json(); } catch (err) { data = null; }
+                    if (data && data.ok) {
+                        bills = [];
+                        $('bp-remark').value = '';
+                        if (typeof data.balance === 'number') { $('bp-balance').textContent = fmt(Math.round(data.balance)); }
+                        renderBills();
+                        showModal(data.message, { title: 'ส่งโพยสำเร็จ', after: () => location.reload() });
+                    } else if (data) {
+                        showModal(data.message + '\n\n(โพยของคุณยังอยู่ในหน้านี้ แก้ไขแล้วกดบันทึกใหม่ได้)', { title: 'ส่งโพยไม่สำเร็จ' });
+                    } else {
+                        showModal('ระบบไม่ตอบสนองหรือเซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่ในแท็บอื่น แล้วกลับมากดบันทึกอีกครั้ง\n\n(โพยของคุณยังอยู่ในหน้านี้)', { title: 'ส่งโพยไม่สำเร็จ' });
+                    }
+                } catch (err) {
+                    showModal('เชื่อมต่อไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วกดบันทึกใหม่\n\n(โพยของคุณยังอยู่ในหน้านี้ ยังไม่ถูกส่ง)', { title: 'ส่งโพยไม่สำเร็จ' });
+                } finally {
+                    submitting = false;
+                    renderBills();
+                }
             },
         });
     });

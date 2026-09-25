@@ -1860,7 +1860,15 @@ def lottery_thai():
     room_url = url_for("lottery_thai", room_id=room.id)
 
     if request.method == "POST":
+        # หน้าส่งโพยส่งด้วย fetch แล้วรับ JSON กลับ — ถ้าส่งไม่สำเร็จ (เครดิตไม่พอ ปิดรับ ฯลฯ) หน้าไม่โหลดใหม่ โพยที่กรอกไม่หาย
+        wants_json = "application/json" in request.headers.get("Accept", "")
+
+        def bet_result(ok, message, status=200, **extra):
+            return jsonify(ok=ok, message=message, **extra), status
+
         if not active_period:
+            if wants_json:
+                return bet_result(False, "ขณะนี้ยังไม่มีงวดเปิดรับแทง (อาจปิดรับแล้ว)", 409)
             flash("ขณะนี้ยังไม่มีงวดเปิดรับแทง", "error")
             return redirect(room_url)
 
@@ -1879,16 +1887,25 @@ def lottery_thai():
                     "amount": amounts[idx] if idx < len(amounts) else 0,
                 })
             if not entries:
+                if wants_json:
+                    return bet_result(False, "กรุณาเลือกประเภทและเลขที่ต้องการแทง", 400)
                 flash("กรุณาเลือกประเภทและเลขที่ต้องการแทง", "error")
                 return redirect(room_url)
             try:
                 created = add_thai_lottery_bets(user, active_period, entries, rate_tier=rate_tier, remark=remark)
+                if wants_json:
+                    if created:
+                        return bet_result(True, f"ส่งโพยหวยสำเร็จ {created} รายการ", 200,
+                                          created=created, balance=float(user.credit_balance))
+                    return bet_result(False, "ไม่พบรายการแทงที่ถูกต้อง", 400)
                 if created:
                     flash(f"ส่งโพยหวยสำเร็จ {created} รายการ", "success")
                 else:
                     flash("ไม่พบรายการแทงที่ถูกต้อง", "error")
                 return redirect(room_url)
             except ValueError as exc:
+                if wants_json:
+                    return bet_result(False, str(exc), 400)
                 flash(str(exc), "error")
                 return redirect(room_url)
 
