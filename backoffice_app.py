@@ -12,6 +12,7 @@ from models import (
 )
 from app import app as main_app
 from app import senior_agent_ids
+from backoffice_reports import dashboard_extras
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 SECRET_KEY = os.environ.get("SECRET_KEY") or "loyalty-app-session-secret-v1"
@@ -179,6 +180,7 @@ def dashboard():
         ).limit(8).all()
         return render_template(
             "backoffice_senior.html",
+            **dashboard_extras("senior", user),
             senior=user,
             profile=user.senior_profile,
             agents=agents,
@@ -211,6 +213,7 @@ def dashboard():
         ).limit(5).all()
         return render_template(
             "backoffice_partner.html",
+            **dashboard_extras("partner", user),
             partner=user,
             profile=user.partner_profile,
             members=members,

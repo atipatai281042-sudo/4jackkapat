@@ -489,6 +489,51 @@ def admin_required(view):
     return wrapper
 
 
+ASSISTANT_PERMISSION_LABELS = {
+    "bets": "รายการแทง",
+    "members": "จัดการสมาชิก/สาย",
+    "takelist": "รายการเก็บของสมาชิก",
+    "reports": "รายงานแพ้ชนะ",
+    "transfer": "โอนเงิน/การเงิน",
+}
+# หน้าไหน (ตามชื่อ endpoint หลังตัดคำนำหน้า partner_/senior_) ต้องใช้สิทธิ์อะไร — หน้าที่ไม่อยู่ในรายการเปิดให้ผู้ช่วยทุกคน
+ASSISTANT_ENDPOINT_PERMISSIONS = (
+    (("bets", "bet_", "pending_bets", "overall"), "bets"),
+    (("member", "agents", "online", "settings", "stock", "blocked"), "members"),
+    (("takelist",), "takelist"),
+    (("report", "pnl", "results"), "reports"),
+    (("topup", "deposit", "finance", "statement"), "transfer"),
+)
+
+
+def assistant_permission_for(endpoint):
+    name = endpoint or ""
+    for prefix in ("partner_", "senior_"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    for prefixes, permission in ASSISTANT_ENDPOINT_PERMISSIONS:
+        if name.startswith(prefixes):
+            return permission
+    return None
+
+
+def assistant_allowed(assistant, endpoint):
+    """ผู้ช่วยเข้าหน้านี้ได้ไหม ตามสิทธิ์ที่เจ้าของบัญชีติ๊กไว้ (senior เดิมใช้คำว่า agents แทน members)"""
+    needed = assistant_permission_for(endpoint)
+    if needed is None:
+        return True
+    granted = {item.strip() for item in (assistant.permissions or "").split(",") if item.strip()}
+    if needed == "members" and "agents" in granted:
+        return True
+    return needed in granted
+
+
+def selected_permissions(form):
+    picked = [key for key in ASSISTANT_PERMISSION_LABELS if key in form.getlist("perm")]
+    return ",".join(picked)
+
+
 def partner_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
@@ -508,6 +553,8 @@ def partner_required(view):
         if assistant and not assistant.is_active:
             flash("บัญชีผู้ช่วยนี้ถูกระงับการใช้งาน", "error")
             return redirect(url_for("index"))
+        if assistant and not assistant_allowed(assistant, request.endpoint):
+            abort(403)
         return view(*args, **kwargs)
     return wrapper
 
@@ -531,6 +578,8 @@ def senior_required(view):
         if assistant and not assistant.is_active:
             flash("บัญชีผู้ช่วยนี้ถูกระงับการใช้งาน", "error")
             return redirect(url_for("index"))
+        if assistant and not assistant_allowed(assistant, request.endpoint):
+            abort(403)
         return view(*args, **kwargs)
     return wrapper
 
@@ -2966,14 +3015,32 @@ def partner_assistants():
                 invite_code=f"ASST{random.randint(10000, 99999)}",
                 commission_rate=0,
             ))
-            db.session.add(PartnerAssistant(partner_id=partner.id, assistant_user_id=assistant_user.id))
+            db.session.add(PartnerAssistant(
+                partner_id=partner.id, assistant_user_id=assistant_user.id,
+                permissions=selected_permissions(request.form) or "members,bets,reports",
+            ))
             db.session.commit()
             flash(f"สร้างผู้ช่วย {username} สำเร็จ", "success")
         return redirect(url_for("partner_assistants"))
     assistants = PartnerAssistant.query.filter_by(partner_id=partner.id).order_by(
         PartnerAssistant.created_at.desc()
     ).all()
-    return render_template("partner_manage.html", view="assistants", partner=partner, assistants=assistants)
+    return render_template("partner_manage.html", view="assistants", partner=partner, assistants=assistants,
+                           perm_labels=ASSISTANT_PERMISSION_LABELS)
+
+
+@app.route("/partner/assistants/<int:assistant_id>/permissions", methods=["POST"])
+@partner_required
+def partner_assistant_permissions(assistant_id):
+    owner = current_user()
+    partner = partner_owner(owner)
+    if owner.id != partner.id:
+        abort(403)
+    item = PartnerAssistant.query.filter_by(id=assistant_id, partner_id=partner.id).first_or_404()
+    item.permissions = selected_permissions(request.form)
+    db.session.commit()
+    flash(f"บันทึกสิทธิ์ของผู้ช่วย {item.assistant.username} แล้ว", "success")
+    return redirect(url_for("partner_assistants"))
 
 
 @app.route("/partner/assistants/<int:assistant_id>/toggle", methods=["POST"])
@@ -3939,14 +4006,32 @@ def senior_assistants():
                 invite_code=f"ASST{random.randint(10000, 99999)}",
                 commission_rate=0,
             ))
-            db.session.add(SeniorAssistant(senior_id=senior.id, assistant_user_id=assistant_user.id))
+            db.session.add(SeniorAssistant(
+                senior_id=senior.id, assistant_user_id=assistant_user.id,
+                permissions=selected_permissions(request.form) or "members,bets,reports",
+            ))
             db.session.commit()
             flash(f"สร้างผู้ช่วย {username} สำเร็จ", "success")
         return redirect(url_for("senior_assistants"))
     assistants = SeniorAssistant.query.filter_by(senior_id=senior.id).order_by(
         SeniorAssistant.created_at.desc()
     ).all()
-    return render_template("senior_manage.html", view="assistants", senior=senior, assistants=assistants)
+    return render_template("senior_manage.html", view="assistants", senior=senior, assistants=assistants,
+                           perm_labels=ASSISTANT_PERMISSION_LABELS)
+
+
+@app.route("/senior/assistants/<int:assistant_id>/permissions", methods=["POST"])
+@senior_required
+def senior_assistant_permissions(assistant_id):
+    owner = current_user()
+    senior = senior_owner(owner)
+    if owner.id != senior.id:
+        abort(403)
+    item = SeniorAssistant.query.filter_by(id=assistant_id, senior_id=senior.id).first_or_404()
+    item.permissions = selected_permissions(request.form)
+    db.session.commit()
+    flash(f"บันทึกสิทธิ์ของผู้ช่วย {item.assistant.username} แล้ว", "success")
+    return redirect(url_for("senior_assistants"))
 
 
 @app.route("/senior/assistants/<int:assistant_id>/toggle", methods=["POST"])
@@ -5649,6 +5734,20 @@ def forbidden(e):
 # ==========================================================
 # INIT DATABASE + ข้อมูลตัวอย่าง
 # ==========================================================
+def grant_legacy_assistants_full_access_once():
+    """ผู้ช่วยที่สร้างไว้ก่อนมีระบบสิทธิ์เคยเข้าได้ทุกหน้า — ให้สิทธิ์ครบครั้งเดียวเพื่อไม่ให้ใช้งานไม่ได้ทันที
+    (สร้างใหม่หลังจากนี้ใช้สิทธิ์ที่ติ๊กจริง)"""
+    if get_setting("assistant_permissions_v1", ""):
+        return
+    everything = ",".join(ASSISTANT_PERMISSION_LABELS)
+    for row in PartnerAssistant.query.all():
+        row.permissions = everything
+    for row in SeniorAssistant.query.all():
+        row.permissions = everything
+    save_setting("assistant_permissions_v1", "1")
+    db.session.commit()
+
+
 def apply_reference_rates_once():
     """ตั้งอัตราจ่าย/ส่วนลด/ขั้นต่ำ-ขั้นสูง และชุดที่ 2 ของแต่ละหมวด ตามเว็บตัวอย่าง — ทำครั้งเดียวเท่านั้น
     (เก็บธงใน SystemSetting) หลังจากนั้นแอดมินแก้เองที่หน้าตั้งค่าหวยรัฐบาลได้ ไม่ถูกทับอีก"""
@@ -6004,6 +6103,7 @@ def seed_data():
 
         db.session.commit()
         apply_reference_rates_once()
+        grant_legacy_assistants_full_access_once()
         for user in User.query.all():
             refresh_vip_status(user)
         db.session.commit()

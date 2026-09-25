@@ -306,3 +306,81 @@ for _role in ROLES:
     app.add_url_rule(f"/{_role}/takelist", endpoint=_ep, view_func=_view, methods=["GET"])
     _ep, _view = make_pnl(_role)
     app.add_url_rule(f"/{_role}/pnl/<kind>", endpoint=_ep, view_func=_view, methods=["GET"])
+
+
+# ----------------------------- ประวัติการเงิน (statement) -----------------------------
+from models import WalletTransaction  # noqa: E402
+
+WALLET_LABELS = {"credit": "เครดิต", "commission": "คอมมิชชั่น", "stock": "ถือหุ้น"}
+
+
+def make_statement(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_statement"
+
+    @cfg["decorator"]
+    def view():
+        owner = cfg["owner"](current_user())
+        range_key, start_day, end_day = _bet_history_range(request.args)
+        start_utc = datetime.combine(start_day, datetime.min.time()) - timedelta(hours=7)
+        end_utc = datetime.combine(end_day + timedelta(days=1), datetime.min.time()) - timedelta(hours=7)
+        wallet = request.args.get("wallet") or "credit"
+        if wallet not in WALLET_LABELS:
+            wallet = "credit"
+        rows = WalletTransaction.query.filter(
+            WalletTransaction.user_id == owner.id, WalletTransaction.wallet_type == wallet,
+            WalletTransaction.created_at >= start_utc, WalletTransaction.created_at < end_utc,
+        ).order_by(WalletTransaction.id.desc()).limit(1000).all()
+        total_out = sum(-r.change for r in rows if r.change < 0)
+        total_in = sum(r.change for r in rows if r.change > 0)
+        return render_template(
+            "bo_statement.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            rows=rows, wallet=wallet, wallet_labels=WALLET_LABELS, range_key=range_key, start_day=start_day,
+            end_day=end_day, total_out=total_out, total_in=total_in, shift=timedelta(hours=7),
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+for _role in ROLES:
+    _ep, _view = make_statement(_role)
+    app.add_url_rule(f"/{_role}/statement", endpoint=_ep, view_func=_view, methods=["GET"])
+
+
+# ----------------------------- ข้อมูลเพิ่มบนหน้าภาพรวม -----------------------------
+from datetime import time as _time  # noqa: E402
+from models import LoginHistory  # noqa: E402
+
+
+def dashboard_extras(role, owner):
+    """การ์ดสรุปวันนี้ (ถือหุ้น/ถูกรางวัล/ค่าคอม/รวม), % ถือสู้รายห้อง, ประวัติการเข้าสู่ระบบ — ใช้บนหน้าภาพรวมของ Agent/Senior"""
+    start_local = datetime.combine(app_now().date(), _time.min)
+    start_utc = start_local - timedelta(hours=7)
+    end_utc = start_utc + timedelta(days=1)
+    bets = scope_query(role, owner).filter(
+        ThaiLotteryBet.created_at >= start_utc, ThaiLotteryBet.created_at < end_utc,
+        ThaiLotteryBet.status.in_(["win", "lose"]),
+    ).all()
+    commission, stock = ledger_maps(role, owner, [b.id for b in bets])
+    cards = {
+        "stock": sum(stock.values()),
+        "win": sum(float(b.reward_amount) for b in bets if b.status == "win"),
+        "commission": sum(commission.values()),
+    }
+    cards["total"] = cards["stock"] + cards["commission"]
+
+    share_model, id_field = (PartnerStockShare, "partner_id") if role == "partner" else (SeniorStockShare, "senior_id")
+    rooms = active_lottery_rooms().all()
+    shares = {
+        row.room_id: row.hold_percent
+        for row in share_model.query.filter(getattr(share_model, id_field) == owner.id)
+    }
+    hold_rows = [{"room": room.name, "group": room_category_name(room) or "อื่นๆ", "percent": shares.get(room.id, 0.0)} for room in rooms]
+    logins = LoginHistory.query.filter_by(user_id=owner.id).order_by(LoginHistory.id.desc()).limit(10).all()
+    login_rows = [
+        {"time": (entry.created_at + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S") if entry.created_at else "-",
+         "ip": entry.ip_address or "-", "agent": entry.user_agent or "-"}
+        for entry in logins
+    ]
+    return {"today_cards": cards, "hold_rows": hold_rows, "login_rows": login_rows}

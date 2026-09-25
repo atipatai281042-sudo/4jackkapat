@@ -1,0 +1,54 @@
+{% extends shell %}
+{% block title %}ประวัติการเงิน — mklotto{% endblock %}
+{% block content %}
+<style>
+  .st-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .st-filter a { padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(245,158,11,.5); color: #fbbf24; text-decoration: none; font-size: .85rem; }
+  .st-filter a.on { background: #f59e0b; color: #111; font-weight: 700; }
+  .st-filter.sub a { border-color: rgba(148,163,184,.4); color: #cbd5e1; }
+  .st-filter.sub a.on { background: #38bdf8; color: #06202b; }
+  .st-dates { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .st-table th, .st-table td { white-space: nowrap; }
+  .st-table td.num, .st-table th.num { text-align: right; }
+  .st-out { color: #f87171; }
+  .st-in { color: #4ade80; }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">STATEMENT</span><h1 class="page-title">ประวัติการเงิน</h1>
+      <p class="section-desc">รายการเงินเข้า-ออกของบัญชีคุณ พร้อมยอดคงเหลือหลังทำรายการ</p></div>
+    <div class="partner-balance"><span>เครดิตคงเหลือ</span><strong>{{ '{:,.2f}'.format(partner.credit_balance) }}</strong></div>
+  </header>
+  <article class="panel">
+    <h2 class="panel-title">ตัวเลือกการค้นหา</h2>
+    <div class="st-filter">
+      {% for key, label in [('today','วันนี้'),('yesterday','เมื่อวาน'),('week','สัปดาห์นี้ (จันทร์ - อาทิตย์)'),('lastweek','สัปดาห์ที่แล้ว (จันทร์ - อาทิตย์)'),('month','เดือนนี้')] %}
+      <a href="{{ url_for(endpoint, range=key, wallet=wallet) }}" class="{{ 'on' if range_key == key else '' }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <form method="get" class="st-dates">
+      <input type="hidden" name="wallet" value="{{ wallet }}">
+      <label>ตั้งแต่วันที่ <input class="form-input" type="date" name="start" value="{{ start_day.isoformat() }}"></label>
+      <label>ถึง <input class="form-input" type="date" name="end" value="{{ end_day.isoformat() }}"></label>
+      <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i> ค้นหา</button>
+    </form>
+    <div class="st-filter sub">
+      {% for key, label in wallet_labels.items() %}<a href="{{ url_for(endpoint, range=range_key, start=start_day.isoformat(), end=end_day.isoformat(), wallet=key) }}" class="{{ 'on' if wallet == key else '' }}">{{ label }}</a>{% endfor %}
+    </div>
+    <div class="table-wrap">
+      <table class="data-table st-table">
+        <thead><tr><th>วันที่-เวลา</th><th>รายละเอียด</th><th class="num">เงินออก</th><th class="num">เงินเข้า</th><th class="num">คงเหลือ</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr><td>{{ (r.created_at + shift).strftime('%d/%m/%Y %H:%M:%S') }}</td><td style="white-space:normal;">{{ r.reason or '-' }}</td>
+            <td class="num st-out">{{ '{:,.2f}'.format(-r.change) if r.change < 0 else '' }}</td>
+            <td class="num st-in">{{ '{:,.2f}'.format(r.change) if r.change > 0 else '' }}</td>
+            <td class="num">{{ '{:,.2f}'.format(r.balance_after) }}</td></tr>
+          {% else %}<tr><td colspan="5" class="empty-state-text">ไม่มีข้อมูล</td></tr>{% endfor %}
+          {% if rows %}<tr style="font-weight:700;"><td colspan="2">รวม</td><td class="num st-out">{{ '{:,.2f}'.format(total_out) }}</td><td class="num st-in">{{ '{:,.2f}'.format(total_in) }}</td><td></td></tr>{% endif %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</main>
+{% endblock %}

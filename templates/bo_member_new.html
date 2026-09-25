@@ -49,7 +49,7 @@
     <article class="panel wz-pane" data-pane="2">
       <p class="wz-hint">เลือก "ปิด" เพื่อไม่ให้สมาชิกแทงกลุ่มหวยนั้น (เริ่มต้น = เปิดทั้งหมด)</p>
       <div class="table-wrap"><table class="data-table wz-mini">
-        <thead><tr><th style="text-align:left;">กลุ่มหวย</th><th>เปิด/ปิด</th>{% set has_t2 = tiers_by_group.values()|map('length')|max > 1 %}{% if has_t2 %}<th>{{ tier_names[2] }}</th>{% endif %}</tr></thead>
+        <thead><tr><th style="text-align:left;">กลุ่มหวย</th><th>เปิด/ปิด</th>{% set has_t2 = (tiers_by_group.values()|map('length')|list + [1])|max > 1 %}{% if has_t2 %}<th>{{ tier_names[2] }}</th>{% endif %}</tr></thead>
         <tbody>
           {% for g in groups %}{% set ci = loop.index0 %}
           <tr><td style="text-align:left;">{{ g }}</td>

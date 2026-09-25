@@ -1,0 +1,91 @@
+{# เมนูหลังบ้าน Agent/Senior แบบจัดกลุ่มตามเว็บตัวอย่าง — ใช้ร่วมกันทั้งหน้าจอ shell และหน้าภาพรวม
+   base = '' (หน้าที่ proxy เขียนลิงก์ให้) หรือ main_app_url (หน้าภาพรวม), current = path ของหน้านี้ #}
+{% macro nav_group(title, icon, items, base, current) %}
+  {% set opened = items|selectattr(0, 'equalto', current)|list|length > 0 %}
+  <details class="bo-nav-group" {{ 'open' if opened else '' }}>
+    <summary><i class="fas {{ icon }}"></i><span>{{ title }}</span><i class="fas fa-chevron-down bo-nav-caret"></i></summary>
+    {% for path, label in items %}<a href="{{ base }}{{ path }}" class="{{ 'is-active' if path == current else '' }}"><span>{{ label }}</span></a>{% endfor %}
+  </details>
+{% endmacro %}
+
+{% macro role_nav(role, base, current, home_href, is_owner=True) %}
+  {% if role == 'partner' %}
+    {{ nav_group('รายการแทง', 'fa-ticket', [
+      ('/partner/overall', 'ดูของรวม/คาดคะเนได้เสีย'),
+      ('/partner/bets/member-types', 'ดูของสมาชิก/ประเภท'),
+      ('/partner/bets/pending', 'รอผลเดิมพัน'),
+      ('/partner/bets/acceptance-by-type', 'ตั้งค่ารับของแยกตามชนิด'),
+      ('/partner/bets', 'รายการแทงทั้งหมด'),
+      ('/partner/bets/summary', 'ยอดรวม/คาดได้เสีย'),
+    ], base, current) }}
+    {{ nav_group('จัดการสมาชิก', 'fa-users', [
+      ('/partner/members/new', 'เพิ่มสมาชิก'),
+      ('/partner/myshare', 'ส่วนแบ่งที่ได้รับ'),
+      ('/partner/member-settings/stock', 'ข้อมูลทั่วไป/เก็บของ/แบ่งหุ้น'),
+      ('/partner/member-settings/limits', 'ขั้นต่ำ/สูงสุด/สูงสุดต่อเลข'),
+      ('/partner/member-settings/rates', 'อัตราจ่าย/คอมมิชชั่น'),
+      ('/partner/member-settings/access', 'เปิด-ปิด อัตราจ่าย/กลุ่มหวย'),
+      ('/partner/online', 'สมาชิกออนไลน์'),
+      ('/partner/takelist', 'รายการเก็บของ/อั้น'),
+      ('/partner/members', 'รายชื่อ/เติมเครดิตสมาชิก'),
+      ('/partner/agents', 'Agent ย่อย'),
+      ('/partner/blocked', 'เลขอั้นในสาย'),
+      ('/partner/settings', 'เปิด-ปิดห้องหวย'),
+      ('/partner/stock', '% ถือหุ้นระดับห้อง'),
+    ], base, current) }}
+    {{ nav_group('รายงานแพ้ชนะ', 'fa-chart-pie', [
+      ('/partner/pnl/member', 'แพ้-ชนะ สมาชิก/ประเภท'),
+      ('/partner/pnl/date', 'แพ้-ชนะ สุทธิ'),
+      ('/partner/reports/chart', 'แพ้-ชนะ สุทธิ (กราฟ)'),
+      ('/partner/reports/winners', 'รายการที่ถูกรางวัล'),
+      ('/partner/results', 'ผลการออกรางวัล'),
+      ('/partner/reports', 'รายการแทงล่าสุด'),
+    ], base, current) }}
+    {{ nav_group('การเงิน', 'fa-wallet', [
+      ('/partner/deposit', 'เติมเงิน'),
+      ('/partner/statement', 'ประวัติการเงิน'),
+      ('/partner/finance', 'เบิกคอม/บัญชีรับเงิน'),
+    ], base, current) }}
+    {% if is_owner %}{{ nav_group('ผู้ช่วย', 'fa-user-shield', [('/partner/assistants', 'จัดการผู้ช่วย')], base, current) }}{% endif %}
+    <a href="{{ base }}/partner/login-history" class="bo-nav-single {{ 'is-active' if current == '/partner/login-history' else '' }}"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
+  {% else %}
+    {{ nav_group('รายการแทง', 'fa-ticket', [
+      ('/senior/overall', 'ดูของรวม/คาดคะเนได้เสีย'),
+      ('/senior/bets/member-types', 'ดูของสมาชิก/ประเภท'),
+      ('/senior/pending', 'รอผลเดิมพัน'),
+      ('/senior/bets/acceptance-by-type', 'ตั้งค่ารับของแยกตามชนิด'),
+      ('/senior/bets', 'รายการแทงทั้งหมด'),
+      ('/senior/bets/summary', 'ยอดรวม/คาดได้เสีย'),
+    ], base, current) }}
+    {{ nav_group('จัดการสมาชิก', 'fa-users', [
+      ('/senior/agents', 'Agent ในสาย'),
+      ('/senior/members/new', 'เพิ่มสมาชิก'),
+      ('/senior/myshare', 'ส่วนแบ่งที่ได้รับ'),
+      ('/senior/member-settings/stock', 'ข้อมูลทั่วไป/เก็บของ/แบ่งหุ้น'),
+      ('/senior/member-settings/limits', 'ขั้นต่ำ/สูงสุด/สูงสุดต่อเลข'),
+      ('/senior/member-settings/rates', 'อัตราจ่าย/คอมมิชชั่น'),
+      ('/senior/member-settings/access', 'เปิด-ปิด อัตราจ่าย/กลุ่มหวย'),
+      ('/senior/online', 'สมาชิกออนไลน์'),
+      ('/senior/takelist', 'รายการเก็บของ/อั้น'),
+      ('/senior/members', 'สมาชิกทั้งสาย/เติมเครดิต'),
+      ('/senior/blocked', 'เลขอั้นทั้งสาย'),
+      ('/senior/settings', 'เปิด-ปิดห้องหวย'),
+      ('/senior/stock', '% ถือหุ้นระดับห้อง'),
+    ], base, current) }}
+    {{ nav_group('รายงานแพ้ชนะ', 'fa-chart-pie', [
+      ('/senior/pnl/member', 'แพ้-ชนะ สมาชิก/ประเภท'),
+      ('/senior/pnl/date', 'แพ้-ชนะ สุทธิ'),
+      ('/senior/reports/chart', 'แพ้-ชนะ สุทธิ (กราฟ)'),
+      ('/senior/reports/winners', 'รายการที่ถูกรางวัล'),
+      ('/senior/results', 'ผลการออกรางวัล'),
+      ('/senior/reports', 'รายการแทงล่าสุด'),
+    ], base, current) }}
+    {{ nav_group('การเงิน', 'fa-wallet', [
+      ('/senior/deposit', 'เติมเงิน'),
+      ('/senior/statement', 'ประวัติการเงิน'),
+      ('/senior/finance', 'เบิกคอม/บัญชีรับเงิน'),
+    ], base, current) }}
+    {% if is_owner %}{{ nav_group('ผู้ช่วย', 'fa-user-shield', [('/senior/assistants', 'จัดการผู้ช่วย')], base, current) }}{% endif %}
+    <a href="{{ base }}/senior/login-history" class="bo-nav-single {{ 'is-active' if current == '/senior/login-history' else '' }}"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
+  {% endif %}
+{% endmacro %}
