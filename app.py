@@ -134,7 +134,7 @@ def app_now():
 def ensure_default_admin_accounts():
     """Keep the documented local admin accounts available after a DB reset."""
     changed = False
-    accounts = (("admin", "ผู้ดูแลระบบ", "admin1234"), ("admin2", "ผู้ดูแลระบบสำรอง", "a12345"))
+    accounts = (("admin", "ผู้ดูแลระบบ", "admin1234"),)
     for username, full_name, password in accounts:
         user = User.query.filter_by(username=username).first()
         if user is None:
@@ -5978,6 +5978,32 @@ def grant_legacy_assistants_full_access_once():
     db.session.commit()
 
 
+def remove_admin2_once():
+    """เจ้าของโปรเจกต์สั่งเอาบัญชี admin2 ออก — ทำครั้งเดียว (ธงใน SystemSetting) และไม่สร้างกลับมาอีก
+    ถ้า admin2 เคยมีร่องรอยในบันทึกของระบบ (audit / ธุรกรรม / แต้ม) จะปิดใช้งานแทนการลบ
+    เพื่อไม่ให้ประวัติเก่าอ้างถึงผู้ใช้ที่หายไป; ไม่ลบถ้าไม่มีแอดมินคนอื่นที่ยังใช้งานได้"""
+    if get_setting("admin2_removed_v1", ""):
+        return
+    user = User.query.filter_by(username="admin2", role="admin").first()
+    other_admin = User.query.filter(User.role == "admin", User.username != "admin2", User.is_active.is_(True)).first()
+    if user is not None and other_admin is not None:
+        has_traces = (
+            AdminAuditLog.query.filter_by(admin_id=user.id).first() is not None
+            or WalletTransaction.query.filter_by(admin_id=user.id).first() is not None
+            or PointLog.query.filter_by(admin_id=user.id).first() is not None
+        )
+        if has_traces:
+            user.is_active = False
+            user.set_password(secrets.token_urlsafe(24))
+            print("admin2 deactivated (has audit history)")
+        else:
+            db.session.delete(user)
+            print("admin2 deleted")
+    if user is None or other_admin is not None:
+        save_setting("admin2_removed_v1", "1")
+    db.session.commit()
+
+
 def apply_reference_rates_once():
     """ตั้งอัตราจ่าย/ส่วนลด/ขั้นต่ำ-ขั้นสูง และชุดที่ 2 ของแต่ละหมวด ตามเว็บตัวอย่าง — ทำครั้งเดียวเท่านั้น
     (เก็บธงใน SystemSetting) หลังจากนั้นแอดมินแก้เองที่หน้าตั้งค่าหวยรัฐบาลได้ ไม่ถูกทับอีก"""
@@ -6144,11 +6170,6 @@ def seed_data():
             admin_user = User(username="admin", full_name="ผู้ดูแลระบบ", role="admin", points=0, credit_balance=0.0)
             admin_user.set_password("admin1234")
             db.session.add(admin_user)
-
-        if not User.query.filter_by(username="admin2").first():
-            secondary_admin = User(username="admin2", full_name="ผู้ดูแลระบบสำรอง", role="admin", points=0, credit_balance=0.0)
-            secondary_admin.set_password("a12345")
-            db.session.add(secondary_admin)
 
         if not User.query.filter_by(username="somchai").first():
             demo = User(username="somchai", full_name="สมชาย ใจดี", phone="0812345678", points=1500, credit_balance=1500.0)
@@ -6345,6 +6366,7 @@ def seed_data():
             ])
 
         db.session.commit()
+        remove_admin2_once()
         apply_reference_rates_once()
         grant_legacy_assistants_full_access_once()
         for user in User.query.all():
