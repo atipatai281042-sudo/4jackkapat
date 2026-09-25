@@ -174,3 +174,7 @@ body.bo-body {
 .bo-nav-group > a i { display: none; }
 .bo-shell.is-collapsed .bo-nav-group > a, .bo-shell.is-collapsed .bo-nav-group .bo-nav-caret { display: none; }
 .bo-shell.is-collapsed .bo-nav-group > summary span { display: none; }
+
+/* แถบตัวกรองของหน้าตั้งค่า/รายงาน Agent-Senior: ช่องกรอกไม่ต้องกว้างเต็มบรรทัด */
+.ov-bar .form-input, .tk-bar .form-input, .wn-bar .form-input, .tr-bar .form-input,
+.mg-search .form-input, .st-dates .form-input, .pl-dates .form-input { width: auto; min-width: 170px; flex: 0 1 auto; }
