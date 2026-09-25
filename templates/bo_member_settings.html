@@ -17,7 +17,8 @@
   .mg-table tr.mg-all td { background: rgba(245,158,11,.12); }
   .mg-hide { display: none !important; }
   .mg-savebar { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
-  .mg-note { opacity: .8; font-size: .85rem; }
+  .mg-note { opacity: .9; font-size: .85rem; }
+  .mg-table input.mg-over { border-color: #f87171; background: rgba(248,113,113,.15); }
 </style>
 <main class="partner-dashboard-main">
   <header class="partner-dashboard-head">
@@ -146,6 +147,7 @@
       <div class="mg-savebar">
         <button class="btn btn-primary" type="submit"><i class="fas fa-floppy-disk"></i> {{ 'บันทึก' if section == 'access' else 'บันทึกที่เลือก' }}</button>
         <span class="mg-note">
+          {% if section == 'rates' %}<strong style="color:#f87171;">ตั้งอัตราจ่ายหรือส่วนลดสูงกว่าที่คุณ "รับมา" ได้ แต่ส่วนต่างที่เกินคุณต้องจ่ายเอง</strong> (หักจากคอมมิชชั่นของคุณเมื่อออกผล) · {% endif %}
           {% if section == 'access' %}ระบบบันทึกทุกคนที่แสดงในตาราง{% else %}ติ๊กเลือกสมาชิก (แก้ช่องไหนระบบติ๊กให้อัตโนมัติ) แล้วกดบันทึก ช่องที่ว่างจะกลับไปใช้ค่ามาตรฐาน{% endif %}
         </span>
       </div>
@@ -161,6 +163,15 @@
   var selAll = document.getElementById('mg-selall');
   var boxes = function () { return form.querySelectorAll('input[name="sel"]'); };
   if (selAll) selAll.addEventListener('change', function () { boxes().forEach(function (b) { b.checked = selAll.checked; }); });
+  // ช่องที่ตั้งสูงกว่าค่า "รับมา" ขึ้นกรอบแดง (ส่วนต่างที่เกินผู้ตั้งค่าต้องจ่ายเอง)
+  function markOver(input) {
+    var kind = input.getAttribute('data-kind');
+    if (kind !== 'payout' && kind !== 'discount') return;
+    var got = parseFloat(input.placeholder), val = parseFloat(input.value);
+    input.classList.toggle('mg-over', !isNaN(got) && !isNaN(val) && val > got);
+  }
+  form.querySelectorAll('input[data-kind]').forEach(markOver);
+  form.addEventListener('input', function (e) { markOver(e.target); });
   // แก้ช่องไหน = ติ๊กเลือกแถวนั้นให้
   form.addEventListener('input', function (e) {
     var tr = e.target.closest('tr');
@@ -175,7 +186,7 @@
         var box = tr.querySelector('input[name="sel"]');
         if (!box || !box.checked) return;
         tr.querySelectorAll('input[data-bt="' + all.dataset.all + '"]').forEach(function (input) {
-          if (!input.classList.contains('mg-hide')) input.value = all.value;
+          if (!input.classList.contains('mg-hide')) { input.value = all.value; markOver(input); }
         });
       });
     });

@@ -397,7 +397,7 @@ def settle_lottery_period(period, admin_user):
     result_3front = {item.strip() for item in (period.result_3front or "").split(",") if item.strip()}
     result_3back = {item.strip() for item in (period.result_3back or "").split(",") if item.strip()}
     settled = 0
-    for bet in ThaiLotteryBet.query.filter_by(period_id=period.id, status="pending").all():
+    for bet in ThaiLotteryBet.query.filter_by(period_id=period.id, status="pending").order_by(ThaiLotteryBet.id).all():
         is_win = (
             (bet.bet_type == "3up" and bet.number == period.result_3up)
             or (bet.bet_type == "3toad" and bet.number in result_3toad)
@@ -413,6 +413,7 @@ def settle_lottery_period(period, admin_user):
         apply_partner_stock_holding(bet, is_win)
         apply_agent_upline_stock_holding(bet, is_win)
         apply_senior_stock_holding(bet, is_win)
+        charge_rate_excess(bet, is_win)
         if is_win:
             adjust_credit(
                 bet.user, bet.reward_amount,
@@ -735,6 +736,65 @@ def create_senior_commission(bet):
     return entry
 
 
+def apply_hold_cap(role, owner_id, bet, room_id, hold_percent):
+    """"ตั้งสู้": ยอดสูงสุดที่ผู้ดูแลถือไว้ต่อเลขต่อประเภทในงวดนี้ (ตามสัดส่วน % ถือหุ้น) — ส่วนที่เกินส่งต่อให้บริษัท
+    ไม่มีการตั้งค่า = ไม่จำกัด, ตั้งเป็น 0 = ไม่ถือเลย คืน % ที่ถือจริงของโพยนี้ (คิดสะสมตามลำดับโพย)"""
+    limit_model, owner_field = (
+        (PartnerAcceptanceLimit, "partner_id") if role == "partner" else (SeniorAcceptanceLimit, "senior_id")
+    )
+    row = limit_model.query.filter_by(**{owner_field: owner_id, "room_id": room_id, "bet_type": bet.bet_type}).first()
+    stake = float(bet.amount)
+    if row is None or stake <= 0:
+        return hold_percent
+    ledger = PartnerStockLedger if role == "partner" else SeniorStockLedger
+    owner_col = ledger.partner_id if role == "partner" else ledger.senior_id
+    prior = db.session.query(
+        func.coalesce(func.sum(ledger.stake_amount * ledger.hold_percent / 100.0), 0.0)
+    ).join(ThaiLotteryBet, ThaiLotteryBet.id == ledger.bet_id).filter(
+        owner_col == owner_id, ThaiLotteryBet.period_id == bet.period_id,
+        ThaiLotteryBet.bet_type == bet.bet_type, ThaiLotteryBet.number == bet.number,
+        ThaiLotteryBet.id < bet.id,
+    ).scalar() or 0.0
+    remaining = max(0.0, float(row.amount_limit) - float(prior))
+    held = min(stake * hold_percent / 100, remaining)
+    return held / stake * 100
+
+
+def charge_rate_excess(bet, is_win):
+    """ผู้ดูแลที่ให้สมาชิกได้อัตราจ่าย/ส่วนลดเกินกว่าที่ตัวเองได้รับมา ต้องจ่ายส่วนต่างเอง
+    — หักจากยอดคอมมิชชั่นของผู้ตั้งค่า พร้อมบันทึกลงสมุดคอมมิชชั่น (รายการติดลบ)
+    ส่วนลดส่วนเกินหักทุกโพยที่ออกผล ส่วนอัตราจ่ายส่วนเกินหักเฉพาะโพยที่ถูกรางวัล"""
+    charges = {}
+    if bet.discount_grantor_id and (bet.discount_excess_pct or 0) > 0:
+        charges[bet.discount_grantor_id] = charges.get(bet.discount_grantor_id, 0.0) + float(bet.amount) * bet.discount_excess_pct / 100
+    if is_win and bet.payout_grantor_id and (bet.payout_excess or 0) > 0:
+        charges[bet.payout_grantor_id] = charges.get(bet.payout_grantor_id, 0.0) + float(bet.amount) * bet.payout_excess
+    for owner_id, raw_amount in charges.items():
+        amount = round(raw_amount, 2)
+        owner = db.session.get(User, owner_id)
+        if owner is None or amount <= 0:
+            continue
+        profile = owner.partner_profile if owner.is_partner else owner.senior_profile
+        if profile is None:
+            continue
+        reason = f"ส่วนต่างอัตราจ่าย/ส่วนลดที่ให้สมาชิกเกินที่ได้รับมา โพย {bet.number} ({bet.bet_type})"
+        profile.commission_balance = round(profile.commission_balance - amount, 2)
+        record_wallet_transaction(
+            owner, "commission", -amount, profile.commission_balance, reason,
+            reference_type="bet", reference_id=bet.id,
+        )
+        if owner.is_partner:
+            db.session.add(CommissionLedger(
+                partner_id=owner.id, member_id=bet.user_id, bet_id=bet.id, base_amount=bet.amount,
+                rate=0.0, commission_amount=-amount, reason=reason,
+            ))
+        else:
+            db.session.add(SeniorCommissionLedger(
+                senior_id=owner.id, agent_id=bet.user.partner_id, member_id=bet.user_id, bet_id=bet.id,
+                base_amount=bet.amount, rate=0.0, commission_amount=-amount, reason=reason,
+            ))
+
+
 def apply_partner_stock_holding(bet, is_win):
     """บันทึกกำไร/ขาดทุนของ Partner ที่เลือก "ถือหุ้น" บางส่วนของห้องนี้ไว้เอง
     แยกจากคอมมิชชันโดยสิ้นเชิง — ถ้าไม่ได้ตั้งค่า % ถือหุ้นไว้ จะไม่มีผลใดๆ
@@ -759,6 +819,9 @@ def apply_partner_stock_holding(bet, is_win):
         else:
             share = PartnerStockShare.query.filter_by(partner_id=partner.id, room_id=room_id).first()
             hold_percent = share.hold_percent if share else 0.0
+    if hold_percent <= 0:
+        return
+    hold_percent = apply_hold_cap("partner", partner.id, bet, room_id, hold_percent)
     if hold_percent <= 0:
         return
     house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
@@ -835,6 +898,9 @@ def apply_senior_stock_holding(bet, is_win):
         else:
             share = SeniorStockShare.query.filter_by(senior_id=senior.id, room_id=room_id).first()
             hold_percent = share.hold_percent if share else 0.0
+    if hold_percent <= 0:
+        return
+    hold_percent = apply_hold_cap("senior", senior.id, bet, room_id, hold_percent)
     if hold_percent <= 0:
         return
     house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
@@ -1187,7 +1253,8 @@ def member_group_limits(member, category):
 
 
 def member_group_rate_overrides(member, category, tier):
-    """{bet_type: (payout|None, discount|None)} — ผู้ดูแลที่ใกล้สมาชิกที่สุดชนะ (Agent ก่อน Senior) แยกกันรายช่อง"""
+    """{bet_type: (payout|None, discount|None, payout_owner_id|None, discount_owner_id|None)}
+    — ผู้ดูแลที่ใกล้สมาชิกที่สุดชนะ (Agent ก่อน Senior) แยกกันรายช่อง และบอกด้วยว่าใครเป็นคนตั้ง"""
     owners = member_setting_owner_ids(member)
     result = {}
     if not owners:
@@ -1200,12 +1267,12 @@ def member_group_rate_overrides(member, category, tier):
         for row in rows:
             if row.owner_id != owner_id:
                 continue
-            payout, discount = result.get(row.bet_type, (None, None))
+            payout, discount, payout_owner, discount_owner = result.get(row.bet_type, (None, None, None, None))
             if payout is None and row.payout_multiplier is not None:
-                payout = row.payout_multiplier
+                payout, payout_owner = row.payout_multiplier, row.owner_id
             if discount is None and row.discount_pct is not None:
-                discount = row.discount_pct
-            result[row.bet_type] = (payout, discount)
+                discount, discount_owner = row.discount_pct, row.owner_id
+            result[row.bet_type] = (payout, discount, payout_owner, discount_owner)
     return result
 
 
@@ -1242,7 +1309,7 @@ def build_rate_tables(user, category, member_min, member_max, type_rules=None):
         rows = []
         for key in RATE_TABLE_ORDER + tuple(t for t in EXTRA_BET_TYPES if rates.get(t)):
             rule = type_rules.get(key, {"discount": 0.0, "min": 1, "max": MAX_BET_AMOUNT})
-            payout_ov, discount_ov = overrides.get(key, (None, None))
+            payout_ov, discount_ov = overrides.get(key, (None, None, None, None))[:2]
             glim = group_limits.get(key) or {}
             rows.append({
                 "key": key,
@@ -1307,13 +1374,16 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
                 number_totals[key] = number_totals.get(key, 0) + amount
                 if member_number_total(user, period, bet_type, raw_number) + number_totals[key] > glim["per_number"]:
                     raise ValueError(f"{label} เลข {raw_number} แทงรวมได้สูงสุด {glim['per_number']:,} บาทต่อเลข")
-        group_payout, group_discount = group_overrides.get(bet_type, (None, None))
-        if group_discount is not None:
-            discount_pct = group_discount
-        else:
-            discount_pct = tier_set[bet_type].discount_pct if bet_type in tier_set else (type_rule["discount"] if type_rule else 0.0)
+        group_payout, group_discount, payout_owner, discount_owner = group_overrides.get(bet_type, (None, None, None, None))
+        base_discount = tier_set[bet_type].discount_pct if bet_type in tier_set else (type_rule["discount"] if type_rule else 0.0)
+        discount_pct = group_discount if group_discount is not None else base_discount
         discount = round(amount * discount_pct / 100, 2)
-        validated_entries.append((bet_type, raw_number, amount, discount, group_payout))
+        validated_entries.append({
+            "bet_type": bet_type, "number": raw_number, "amount": amount, "discount": discount,
+            "group_payout": group_payout, "payout_owner": payout_owner,
+            "discount_excess_pct": max(0.0, discount_pct - base_discount) if group_discount is not None else 0.0,
+            "discount_owner": discount_owner if group_discount is not None else None,
+        })
         total_amount += amount
         total_paid += amount - discount
 
@@ -1326,7 +1396,10 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
 
     ticket_code = f"TK-{app_now().strftime('%Y%m%d%H%M%S%f')}-{random.randint(100, 999)}"
     created = 0
-    for bet_type, raw_number, amount, discount, group_payout in validated_entries:
+    for entry in validated_entries:
+        bet_type, raw_number, amount, discount = entry["bet_type"], entry["number"], entry["amount"], entry["discount"]
+        group_payout = entry["group_payout"]
+        payout_excess, payout_grantor = 0.0, None
 
         blocked_rate = partner_blocked_rate(user, period.room_id, bet_type, raw_number)
         blocked = None
@@ -1349,6 +1422,9 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
         else:
             personal_rate = group_payout if group_payout is not None else member_specific_rate(user, bet_type)
             rate = personal_rate if personal_rate is not None else rates[bet_type]
+            if group_payout is not None and rate == group_payout:
+                payout_excess = max(0.0, group_payout - rates[bet_type])
+                payout_grantor = entry["payout_owner"] if payout_excess > 0 else None
 
         total_reward = int(amount * rate)
         adjust_credit(user, -(amount - discount), f"แทงหวยรัฐบาล งวด {period.period_date} ({bet_type}: {raw_number})")
@@ -1360,6 +1436,10 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
             number=raw_number,
             amount=amount,
             discount_amount=discount,
+            payout_grantor_id=payout_grantor,
+            payout_excess=payout_excess,
+            discount_grantor_id=entry["discount_owner"] if entry["discount_excess_pct"] > 0 else None,
+            discount_excess_pct=entry["discount_excess_pct"],
             remark=(remark or "").strip()[:50] or None,
             rate=rate,
             ticket_code=ticket_code,
@@ -3619,6 +3699,20 @@ def partner_results():
                            grouped_results=grouped_results, latest_periods=latest_periods)
 
 
+def online_agents_for(agent_ids):
+    """Agent ที่เข้าสู่ระบบภายใน 10 นาทีล่าสุด (ดูจากประวัติการเข้าสู่ระบบ)"""
+    if not agent_ids:
+        return []
+    cutoff = datetime.utcnow() - timedelta(minutes=10)
+    recent = {
+        row.user_id: row.created_at
+        for row in LoginHistory.query.filter(LoginHistory.user_id.in_(agent_ids), LoginHistory.created_at >= cutoff)
+        .order_by(LoginHistory.id.asc())
+    }
+    agents = User.query.filter(User.id.in_(list(recent) or [-1])).order_by(User.username).all()
+    return [{"user": agent, "last": (recent[agent.id] + timedelta(hours=7)).strftime("%d/%m/%Y %H:%M")} for agent in agents]
+
+
 @app.route("/partner/online")
 @partner_required
 def partner_online_members():
@@ -3627,8 +3721,10 @@ def partner_online_members():
     presence = PartnerPresence.query.filter_by(partner_id=partner.id).filter(
         PartnerPresence.last_seen_at >= online_cutoff
     ).order_by(PartnerPresence.last_seen_at.desc()).all()
+    sub_agent_ids = [row.id for row in User.query.filter_by(partner_id=partner.id, role="partner").with_entities(User.id).all()]
     return render_template("partner_manage.html", view="online", partner=partner,
-                           online_members=[item.member for item in presence])
+                           online_members=[item.member for item in presence],
+                           online_agents=online_agents_for(sub_agent_ids))
 
 
 @app.route("/partner/deposit", methods=["GET", "POST"])
@@ -4263,7 +4359,8 @@ def senior_online_members():
         PartnerPresence.last_seen_at >= online_cutoff
     ).order_by(PartnerPresence.last_seen_at.desc()).all() if agent_ids else []
     return render_template("senior_manage.html", view="online", senior=senior,
-                           online_members=[item.member for item in presence])
+                           online_members=[item.member for item in presence],
+                           online_agents=online_agents_for(agent_ids))
 
 
 @app.route("/senior/deposit", methods=["GET", "POST"])
@@ -5855,6 +5952,15 @@ def seed_data():
             db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_thai_lottery_bets_ticket_code ON thai_lottery_bets (ticket_code)"))
             db.session.commit()
 
+        for column_name, ddl in (
+            ("payout_grantor_id", "INTEGER"),
+            ("payout_excess", "FLOAT NOT NULL DEFAULT 0.0"),
+            ("discount_grantor_id", "INTEGER"),
+            ("discount_excess_pct", "FLOAT NOT NULL DEFAULT 0.0"),
+        ):
+            if column_name not in bet_columns:
+                db.session.execute(text(f"ALTER TABLE thai_lottery_bets ADD COLUMN {column_name} {ddl}"))
+                db.session.commit()
         if "remark" not in bet_columns:
             db.session.execute(text("ALTER TABLE thai_lottery_bets ADD COLUMN remark VARCHAR(100)"))
             db.session.commit()

@@ -932,6 +932,11 @@ class ThaiLotteryBet(db.Model):
     number = db.Column(db.String(10), nullable=False)
     amount = db.Column(db.Integer, nullable=False)
     remark = db.Column(db.String(100), nullable=True)  # หมายเหตุที่สมาชิกใส่ตอนส่งโพย (ใช้เหมือนกันทั้งใบ)
+    # ส่วนต่างที่ผู้ดูแลให้สมาชิกเกินกว่าที่ตัวเองได้รับมา — ผู้ดูแลที่ตั้งค่านั้นต้องจ่ายเอง (หักตอนตรวจรางวัล)
+    payout_grantor_id = db.Column(db.Integer, nullable=True)
+    payout_excess = db.Column(db.Float, nullable=False, default=0.0, server_default="0")
+    discount_grantor_id = db.Column(db.Integer, nullable=True)
+    discount_excess_pct = db.Column(db.Float, nullable=False, default=0.0, server_default="0")
     discount_amount = db.Column(db.Float, nullable=False, default=0.0, server_default="0")  # ส่วนลดที่หักจากยอดแทงตอนส่งโพย
     rate = db.Column(db.Float, nullable=False)
     ticket_code = db.Column(db.String(40), nullable=True, index=True)

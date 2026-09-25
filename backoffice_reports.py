@@ -158,20 +158,26 @@ def make_overall(role):
             bets = scope_query(role, owner).filter(ThaiLotteryBet.period_id == period.id).all()
         commission, _ = ledger_maps(role, owner, [b.id for b in bets])
         cache = {}
-        for bet in bets:
+        caps = {
+            row.bet_type: row.amount_limit for row in limit_model.query.filter_by(**{owner_field: owner.id, "room_id": room.id})
+        } if room else {}
+        prior_held = defaultdict(float)  # ตั้งสู้ต่อเลข: นับสะสมตามลำดับโพย เหมือนตอนตรวจรางวัลจริง
+        for bet in sorted(bets, key=lambda b: b.id):
             percent = effective_hold_percent(role, owner, bet.user, room, cache)
             stake, payout = float(bet.amount), float(bet.amount) * float(bet.rate)
+            held = stake * percent / 100
+            cap = caps.get(bet.bet_type)
+            if cap is not None and percent > 0:
+                held = min(held, max(0.0, float(cap) - prior_held[(bet.bet_type, bet.number)]))
+            prior_held[(bet.bet_type, bet.number)] += held
             totals["buy"][bet.bet_type] += stake
             totals["comm"][bet.bet_type] += commission.get(bet.id, 0.0)
-            totals["held"][bet.bet_type] += stake * percent / 100
-            totals["max"][bet.bet_type] += payout * percent / 100
+            totals["held"][bet.bet_type] += held
+            totals["max"][bet.bet_type] += payout * (held / stake if stake else 0.0)
             entry = numbers[(bet.bet_type, bet.number)]
             entry["stake"] += stake
             entry["max"] += payout
             entry["members"].add(bet.user_id)
-        caps = {
-            row.bet_type: row.amount_limit for row in limit_model.query.filter_by(**{owner_field: owner.id, "room_id": room.id})
-        } if room else {}
 
         view_filter = request.args.get("type") or ""
         sort = request.args.get("sort") or "max"
@@ -207,12 +213,23 @@ def make_takelist(role):
         members = {}
         cache = {}
         if period:
-            for bet in scope_query(role, owner).filter(ThaiLotteryBet.period_id == period.id).all():
+            limit_model = PartnerAcceptanceLimit if role == "partner" else SeniorAcceptanceLimit
+            owner_field = "partner_id" if role == "partner" else "senior_id"
+            caps = {
+                row.bet_type: row.amount_limit for row in limit_model.query.filter_by(**{owner_field: owner.id, "room_id": room.id})
+            }
+            prior_held = defaultdict(float)
+            for bet in sorted(scope_query(role, owner).filter(ThaiLotteryBet.period_id == period.id).all(), key=lambda b: b.id):
                 members[bet.user_id] = bet.user
                 percent = effective_hold_percent(role, owner, bet.user, room, cache)
+                held = float(bet.amount) * percent / 100
+                cap = caps.get(bet.bet_type)
+                if cap is not None and percent > 0:
+                    held = min(held, max(0.0, float(cap) - prior_held[(bet.bet_type, bet.number)]))
+                prior_held[(bet.bet_type, bet.number)] += held
                 row = table[bet.user_id]
                 row["stake"][bet.bet_type] += float(bet.amount)
-                row["held"][bet.bet_type] += float(bet.amount) * percent / 100
+                row["held"][bet.bet_type] += held
                 row["count"] += 1
         rows = sorted(
             ({"member": members[mid], **data, "total": sum(data["stake"].values()), "held_total": sum(data["held"].values())}
