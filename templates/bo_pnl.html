@@ -1,0 +1,68 @@
+{% extends shell %}
+{% block title %}{{ title }} — mklotto{% endblock %}
+{% block content %}
+<style>
+  .pl-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .pl-filter a { padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(245,158,11,.5); color: #fbbf24; text-decoration: none; font-size: .85rem; }
+  .pl-filter a.on { background: #f59e0b; color: #111; font-weight: 700; }
+  .pl-filter.sub a { border-color: rgba(148,163,184,.4); color: #cbd5e1; }
+  .pl-filter.sub a.on { background: #38bdf8; color: #06202b; }
+  .pl-dates { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .pl-dates input, .pl-dates select { padding: 6px 8px; border-radius: 6px; }
+  .pl-table th, .pl-table td { text-align: right; white-space: nowrap; }
+  .pl-table th:first-child, .pl-table td:first-child { text-align: left; }
+  .pl-table thead tr:first-child th { text-align: center; }
+  .pl-win { color: #4ade80; font-weight: 700; }
+  .pl-lose { color: #f87171; font-weight: 700; }
+  .pl-note { opacity: .8; font-size: .85rem; margin-top: 10px; }
+</style>
+{% macro money(v) %}<span class="{{ 'pl-win' if v > 0.004 else ('pl-lose' if v < -0.004 else '') }}">{{ '{:,.2f}'.format(v) }}</span>{% endmacro %}
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">WIN / LOSS</span><h1 class="page-title">{{ title }}</h1>
+      <p class="section-desc">แบ่ง 3 ฝ่าย: สมาชิก · คุณ (ค่าคอม + ถือหุ้น) · บริษัท — คิดจากโพยที่ออกผลแล้วในช่วงวันที่เลือก</p></div>
+    <div class="partner-balance"><span>รายการแทงที่ออกผลแล้ว</span><strong>{{ '{:,.0f}'.format(totals.get('count', 0)) }}</strong></div>
+  </header>
+  <article class="panel">
+    <div class="pl-filter">
+      {% for key, label in [('today','วันนี้'),('yesterday','เมื่อวาน'),('week','สัปดาห์นี้ (จันทร์ - อาทิตย์)'),('lastweek','สัปดาห์ที่แล้ว (จันทร์ - อาทิตย์)'),('month','เดือนนี้')] %}
+      <a href="{{ url_for(endpoint, kind=kind, range=key, by=group_by, room_id=room_id) }}" class="{{ 'on' if range_key == key else '' }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <form method="get" class="pl-dates">
+      <input type="hidden" name="by" value="{{ group_by }}">
+      <label>ตั้งแต่วันที่ <input class="form-input" type="date" name="start" value="{{ start_day.isoformat() }}"></label>
+      <label>ถึง <input class="form-input" type="date" name="end" value="{{ end_day.isoformat() }}"></label>
+      <select class="form-input" name="room_id" aria-label="ชนิดหวย"><option value="">ทุกชนิดหวย</option>{% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room_id == r.id else '' }}>{{ r.name }}</option>{% endfor %}</select>
+      <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i> ค้นหา</button>
+    </form>
+    <div class="pl-filter sub">
+      {% for key, label in ([('member','แยกตามสมาชิก'),('type','แยกตามประเภท'),('room','แยกตามชนิดหวย')] if kind == 'member' else [('date','แยกตามวัน'),('type','แยกตามประเภท'),('room','แยกตามชนิดหวย')]) %}
+      <a href="{{ url_for(endpoint, kind=kind, range=range_key, start=start_day.isoformat(), end=end_day.isoformat(), by=key, room_id=room_id) }}" class="{{ 'on' if group_by == key else '' }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table pl-table">
+        <thead>
+          <tr><th rowspan="2">{{ {'member':'ชื่อผู้ใช้','type':'ประเภท','room':'ชนิดหวย','date':'วันที่'}[group_by] }}</th><th rowspan="2">รายการ</th><th rowspan="2">ยอดแทง</th><th colspan="3">สมาชิก</th><th colspan="3">คุณ</th><th>บริษัท</th></tr>
+          <tr><th>ส่วนลด</th><th>ถูกรางวัล</th><th>รวม</th><th>ถือหุ้น</th><th>ค่าคอม</th><th>รวม</th><th>รวม</th></tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr><td>{{ r.name }}</td><td>{{ '{:,.0f}'.format(r.count) }}</td><td>{{ '{:,.2f}'.format(r.stake) }}</td>
+            <td>{{ '{:,.2f}'.format(r.m_discount) }}</td><td>{{ '{:,.2f}'.format(r.m_win) }}</td><td>{{ money(r.m_net) }}</td>
+            <td>{{ money(r.o_stock) }}</td><td>{{ money(r.o_comm) }}</td><td>{{ money(r.o_net) }}</td><td>{{ money(r.c_net) }}</td></tr>
+          {% else %}<tr><td colspan="10" class="empty-state-text">ไม่มีข้อมูล</td></tr>{% endfor %}
+          {% if rows %}
+          <tr style="font-weight:700;"><td>รวม</td><td>{{ '{:,.0f}'.format(totals.get('count', 0)) }}</td><td>{{ '{:,.2f}'.format(totals.get('stake', 0)) }}</td>
+            <td>{{ '{:,.2f}'.format(totals.get('m_discount', 0)) }}</td><td>{{ '{:,.2f}'.format(totals.get('m_win', 0)) }}</td><td>{{ money(totals.get('m_net', 0)) }}</td>
+            <td>{{ money(totals.get('o_stock', 0)) }}</td><td>{{ money(totals.get('o_comm', 0)) }}</td><td>{{ money(totals.get('o_net', 0)) }}</td><td>{{ money(totals.get('c_net', 0)) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+    <p class="pl-note">สมาชิก "รวม" = ถูกรางวัล − ยอดแทง + ส่วนลด (บวก = สมาชิกได้) · คุณ = กำไร/ขาดทุนจากหุ้นที่ถือ + ค่าคอมมิชชั่น · บริษัท = ส่วนที่เหลือ (รวมส่วนของสายอื่นที่อยู่เหนือหรือใต้คุณ)</p>
+  </article>
+</main>
+{% endblock %}

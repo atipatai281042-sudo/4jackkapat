@@ -6009,6 +6009,7 @@ def seed_data():
         db.session.commit()
 
 
+import backoffice_reports  # noqa: E402,F401  (ดูของรวม/รายเลข/แพ้-ชนะ 3 ฝ่าย ของ Agent/Senior)
 import backoffice_settings  # noqa: E402,F401  (ลงทะเบียนหน้าตั้งค่ารายกลุ่มหวยของ Agent/Senior)
 
 

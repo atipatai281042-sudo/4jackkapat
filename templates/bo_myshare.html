@@ -1,0 +1,49 @@
+{% extends shell %}
+{% block title %}ส่วนแบ่งที่ได้รับ — mklotto{% endblock %}
+{% block content %}
+<style>
+  .ms-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
+  .ms-tabs a { padding: 7px 14px; border-radius: 6px; border: 1px solid rgba(245,158,11,.5); color: #fbbf24; text-decoration: none; font-size: .9rem; }
+  .ms-tabs a.on { background: #f59e0b; color: #111; font-weight: 700; }
+  .ms-table th, .ms-table td { text-align: center; white-space: nowrap; }
+  .ms-table td:first-child, .ms-table th:first-child { text-align: left; }
+  .ms-h { margin: 18px 0 8px; font-size: 1rem; }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">MY SHARE</span><h1 class="page-title">ส่วนแบ่งที่ได้รับ</h1>
+      <p class="section-desc">สิ่งที่คุณได้รับตามกลุ่มหวย: % ถือหุ้น ขั้นต่ำ/สูงสุด และอัตราจ่าย/คอมมิชชั่นที่ได้มาจากด้านบน</p></div>
+    <div class="partner-balance"><span>คอมมิชชั่นของคุณ</span><strong>{{ '%g'|format(commission_rate) }}%</strong></div>
+  </header>
+  <div class="ms-tabs">{% for g in groups %}<a href="{{ url_for(endpoint, category=g) }}" class="{{ 'on' if g == category else '' }}">{{ g }}</a>{% endfor %}</div>
+
+  <article class="panel">
+    <h2 class="ms-h">แบ่งหุ้น / ถือหุ้น ตามห้องในกลุ่ม {{ category }}</h2>
+    <div class="table-wrap"><table class="data-table ms-table">
+      <thead><tr><th>ห้อง</th><th>% ถือหุ้นของคุณ</th></tr></thead>
+      <tbody>{% for r in rooms %}<tr><td>{{ r.name }}</td><td>{{ '%g'|format(shares.get(r.id, 0)) }} %</td></tr>{% else %}<tr><td colspan="2" class="empty-state-text">ไม่มีห้องในกลุ่มนี้</td></tr>{% endfor %}</tbody>
+    </table></div>
+
+    <h2 class="ms-h">ขั้นต่ำ / สูงสุด / สูงสุดต่อเลข (มาตรฐานของระบบ)</h2>
+    <div class="table-wrap"><table class="data-table ms-table">
+      <thead><tr><th>#</th><th>รายการ</th>{% for bt in bet_types %}<th>{{ labels[bt] }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        <tr><td>1</td><td>ขั้นต่ำ</td>{% for bt in bet_types %}<td>{{ '{:,}'.format(type_rules[bt].min) }}</td>{% endfor %}</tr>
+        <tr><td>2</td><td>สูงสุด</td>{% for bt in bet_types %}<td>{{ '{:,}'.format(type_rules[bt].max) }}</td>{% endfor %}</tr>
+        <tr><td>3</td><td>สูงสุดต่อเลข</td>{% for bt in bet_types %}<td>{{ '{:,}'.format(type_rules[bt].max) }}</td>{% endfor %}</tr>
+      </tbody>
+    </table></div>
+
+    {% for t in tables %}
+    <h2 class="ms-h">อัตราจ่าย / คอมมิชชั่น — {{ t.name }}</h2>
+    <div class="table-wrap"><table class="data-table ms-table">
+      <thead><tr><th>#</th><th>รายการ</th>{% for bt in bet_types %}<th>{{ labels[bt] }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        <tr><td>1</td><td>อัตราจ่าย</td>{% for bt in bet_types %}<td>{{ '%g'|format(t.rates.get(bt, 0)) }}</td>{% endfor %}</tr>
+        <tr><td>2</td><td>คอมมิชชั่น (ลด %)</td>{% for bt in bet_types %}<td>{{ '%g'|format(t.discounts.get(bt, 0)) }}</td>{% endfor %}</tr>
+      </tbody>
+    </table></div>
+    {% endfor %}
+  </article>
+</main>
+{% endblock %}

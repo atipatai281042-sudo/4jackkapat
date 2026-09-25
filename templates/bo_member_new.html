@@ -1,0 +1,119 @@
+{% extends shell %}
+{% block title %}เพิ่มสมาชิก — mklotto{% endblock %}
+{% block content %}
+<style>
+  .wz-steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 16px; }
+  .wz-steps button { padding: 8px 14px; border-radius: 6px; border: 1px solid rgba(148,163,184,.4); background: transparent; color: #cbd5e1; cursor: pointer; font-family: inherit; }
+  .wz-steps button.on { background: #f59e0b; border-color: #f59e0b; color: #111; font-weight: 700; }
+  .wz-pane { display: none; }
+  .wz-pane.on { display: block; }
+  .wz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .wz-group { border: 1px solid rgba(148,163,184,.3); border-radius: 8px; margin-bottom: 10px; padding: 8px 12px; }
+  .wz-group summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+  .wz-mini th, .wz-mini td { text-align: center; padding: 4px 6px; white-space: nowrap; }
+  .wz-mini input.form-input { width: 76px; padding: 4px 6px; text-align: right; }
+  .wz-nav { display: flex; gap: 10px; margin-top: 16px; }
+  .wz-hint { opacity: .8; font-size: .88rem; margin: 0 0 10px; }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">ADD MEMBER</span><h1 class="page-title">เพิ่มสมาชิก</h1>
+      <p class="section-desc">กรอกข้อมูลสมาชิก แล้วตั้งค่าเริ่มต้นได้ทั้ง 4 ขั้นในหน้าเดียว (ข้ามขั้นที่ไม่ต้องการได้ ระบบใช้ค่ามาตรฐาน) — แก้ภายหลังได้ที่หน้าตั้งค่าสมาชิก</p></div>
+    <div class="partner-balance"><span>เครดิตที่คุณมี</span><strong>{{ '{:,.2f}'.format(owner.credit_balance) }}</strong></div>
+  </header>
+
+  <form method="post" id="wz-form" autocomplete="off">
+    <div class="wz-steps" id="wz-steps">
+      <button type="button" class="on" data-step="1">ข้อมูลสมาชิก</button>
+      <button type="button" data-step="2">1. เปิด/ปิดกลุ่มหวย</button>
+      <button type="button" data-step="3">2. แบ่งหุ้น/เก็บของ</button>
+      <button type="button" data-step="4">3. ข้อมูลการแทง</button>
+      <button type="button" data-step="5">4. อัตราจ่าย</button>
+    </div>
+
+    <article class="panel wz-pane on" data-pane="1">
+      <div class="wz-grid">
+        {% if role == 'senior' %}
+        <div class="form-group"><label class="form-label">Agent ผู้ดูแล *</label>
+          <select class="form-input" name="agent_id" required><option value="">เลือก Agent</option>{% for a in agents %}<option value="{{ a.id }}">{{ a.username }}{% if a.full_name %} ({{ a.full_name }}){% endif %}</option>{% endfor %}</select></div>
+        {% endif %}
+        <div class="form-group"><label class="form-label">ชื่อผู้ใช้งาน *</label><input class="form-input" name="username" minlength="4" required placeholder="ภาษาอังกฤษหรือตัวเลข"></div>
+        <div class="form-group"><label class="form-label">รหัสผ่าน *</label><input class="form-input" type="text" name="password" minlength="6" required autocomplete="new-password"></div>
+        <div class="form-group"><label class="form-label">ชื่อ-สกุล *</label><input class="form-input" name="full_name" required></div>
+        <div class="form-group"><label class="form-label">เบอร์โทร</label><input class="form-input" name="phone" maxlength="20"></div>
+        <div class="form-group"><label class="form-label">จำนวนเงินเริ่มต้น <small>(สูงสุด {{ '{:,.2f}'.format(owner.credit_balance) }})</small></label><input class="form-input" type="number" name="credit" min="0" step="0.01" max="{{ owner.credit_balance }}" value="0"></div>
+      </div>
+      <div class="wz-nav"><button type="button" class="btn btn-primary" data-go="2">ถัดไป: เปิด/ปิดกลุ่มหวย →</button></div>
+    </article>
+
+    <article class="panel wz-pane" data-pane="2">
+      <p class="wz-hint">เลือก "ปิด" เพื่อไม่ให้สมาชิกแทงกลุ่มหวยนั้น (เริ่มต้น = เปิดทั้งหมด)</p>
+      <div class="table-wrap"><table class="data-table wz-mini">
+        <thead><tr><th style="text-align:left;">กลุ่มหวย</th><th>เปิด/ปิด</th>{% set has_t2 = tiers_by_group.values()|map('length')|max > 1 %}{% if has_t2 %}<th>{{ tier_names[2] }}</th>{% endif %}</tr></thead>
+        <tbody>
+          {% for g in groups %}{% set ci = loop.index0 %}
+          <tr><td style="text-align:left;">{{ g }}</td>
+            <td><select class="form-input" name="acc_{{ ci }}"><option value="1">เปิด</option><option value="0">ปิด</option></select></td>
+            {% if has_t2 %}<td>{% if 2 in tiers_by_group[g] %}<select class="form-input" name="acc_{{ ci }}_t2"><option value="1">เปิด</option><option value="0">ปิด</option></select>{% else %}-{% endif %}</td>{% endif %}</tr>
+          {% endfor %}
+        </tbody></table></div>
+      <div class="wz-nav"><button type="button" class="btn btn-ghost" data-go="1">← ย้อนกลับ</button><button type="button" class="btn btn-primary" data-go="3">ถัดไป →</button></div>
+    </article>
+
+    <article class="panel wz-pane" data-pane="3">
+      <p class="wz-hint">% ที่คุณถือหุ้นของสมาชิกคนนี้ แยกตามกลุ่มหวย (เว้นว่าง = ใช้ค่าตามห้อง)</p>
+      <div class="table-wrap"><table class="data-table wz-mini">
+        <thead><tr><th style="text-align:left;">กลุ่มหวย</th><th>% ถือหุ้น</th></tr></thead>
+        <tbody>{% for g in groups %}<tr><td style="text-align:left;">{{ g }}</td><td><input class="form-input" type="number" step="any" min="0" max="100" name="hold_{{ loop.index0 }}" placeholder="ค่าห้อง"> %</td></tr>{% endfor %}</tbody></table></div>
+      <div class="wz-nav"><button type="button" class="btn btn-ghost" data-go="2">← ย้อนกลับ</button><button type="button" class="btn btn-primary" data-go="4">ถัดไป →</button></div>
+    </article>
+
+    <article class="panel wz-pane" data-pane="4">
+      <p class="wz-hint">ขั้นต่ำ / สูงสุด / สูงสุดต่อเลข ต่อรายการ แยกตามกลุ่มหวยและประเภท (เว้นว่าง = ใช้ค่ามาตรฐานของระบบ)</p>
+      {% for g in groups %}{% set ci = loop.index0 %}
+      <details class="wz-group" {{ 'open' if loop.first else '' }}><summary>{{ g }}</summary>
+        <div class="table-wrap"><table class="data-table wz-mini">
+          <thead><tr><th></th>{% for bt in bet_types %}<th>{{ labels[bt] }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for key, label in [('min', 'ขั้นต่ำ'), ('max', 'สูงสุด'), ('num', 'สูงสุดต่อเลข')] %}
+            <tr><td style="text-align:left;">{{ label }}</td>{% for bt in bet_types %}<td><input class="form-input" type="number" min="1" step="1" name="{{ key }}_{{ ci }}_{{ bt }}" placeholder="{{ type_rules[bt].min if key == 'min' else type_rules[bt].max }}"></td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody></table></div>
+      </details>
+      {% endfor %}
+      <div class="wz-nav"><button type="button" class="btn btn-ghost" data-go="3">← ย้อนกลับ</button><button type="button" class="btn btn-primary" data-go="5">ถัดไป →</button></div>
+    </article>
+
+    <article class="panel wz-pane" data-pane="5">
+      <p class="wz-hint">อัตราจ่ายและคอมมิชชั่น (ลด %) ของสมาชิกคนนี้ แยกตามกลุ่มหวยและชุดอัตราจ่าย (เว้นว่าง = ใช้ค่ามาตรฐาน)</p>
+      {% for g in groups %}{% set ci = loop.index0 %}
+      <details class="wz-group" {{ 'open' if loop.first else '' }}><summary>{{ g }}</summary>
+        {% for tier in tiers_by_group[g] %}
+        <div class="table-wrap"><table class="data-table wz-mini">
+          <thead><tr><th style="text-align:left;">{{ tier_names[tier] }}</th>{% for bt in bet_types %}<th>{{ labels[bt] }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            <tr><td style="text-align:left;">จ่าย</td>{% for bt in bet_types %}<td><input class="form-input" type="number" step="any" min="0" name="p_{{ ci }}_{{ tier }}_{{ bt }}"></td>{% endfor %}</tr>
+            <tr><td style="text-align:left;">ลด %</td>{% for bt in bet_types %}<td><input class="form-input" type="number" step="any" min="0" max="100" name="d_{{ ci }}_{{ tier }}_{{ bt }}"></td>{% endfor %}</tr>
+          </tbody></table></div>
+        {% endfor %}
+      </details>
+      {% endfor %}
+      <div class="wz-nav"><button type="button" class="btn btn-ghost" data-go="4">← ย้อนกลับ</button><button type="submit" class="btn btn-primary"><i class="fas fa-user-plus"></i> เพิ่มสมาชิก</button></div>
+    </article>
+  </form>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var panes = document.querySelectorAll('.wz-pane'), buttons = document.querySelectorAll('#wz-steps button');
+  function go(step) {
+    panes.forEach(function (p) { p.classList.toggle('on', p.dataset.pane === String(step)); });
+    buttons.forEach(function (b) { b.classList.toggle('on', b.dataset.step === String(step)); });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { go(b.dataset.step); }); });
+  document.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { go(b.dataset.go); }); });
+})();
+</script>
+{% endblock %}

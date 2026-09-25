@@ -1,0 +1,93 @@
+{% extends shell %}
+{% block title %}ดูของรวม/คาดคะเนได้เสีย — mklotto{% endblock %}
+{% block content %}
+<style>
+  .ov-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
+  .ov-info { border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
+  .ov-info.ok { background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.4); }
+  .ov-info.hint { background: rgba(245,158,11,.10); border: 1px solid rgba(245,158,11,.35); font-size: .9rem; }
+  .ov-table th, .ov-table td { text-align: right; white-space: nowrap; }
+  .ov-table th:first-child, .ov-table td:first-child { text-align: left; }
+  .ov-table input.form-input { width: 92px; padding: 4px 6px; text-align: right; }
+  .ov-red { color: #f87171; font-weight: 700; }
+  .ov-neg { color: #f87171; }
+  .ov-pos { color: #4ade80; }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">EXPOSURE</span><h1 class="page-title">ดูของรวม / คาดคะเนได้เสีย</h1>
+      <p class="section-desc">ยอดซื้อ ค่าคอม ยอดที่คุณรับไว้ (ตามสัดส่วนถือหุ้น) และยอดจ่ายสูงสุดถ้าถูกทุกเลข แยกตามประเภท</p></div>
+    <div class="partner-balance"><span>รายการแทงในงวด</span><strong>{{ bet_count }}</strong></div>
+  </header>
+
+  <form method="get" class="ov-bar" id="ov-select">
+    <select class="form-input" name="room_id" onchange="this.form.period_id.value='';this.form.submit()" aria-label="ตลาด">
+      {% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room and r.id == room.id else '' }}>{{ r.name }}</option>{% endfor %}
+    </select>
+    <select class="form-input" name="period_id" onchange="this.form.submit()" aria-label="งวด">
+      {% for p in periods %}<option value="{{ p.id }}" {{ 'selected' if period and p.id == period.id else '' }}>งวด {{ p.period_date }}{% if p.is_open %} (เปิดรับ){% endif %}</option>{% endfor %}
+    </select>
+    <select class="form-input" name="sort" onchange="this.form.submit()" aria-label="เรียง">
+      <option value="max" {{ 'selected' if sort == 'max' else '' }}>คาดคะเนยอดเสีย มาก → น้อย</option>
+      <option value="stake" {{ 'selected' if sort == 'stake' else '' }}>ยอดซื้อ มาก → น้อย</option>
+      <option value="number" {{ 'selected' if sort == 'number' else '' }}>เรียงตามเลข</option>
+    </select>
+    <select class="form-input" name="type" onchange="this.form.submit()" aria-label="ประเภท">
+      <option value="">ทุกประเภท</option>
+      {% for t in types %}<option value="{{ t }}" {{ 'selected' if view_filter == t else '' }}>{{ labels[t] }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-primary" type="submit"><i class="fas fa-rotate"></i> รีเฟรช</button>
+    <span class="section-desc" id="ov-count">รีเฟรชใน 180 วินาที</span>
+  </form>
+
+  {% if room and period %}<div class="ov-info ok"><i class="fas fa-circle-check"></i> {{ room.name }} - {{ period.period_date }}</div>{% endif %}
+  <div class="ov-info hint"><strong>วิธีอ่าน:</strong> ตัวเลขสีแดง = ยอดซื้อเลขนั้นเกินที่ตั้งสู้ไว้ · "รับ" = ยอดซื้อ × % ถือหุ้นของคุณ · "จ่ายสูงสุด" = ยอดที่คุณต้องจ่ายส่วนของคุณถ้าเลขนั้นถูกทั้งหมด</div>
+
+  <article class="panel">
+    <div class="partner-panel-heading"><div><span class="eyebrow">SUMMARY</span><h2 class="panel-title">รายละเอียด</h2></div></div>
+    <form method="post">
+      <input type="hidden" name="room_id" value="{{ room.id if room else '' }}"><input type="hidden" name="period_id" value="{{ period.id if period else '' }}">
+      <div class="table-wrap">
+        <table class="data-table ov-table">
+          <thead><tr><th>รายการ</th><th>รวม</th>{% for t in types %}<th>{{ labels[t] }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for key, label in [('buy', 'ซื้อ'), ('comm', 'คอม'), ('held', 'รับ'), ('max', 'จ่ายสูงสุด')] %}
+            <tr><td><strong>{{ label }}</strong></td><td>{{ '{:,.2f}'.format(summary[key]) }}</td>{% for t in types %}<td>{{ '{:,.2f}'.format(totals[key].get(t, 0)) }}</td>{% endfor %}</tr>
+            {% endfor %}
+            <tr><td><strong>ตั้งสู้</strong><small style="display:block;opacity:.7;">ยอดถือสู้ต่อเลข (เว้นว่าง = ไม่จำกัด)</small></td>
+              <td><button class="btn btn-primary btn-xs" type="submit">บันทึกข้อมูล</button></td>
+              {% for t in types %}<td><input class="form-input" type="number" min="0" step="any" name="cap_{{ t }}" value="{{ '%g'|format(caps[t]) if t in caps else '' }}"></td>{% endfor %}</tr>
+          </tbody>
+        </table>
+      </div>
+    </form>
+  </article>
+
+  <article class="panel">
+    <div class="partner-panel-heading"><div><span class="eyebrow">NUMBERS</span><h2 class="panel-title">รายการ (รายเลข)</h2></div><span class="partner-count-chip">{{ rows|length }} เลข</span></div>
+    <div class="table-wrap">
+      <table class="data-table ov-table">
+        <thead><tr><th>#</th><th>ประเภท</th><th>เลข</th><th>ยอดซื้อรวม</th><th>จ่ายสูงสุด (ทั้งหมด)</th><th>จำนวนสมาชิก</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr><td>{{ loop.index }}</td><td>{{ labels[r.type] }}</td><td class="{{ 'ov-red' if r.over else '' }}">{{ r.number }}</td>
+            <td class="{{ 'ov-red' if r.over else '' }}">{{ '{:,.2f}'.format(r.stake) }}</td><td>{{ '{:,.2f}'.format(r.max) }}</td><td>{{ r.members }}</td></tr>
+          {% else %}<tr><td colspan="6" class="empty-state-text">ยังไม่มีรายการแทงในงวดนี้</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    var left = 180, el = document.getElementById('ov-count');
+    setInterval(function () {
+      left -= 1;
+      if (el) el.textContent = 'รีเฟรชใน ' + left + ' วินาที';
+      if (left <= 0) location.reload();
+    }, 1000);
+  })();
+</script>
+{% endblock %}

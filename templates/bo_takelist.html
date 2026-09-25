@@ -1,0 +1,40 @@
+{% extends shell %}
+{% block title %}รายการเก็บของตามสมาชิก — mklotto{% endblock %}
+{% block content %}
+<style>
+  .tk-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
+  .tk-table th, .tk-table td { text-align: right; white-space: nowrap; }
+  .tk-table th:first-child, .tk-table td:first-child { text-align: left; }
+  .tk-table small { display: block; opacity: .7; }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">TAKE LIST</span><h1 class="page-title">รายการเก็บของตามสมาชิก</h1>
+      <p class="section-desc">ยอดซื้อของสมาชิกแต่ละคน แยกประเภท พร้อมยอดที่คุณรับไว้ตามสัดส่วนถือหุ้น — เลือกตลาดและงวดจากด้านล่าง</p></div>
+    <div class="partner-balance"><span>สมาชิกที่มียอด</span><strong>{{ rows|length }}</strong></div>
+  </header>
+  <form method="get" class="tk-bar">
+    <select class="form-input" name="room_id" onchange="this.form.period_id.value='';this.form.submit()" aria-label="ตลาด">
+      {% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room and r.id == room.id else '' }}>{{ r.name }}</option>{% endfor %}
+    </select>
+    <select class="form-input" name="period_id" onchange="this.form.submit()" aria-label="งวด">
+      {% for p in periods %}<option value="{{ p.id }}" {{ 'selected' if period and p.id == period.id else '' }}>งวด {{ p.period_date }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-primary" type="submit">ดูข้อมูล</button>
+  </form>
+  <article class="panel">
+    <div class="table-wrap">
+      <table class="data-table tk-table">
+        <thead><tr><th>ชื่อผู้ใช้</th><th>รายการ</th><th>ยอดซื้อรวม</th><th>คุณรับ</th>{% for t in types %}<th>{{ labels[t] }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr><td>{{ r.member.username }}<small>{{ r.member.full_name or '' }}</small></td><td>{{ r.count }}</td>
+            <td>{{ '{:,.2f}'.format(r.total) }}</td><td>{{ '{:,.2f}'.format(r.held_total) }}</td>
+            {% for t in types %}<td>{{ '{:,.2f}'.format(r.stake.get(t, 0)) if r.stake.get(t) else '-' }}{% if r.held.get(t) %}<small>รับ {{ '{:,.2f}'.format(r.held[t]) }}</small>{% endif %}</td>{% endfor %}</tr>
+          {% else %}<tr><td colspan="{{ 4 + types|length }}" class="empty-state-text">ไม่มีข้อมูล</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</main>
+{% endblock %}

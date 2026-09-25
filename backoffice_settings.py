@@ -325,3 +325,151 @@ SAVERS = {"rates": save_rates, "limits": save_limits, "access": save_access, "st
 for _role in ROLES:
     _endpoint, _view = make_view(_role)
     app.add_url_rule(f"/{_role}/member-settings/<section>", endpoint=_endpoint, view_func=_view, methods=["GET", "POST"])
+
+
+# ------------------------- เพิ่มสมาชิก (ตัวช่วย 4 ขั้น) -------------------------
+from app import adjust_credit, notify_user  # noqa: E402
+from models import PartnerStockShare, SeniorStockShare  # noqa: E402
+
+
+def make_wizard(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_member_new"
+
+    @cfg["decorator"]
+    def view():
+        owner = cfg["owner"](current_user())
+        groups = lottery_groups()
+        bet_types = bet_types_for_tables()
+        agents = []
+        if role == "senior":
+            agents = User.query.filter(User.id.in_(senior_agent_ids(owner) or [-1]), User.role == "partner").order_by(User.username).all()
+        tiers_by_group = {g: available_rate_tiers(g) for g in groups}
+
+        if request.method == "POST":
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
+            full_name = request.form.get("full_name", "").strip()
+            phone = request.form.get("phone", "").strip()
+            try:
+                credit = round(float(request.form.get("credit") or 0), 2)
+            except ValueError:
+                credit = -1
+            agent = owner
+            error = None
+            if role == "senior":
+                agent = next((a for a in agents if a.id == request.form.get("agent_id", type=int)), None)
+                if agent is None:
+                    error = "กรุณาเลือก Agent ผู้ดูแลสมาชิก"
+            if error is None:
+                if len(username) < 4 or not re.fullmatch(r"[A-Za-z0-9]+", username):
+                    error = "ชื่อผู้ใช้ต้องเป็นภาษาอังกฤษหรือตัวเลขอย่างน้อย 4 ตัว"
+                elif len(password) < 6 or not re.fullmatch(r"[A-Za-z0-9]+", password):
+                    error = "รหัสผ่านต้องเป็นภาษาอังกฤษและตัวเลขอย่างน้อย 6 ตัว"
+                elif not full_name:
+                    error = "กรุณากรอกชื่อสมาชิก"
+                elif User.query.filter_by(username=username).first():
+                    error = "ชื่อผู้ใช้นี้ถูกใช้แล้ว"
+                elif credit < 0 or credit > owner.credit_balance:
+                    error = f"เครดิตเริ่มต้นต้องอยู่ระหว่าง 0 ถึง {owner.credit_balance:,.2f} (เครดิตที่คุณมี)"
+            if error is None:
+                try:
+                    member = User(username=username, full_name=full_name, phone=phone, role="member",
+                                  partner_id=agent.id, points=0, credit_balance=0.0)
+                    member.set_password(password)
+                    db.session.add(member)
+                    db.session.flush()
+                    apply_wizard_settings(owner, member, groups, bet_types, tiers_by_group)
+                    if credit > 0:
+                        adjust_credit(owner, -credit, f"โอนเครดิตเริ่มต้นให้สมาชิกใหม่ {username}")
+                        adjust_credit(member, credit, f"เครดิตเริ่มต้นจาก {owner.username}")
+                        notify_user(member, "ได้รับเครดิตเริ่มต้น", f"เครดิต {credit:,.2f}", "wallet")
+                    db.session.commit()
+                except ValueError as exc:
+                    db.session.rollback()
+                    error = str(exc)
+            if error:
+                flash(error, "error")
+                return redirect(url_for(endpoint))
+            flash(f"เพิ่มสมาชิก {username} และตั้งค่าเริ่มต้นเรียบร้อยแล้ว", "success")
+            return redirect(url_for(f"{role}_member_settings", section="stock", sub="general"))
+
+        return render_template(
+            "bo_member_new.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            groups=groups, bet_types=bet_types, labels=BET_TYPE_LABELS, tiers_by_group=tiers_by_group,
+            tier_names=RATE_TIER_NAMES, agents=agents, type_rules=get_type_rules(), owner=owner,
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+def apply_wizard_settings(owner, member, groups, bet_types, tiers_by_group):
+    """บันทึกค่าเริ่มต้นที่กรอกในตัวช่วย — ชื่อช่องอ้างกลุ่มหวยด้วยลำดับ (0,1,2,…) ตามรายการกลุ่มตอนแสดงฟอร์ม"""
+    form = request.form
+    for ci, category in enumerate(groups):
+        if form.get(f"acc_{ci}") == "0":
+            _set_access(owner, member, category, 0, False)
+        for tier in tiers_by_group[category]:
+            if tier != 1 and form.get(f"acc_{ci}_t{tier}") == "0":
+                _set_access(owner, member, category, tier, False)
+        hold = _number(form.get(f"hold_{ci}"), f"% ถือหุ้น {category}", float, low=0, high=100)
+        if hold is not None:
+            db.session.add(MemberGroupStock(owner_id=owner.id, member_id=member.id, category=category, hold_percent=hold))
+        for bet_type in bet_types:
+            label = f"{category} {BET_TYPE_LABELS.get(bet_type, bet_type)}"
+            low = _number(form.get(f"min_{ci}_{bet_type}"), f"ขั้นต่ำ {label}", int, low=1)
+            high = _number(form.get(f"max_{ci}_{bet_type}"), f"สูงสุด {label}", int, low=1)
+            per_number = _number(form.get(f"num_{ci}_{bet_type}"), f"สูงสุดต่อเลข {label}", int, low=1)
+            if low is not None and high is not None and high < low:
+                raise ValueError(f"{label}: ยอดสูงสุดต้องไม่น้อยกว่าขั้นต่ำ")
+            if low is not None and per_number is not None and per_number < low:
+                raise ValueError(f"{label}: สูงสุดต่อเลขต้องไม่น้อยกว่าขั้นต่ำ")
+            if not (low is None and high is None and per_number is None):
+                db.session.add(MemberGroupLimit(owner_id=owner.id, member_id=member.id, category=category,
+                                                bet_type=bet_type, min_bet=low, max_bet=high, max_number_bet=per_number))
+            for tier in tiers_by_group[category]:
+                payout = _number(form.get(f"p_{ci}_{tier}_{bet_type}"), f"อัตราจ่าย {label}", float, low=0.0001)
+                discount = _number(form.get(f"d_{ci}_{tier}_{bet_type}"), f"ส่วนลด {label}", float, low=0, high=100)
+                if payout is not None or discount is not None:
+                    db.session.add(MemberGroupRate(owner_id=owner.id, member_id=member.id, category=category, tier=tier,
+                                                   bet_type=bet_type, payout_multiplier=payout, discount_pct=discount))
+
+
+# ------------------------- ส่วนแบ่งที่ได้รับ -------------------------
+def make_myshare(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_myshare"
+
+    @cfg["decorator"]
+    def view():
+        owner = cfg["owner"](current_user())
+        groups = lottery_groups()
+        category = request.args.get("category") or (groups[0] if groups else "")
+        tiers = available_rate_tiers(category)
+        rooms = [r for r in active_lottery_rooms().all() if (room_category_name(r) or "อื่นๆ") == category]
+        share_model, id_field = (PartnerStockShare, "partner_id") if role == "partner" else (SeniorStockShare, "senior_id")
+        shares = {
+            row.room_id: row.hold_percent
+            for row in share_model.query.filter(getattr(share_model, id_field) == owner.id, share_model.room_id.in_([r.id for r in rooms] or [-1]))
+        }
+        tables = []
+        for tier in tiers:
+            rates, discounts, type_rules = received_values(role, owner, category, tier)
+            tables.append({"tier": tier, "name": RATE_TIER_NAMES[tier], "rates": rates, "discounts": discounts})
+        profile = owner.partner_profile if role == "partner" else owner.senior_profile
+        return render_template(
+            "bo_myshare.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            groups=groups, category=category, rooms=rooms, shares=shares, tables=tables, type_rules=get_type_rules(),
+            bet_types=bet_types_for_tables(), labels=BET_TYPE_LABELS, commission_rate=profile.commission_rate if profile else 0,
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+for _role in ROLES:
+    _ep, _v = make_wizard(_role)
+    app.add_url_rule(f"/{_role}/members/new", endpoint=_ep, view_func=_v, methods=["GET", "POST"])
+    _ep, _v = make_myshare(_role)
+    app.add_url_rule(f"/{_role}/myshare", endpoint=_ep, view_func=_v, methods=["GET"])
