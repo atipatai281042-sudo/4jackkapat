@@ -70,7 +70,11 @@ app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["POINTS_REWARDS_ENABLED"] = False
-app.config["BACKOFFICE_URL"] = os.environ.get("BACKOFFICE_URL", "/backoffice").rstrip("/")
+_backoffice_host = (os.environ.get("BACKOFFICE_HOST") or "").strip()
+# แยกโดเมนหลังบ้าน: ลิงก์ไปหลังบ้านต้องเป็น URL เต็มของโดเมนนั้น (ไม่ตั้ง = พาธ /backoffice เดิม)
+app.config["BACKOFFICE_URL"] = (
+    os.environ.get("BACKOFFICE_URL") or (f"https://{_backoffice_host}" if _backoffice_host else "/backoffice")
+).rstrip("/")
 ACCOUNT_TEXT_PATTERN = r"[A-Za-z0-9!@#$%^&*._+\-]+"
 BANGKOK_TZ = ZoneInfo("Asia/Bangkok")
 
