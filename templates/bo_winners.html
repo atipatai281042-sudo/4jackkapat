@@ -14,11 +14,6 @@
       <p class="section-desc">โพยที่ถูกรางวัลของงวดที่เลือก พร้อมได้เสียของสมาชิก ส่วนของคุณ และบริษัท</p></div>
     <div class="partner-balance"><span>รายการที่ถูก</span><strong>{{ rows|length }}</strong></div>
   </header>
-  <form method="get" class="wn-bar">
-    <select class="form-input" name="room_id" onchange="this.form.period_id.value='';this.form.submit()" aria-label="ตลาด">{% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room and r.id == room.id else '' }}>{{ r.name }}</option>{% endfor %}</select>
-    <select class="form-input" name="period_id" onchange="this.form.submit()" aria-label="งวด">{% for p in periods %}<option value="{{ p.id }}" {{ 'selected' if period and p.id == period.id else '' }}>งวด {{ p.period_date }}</option>{% endfor %}</select>
-    <button class="btn btn-primary" type="submit">ดูข้อมูล</button>
-  </form>
   <article class="panel"><div class="table-wrap">
     <table class="data-table wn-table">
       <thead><tr><th>#</th><th>ชื่อผู้ใช้</th><th>โพย</th><th>เลข</th><th>เวลา</th><th>อัตราจ่าย</th><th>ยอดแทง</th><th>จ่าย</th><th>สมาชิก</th><th>คุณ</th><th>บริษัท</th><th>หมายเหตุ</th></tr></thead>

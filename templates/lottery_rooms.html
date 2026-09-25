@@ -3,6 +3,16 @@
 {% block head %}<meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes" />{% endblock %}
 {% block content %}
 <div class="rooms-page container">
+        {% if store_announcements %}
+        <div class="store-announcements" style="margin-bottom: 16px; display: grid; gap: 8px;">
+            {% for item in store_announcements %}
+            <div style="background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.4); border-radius: 10px; padding: 10px 14px;">
+                <strong><i class="fas fa-bullhorn"></i> {{ item.title }}</strong>
+                {% if item.body %}<div style="opacity: .9; margin-top: 4px; white-space: pre-line;">{{ item.body }}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         <div class="betting-shell">
             <aside class="betting-sidebar" aria-label="สรุปบัญชีและเมนูแทงหวย">
                 <div class="betting-user-card">

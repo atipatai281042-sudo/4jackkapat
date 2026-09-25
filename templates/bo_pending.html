@@ -1,0 +1,36 @@
+{% extends shell %}
+{% block title %}รอผลเดิมพัน — mklotto{% endblock %}
+{% block content %}
+<style>
+  .pd-table th, .pd-table td { text-align: right; white-space: nowrap; }
+  .pd-table th:first-child, .pd-table td:first-child { text-align: left; }
+  .pd-table thead tr:first-child th { text-align: center; }
+</style>
+{% macro table(rows, total, first) %}
+<div class="table-wrap"><table class="data-table pd-table">
+  <thead>
+    <tr><th rowspan="2">{{ first }}</th><th rowspan="2">รายการ</th><th rowspan="2">ยอดทั้งหมด</th><th colspan="2">สมาชิก</th><th colspan="3">คุณ</th><th>บริษัท</th></tr>
+    <tr><th>ส่วนลด</th><th>จ่ายจริง</th><th>รับ (ถือหุ้น)</th><th>ค่าคอม</th><th>จ่ายสูงสุด</th><th>ส่วนที่เหลือ</th></tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr><td>{{ r.name }}</td><td>{{ '{:,.0f}'.format(r.count) }}</td><td>{{ '{:,.2f}'.format(r.stake) }}</td>
+      <td>{{ '{:,.2f}'.format(r.discount) }}</td><td>{{ '{:,.2f}'.format(r.stake - r.discount) }}</td>
+      <td>{{ '{:,.2f}'.format(r.held) }}</td><td>{{ '{:,.2f}'.format(r.comm) }}</td><td>{{ '{:,.2f}'.format(r.risk) }}</td><td>{{ '{:,.2f}'.format(r.stake - r.held) }}</td></tr>
+    {% else %}<tr><td colspan="9" class="empty-state-text">ไม่มีข้อมูล</td></tr>{% endfor %}
+    {% if rows %}<tr style="font-weight:700;"><td>รวม</td><td>{{ '{:,.0f}'.format(total.count) }}</td><td>{{ '{:,.2f}'.format(total.stake) }}</td>
+      <td>{{ '{:,.2f}'.format(total.discount) }}</td><td>{{ '{:,.2f}'.format(total.stake - total.discount) }}</td>
+      <td>{{ '{:,.2f}'.format(total.held) }}</td><td>{{ '{:,.2f}'.format(total.comm) }}</td><td>{{ '{:,.2f}'.format(total.risk) }}</td><td>{{ '{:,.2f}'.format(total.stake - total.held) }}</td></tr>{% endif %}
+  </tbody>
+</table></div>
+{% endmacro %}
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">WAITING RESULTS</span><h1 class="page-title">รอผลเดิมพัน</h1>
+      <p class="section-desc">แสดงข้อมูลงวดที่ยังไม่ออกรางวัล แยกตามชนิดหวย และตามประเภท (สมาชิก · คุณ · บริษัท)</p></div>
+    <div class="partner-balance"><span>รายการรอผล</span><strong>{{ '{:,.0f}'.format(room_total.get('count', 0)) }}</strong></div>
+  </header>
+  <article class="panel"><h2 class="panel-title">แยกตามชนิดหวย</h2>{{ table(room_rows, room_total, 'ชนิดหวย') }}</article>
+  <article class="panel"><h2 class="panel-title">รวมทั้งหมด (แยกตามประเภท)</h2>{{ table(type_rows, type_total, 'ประเภท') }}</article>
+</main>
+{% endblock %}

@@ -13,9 +13,9 @@ import re
 from flask import abort, flash, redirect, render_template, request, url_for
 
 from app import (
-    BET_TYPE_LABELS, EXTRA_BET_TYPES, MAX_BET_AMOUNT, RATE_TABLE_ORDER, RATE_TIER_NAMES, app,
+    BET_TYPE_LABELS, EXTRA_BET_TYPES, MAX_BET_AMOUNT, RATE_TABLE_ORDER, app,
     active_lottery_rooms, agent_upline_senior, available_rate_tiers, current_user, db,
-    get_lottery_rates, get_rate_set, get_senior_payout_rates, get_type_rules, partner_owner,
+    get_lottery_rates, get_rate_set, get_senior_payout_rates, get_type_rules, group_visible, partner_owner, rate_tier_name, rate_tier_names,
     partner_required, room_category_name, senior_agent_ids, senior_owner, senior_required,
 )
 from models import (
@@ -56,7 +56,7 @@ def lottery_groups():
     names = []
     for room in active_lottery_rooms().all():
         name = room_category_name(room) or "อื่นๆ"
-        if name not in names:
+        if name not in names and group_visible(name):
             names.append(name)
     return names
 
@@ -103,6 +103,8 @@ def make_view(role):
         owner = cfg["owner"](current_user())
         groups = lottery_groups()
         category = request.values.get("category") or (groups[0] if groups else "")
+        if category and category not in groups:
+            abort(403)
         subs = SUBTABS[section]
         sub = request.values.get("sub") or subs[0][0]
         if sub not in {key for key, _ in subs}:
@@ -140,7 +142,7 @@ def make_view(role):
             "role": role, "shell": cfg["shell"], "owner": owner, "section": section,
             "section_title": SECTIONS[section], "sections": SECTIONS, "subs": subs, "sub": sub,
             "groups": groups, "category": category, "tiers": tiers, "tier": tier,
-            "tier_names": RATE_TIER_NAMES, "members": members, "bet_types": bet_types,
+            "tier_names": rate_tier_names(category), "members": members, "bet_types": bet_types,
             "labels": BET_TYPE_LABELS, "keyword": keyword, "endpoint": endpoint_name,
             "partner": owner, "senior": owner,
         }
@@ -397,7 +399,7 @@ def make_wizard(role):
         return render_template(
             "bo_member_new.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
             groups=groups, bet_types=bet_types, labels=BET_TYPE_LABELS, tiers_by_group=tiers_by_group,
-            tier_names=RATE_TIER_NAMES, agents=agents, type_rules=get_type_rules(), owner=owner,
+            tier_names_by_group={g: rate_tier_names(g) for g in groups}, agents=agents, type_rules=get_type_rules(), owner=owner,
         )
 
     view.__name__ = endpoint
@@ -456,7 +458,7 @@ def make_myshare(role):
         tables = []
         for tier in tiers:
             rates, discounts, type_rules = received_values(role, owner, category, tier)
-            tables.append({"tier": tier, "name": RATE_TIER_NAMES[tier], "rates": rates, "discounts": discounts})
+            tables.append({"tier": tier, "name": rate_tier_name(category, tier), "rates": rates, "discounts": discounts})
         profile = owner.partner_profile if role == "partner" else owner.senior_profile
         return render_template(
             "bo_myshare.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,

@@ -496,14 +496,22 @@ ASSISTANT_PERMISSION_LABELS = {
     "takelist": "รายการเก็บของสมาชิก",
     "reports": "รายงานแพ้ชนะ",
     "transfer": "โอนเงิน/การเงิน",
+    "cancel": "ยกเลิกรายการแทง",
+    "storefront": "จัดการหน้าร้าน (ประกาศถึงสมาชิก)",
+    "supervip": "กลุ่มหวย VIP",
+    "superlotto": "กลุ่มหวยออนไลน์",
 }
+# กลุ่มหวยที่ผู้ช่วยต้องได้สิทธิ์เฉพาะถึงจะเห็น/ตั้งค่าได้ (คำที่อยู่ในชื่อหมวด → สิทธิ์)
+SPECIAL_GROUP_PERMISSIONS = (("VIP", "supervip"), ("ออนไลน์", "superlotto"))
 # หน้าไหน (ตามชื่อ endpoint หลังตัดคำนำหน้า partner_/senior_) ต้องใช้สิทธิ์อะไร — หน้าที่ไม่อยู่ในรายการเปิดให้ผู้ช่วยทุกคน
 ASSISTANT_ENDPOINT_PERMISSIONS = (
-    (("bets", "bet_", "pending_bets", "overall", "acceptance"), "bets"),
+    (("bets", "bet_", "pending_bets", "pending_summary", "overall", "acceptance"), "bets"),
     (("member", "agents", "online", "settings", "stock", "blocked"), "members"),
     (("takelist",), "takelist"),
     (("report", "pnl", "results", "winners"), "reports"),
     (("topup", "deposit", "finance", "statement", "transfer"), "transfer"),
+    (("cancel",), "cancel"),
+    (("storefront",), "storefront"),
 )
 
 
@@ -528,6 +536,29 @@ def assistant_allowed(assistant, endpoint):
     if needed == "members" and "agents" in granted:
         return True
     return needed in granted
+
+
+def current_assistant(user=None):
+    """ถ้าผู้ใช้ปัจจุบันเป็นผู้ช่วย คืนแถวผู้ช่วยของ Agent/Senior นั้น ไม่งั้น None"""
+    user = user or current_user()
+    if user is None:
+        return None
+    return (
+        PartnerAssistant.query.filter_by(assistant_user_id=user.id).first()
+        or SeniorAssistant.query.filter_by(assistant_user_id=user.id).first()
+    )
+
+
+def group_visible(category, user=None):
+    """กลุ่มหวยนี้ผู้ใช้ปัจจุบันเห็นและตั้งค่าได้ไหม — เจ้าของบัญชีเห็นทุกกลุ่ม ผู้ช่วยต้องได้สิทธิ์ VIP/ออนไลน์"""
+    assistant = current_assistant(user)
+    if assistant is None:
+        return True
+    granted = {item.strip() for item in (assistant.permissions or "").split(",") if item.strip()}
+    for keyword, permission in SPECIAL_GROUP_PERMISSIONS:
+        if keyword in (category or "") and permission not in granted:
+            return False
+    return True
 
 
 def selected_permissions(form):
@@ -1167,7 +1198,19 @@ def close_expired_periods(room_id=None):
     return len(expired_periods)
 
 
-RATE_TIER_NAMES = {1: "อัตราจ่ายเริ่มต้น", 2: "อัตราจ่ายชุดที่ 2"}
+RATE_TIER_SLOTS = (2, 3, 4, 5)  # ชุดอัตราจ่ายเสริมของแต่ละหมวด (ชุด 1 = ค่าเริ่มต้นกลาง)
+
+
+def rate_tier_name(category, tier):
+    """ชื่อชุดอัตราจ่ายแบบเว็บตัวอย่าง: ชุดเริ่มต้น หรือ "บาทละ N" ตามอัตราจ่าย 2 ตัวของชุดนั้น (100 ขึ้นไป = "บาทละ ร้อย")"""
+    if tier == 1:
+        return "อัตราจ่ายเริ่มต้น"
+    row = LotteryRateSet.query.filter_by(category=category, tier=tier, bet_type="2up").first() \
+        or LotteryRateSet.query.filter_by(category=category, tier=tier).first()
+    if row is None:
+        return f"อัตราจ่ายชุดที่ {tier}"
+    payout = float(row.payout_multiplier)
+    return "บาทละ ร้อย" if payout >= 100 else f"บาทละ {payout:g}"
 RATE_TABLE_ORDER = ("rundown", "2down", "3toad", "2up", "3up", "runup", "3down")
 
 # ตัวเลขอ้างอิงจากเว็บตัวอย่าง (ใช้ตอน seed ครั้งแรกเท่านั้น — หลังจากนั้นแอดมินแก้ได้เอง)
@@ -1198,9 +1241,17 @@ def get_rate_set(category, tier):
 
 def available_rate_tiers(category):
     tiers = [1]
-    if category and LotteryRateSet.query.filter_by(category=category, tier=2).first():
-        tiers.append(2)
+    if category:
+        extra = {
+            row.tier for row in LotteryRateSet.query.filter(LotteryRateSet.category == category, LotteryRateSet.tier > 1)
+            .with_entities(LotteryRateSet.tier)
+        }
+        tiers.extend(sorted(extra))
     return tiers
+
+
+def rate_tier_names(category):
+    return {tier: rate_tier_name(category, tier) for tier in available_rate_tiers(category)}
 
 
 def user_lottery_rates(user, category=None, tier=1):
@@ -1301,6 +1352,16 @@ def member_group_stock_percent(owner_id, member_id, category):
     return row.hold_percent if row else None
 
 
+def store_announcements_for(member):
+    """ประกาศจากเอเย่นต์/ซีเนียร์ที่ดูแลสมาชิกคนนี้ (หน้าร้าน) — แสดง 3 รายการล่าสุด"""
+    owners = member_setting_owner_ids(member) if member is not None else []
+    if not owners:
+        return []
+    return Announcement.query.filter(
+        Announcement.owner_id.in_(owners), Announcement.is_active.is_(True)
+    ).order_by(Announcement.created_at.desc()).limit(3).all()
+
+
 def build_rate_tables(user, category, member_min, member_max, type_rules=None):
     """ตารางอัตราจ่ายของแต่ละชุดที่หมวดนี้มี — ค่าที่สมาชิกได้จริง (ใช้แสดงและให้หน้าเว็บคำนวณส่วนลด)"""
     type_rules = type_rules or get_type_rules()
@@ -1329,7 +1390,7 @@ def build_rate_tables(user, category, member_min, member_max, type_rules=None):
                 "min": max(rule["min"], member_min, glim.get("min") or 0),
                 "max": min(rule["max"], member_max, glim.get("max") or MAX_BET_AMOUNT),
             })
-        tables.append({"tier": tier, "name": RATE_TIER_NAMES[tier], "rows": rows})
+        tables.append({"tier": tier, "name": rate_tier_name(category, tier), "rows": rows})
     return tables
 
 
@@ -1688,11 +1749,14 @@ def lottery_result_detail(room_id):
 
 
 def _grouped_rate_sets():
-    """{หมวด: {bet_type: LotteryRateSet}} ของชุดที่ 2 — ใช้แสดงในหน้าแอดมิน"""
+    """[{category, tier, name, rows: {bet_type: LotteryRateSet}}] ของชุดอัตราจ่ายเสริมทุกชุด — ใช้แสดงในหน้าแอดมิน"""
     grouped = {}
-    for row in LotteryRateSet.query.filter_by(tier=2).order_by(LotteryRateSet.category):
-        grouped.setdefault(row.category, {})[row.bet_type] = row
-    return grouped
+    for row in LotteryRateSet.query.filter(LotteryRateSet.tier > 1).order_by(LotteryRateSet.category, LotteryRateSet.tier):
+        grouped.setdefault((row.category, row.tier), {})[row.bet_type] = row
+    return [
+        {"category": category, "tier": tier, "name": rate_tier_name(category, tier), "rows": rows}
+        for (category, tier), rows in grouped.items()
+    ]
 
 
 @app.route("/payout-rates")
@@ -1765,6 +1829,7 @@ def lottery_rooms():
         room_groups=room_groups,
         room_schedules=room_schedules,
         now=now,
+        store_announcements=store_announcements_for(current_user()),
     )
 
 
@@ -2286,6 +2351,45 @@ def download_lottery_ticket(period_id, ticket_code):
     )
 
 
+def reverse_bet_commissions(bet):
+    """โพยถูกยกเลิก → คืนคอมมิชชันที่จ่ายให้ Agent/Agent สาย/Senior ตอนแทง (ลงสมุดเป็นรายการติดลบ ไม่ซ้ำสอง)"""
+    for model, owner_field in ((CommissionLedger, "partner_id"), (SeniorCommissionLedger, "senior_id")):
+        entries = model.query.filter(model.bet_id == bet.id, model.commission_amount > 0).all()
+        for entry in entries:
+            already = model.query.filter(
+                model.bet_id == bet.id, getattr(model, owner_field) == getattr(entry, owner_field),
+                model.commission_amount < 0, model.reason.like("ยกเลิกคอมมิชชัน%"),
+            ).first()
+            if already:
+                continue
+            owner = db.session.get(User, getattr(entry, owner_field))
+            profile = (owner.partner_profile if owner and owner.is_partner else owner.senior_profile) if owner else None
+            if profile is None:
+                continue
+            amount = float(entry.commission_amount)
+            reason = f"ยกเลิกคอมมิชชัน โพย {bet.number} ({bet.bet_type}) ที่ถูกยกเลิก"
+            profile.commission_balance = round(profile.commission_balance - amount, 2)
+            record_wallet_transaction(
+                owner, "commission", -amount, profile.commission_balance, reason,
+                reference_type="bet", reference_id=bet.id,
+            )
+            values = {"bet_id": bet.id, "member_id": bet.user_id, "base_amount": bet.amount, "rate": 0.0,
+                      "commission_amount": -amount, "reason": reason, owner_field: owner.id}
+            if model is SeniorCommissionLedger:
+                values["agent_id"] = entry.agent_id
+            db.session.add(model(**values))
+
+
+def cancel_ticket_bets(bets, reason_text):
+    """ยกเลิกโพยทั้งใบ: สถานะยกเลิก + คืนเครดิตที่หักจริง (ยอดแทง − ส่วนลด) + คืนคอมมิชชัน — คืนยอดเป็นจำนวนที่คืนเครดิต"""
+    refund = 0.0
+    for bet in bets:
+        bet.status = "cancelled"
+        refund += float(bet.amount) - float(bet.discount_amount or 0)
+        reverse_bet_commissions(bet)
+    return round(refund, 2)
+
+
 @app.route("/lottery/ticket/<int:period_id>/<string:ticket_code>/cancel", methods=["POST"])
 @login_required
 def cancel_lottery_ticket(period_id, ticket_code):
@@ -2300,9 +2404,7 @@ def cancel_lottery_ticket(period_id, ticket_code):
     if not bets:
         abort(404)
 
-    refund_amount = sum(bet.amount - bet.discount_amount for bet in bets)
-    for bet in bets:
-        bet.status = "cancelled"
+    refund_amount = cancel_ticket_bets(bets, "สมาชิกยกเลิกเอง")
     adjust_credit(user, refund_amount, f"คืนโพยหวย {ticket_code}")
     db.session.commit()
     flash("คืนโพยเรียบร้อยแล้ว", "success")
@@ -5145,20 +5247,25 @@ def admin_thai_lottery():
             if not category or bet_type not in BET_TYPE_LABELS or payout <= 0 or not 0 <= discount <= 100:
                 flash("กรุณาเลือกหมวดและประเภทให้ถูกต้อง (อัตราจ่ายมากกว่า 0, ส่วนลด 0-100%)", "error")
                 return redirect(url_for("admin_thai_lottery"))
-            row = LotteryRateSet.query.filter_by(category=category, tier=2, bet_type=bet_type).first()
+            tier = request.form.get("tier", 2, type=int)
+            if tier not in RATE_TIER_SLOTS:
+                flash("เลือกชุดอัตราจ่ายได้ 2-5", "error")
+                return redirect(url_for("admin_thai_lottery"))
+            row = LotteryRateSet.query.filter_by(category=category, tier=tier, bet_type=bet_type).first()
             if row is None:
-                row = LotteryRateSet(category=category, tier=2, bet_type=bet_type)
+                row = LotteryRateSet(category=category, tier=tier, bet_type=bet_type)
                 db.session.add(row)
             row.payout_multiplier, row.discount_pct = payout, discount
             db.session.commit()
-            flash(f"ตั้งค่าชุดที่ 2 ของ {category}: {BET_TYPE_LABELS[bet_type]} จ่าย {payout:g} ลด {discount:g}% แล้ว", "success")
+            flash(f"ตั้งค่าชุดที่ {tier} ({rate_tier_name(category, tier)}) ของ {category}: {BET_TYPE_LABELS[bet_type]} จ่าย {payout:g} ลด {discount:g}% แล้ว", "success")
             return redirect(url_for("admin_thai_lottery"))
 
         if action == "delete_rate_set":
             category = request.form.get("category", "").strip()
-            LotteryRateSet.query.filter_by(category=category, tier=2).delete()
+            tier = request.form.get("tier", 2, type=int)
+            LotteryRateSet.query.filter_by(category=category, tier=tier).delete()
             db.session.commit()
-            flash(f"ลบอัตราจ่ายชุดที่ 2 ของ {category} แล้ว", "success")
+            flash(f"ลบอัตราจ่ายชุดที่ {tier} ของ {category} แล้ว", "success")
             return redirect(url_for("admin_thai_lottery"))
 
         if action == "create_period":
@@ -5687,7 +5794,7 @@ def admin_announcements():
             db.session.commit()
             flash("เพิ่มประกาศสำเร็จ", "success")
         return redirect(url_for("admin_announcements"))
-    announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
+    announcements = Announcement.query.filter(Announcement.owner_id.is_(None)).order_by(Announcement.created_at.desc()).all()
     return render_template("admin_announcements.html", announcements=announcements)
 
 
@@ -5974,6 +6081,10 @@ def seed_data():
             db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_thai_lottery_bets_ticket_code ON thai_lottery_bets (ticket_code)"))
             db.session.commit()
 
+        announcement_columns = [col["name"] for col in inspect(db.engine).get_columns("announcements")]
+        if "owner_id" not in announcement_columns:
+            db.session.execute(text("ALTER TABLE announcements ADD COLUMN owner_id INTEGER"))
+            db.session.commit()
         for column_name, ddl in (
             ("payout_grantor_id", "INTEGER"),
             ("payout_excess", "FLOAT NOT NULL DEFAULT 0.0"),

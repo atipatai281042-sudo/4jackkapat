@@ -222,6 +222,8 @@ class Announcement(db.Model):
     title = db.Column(db.String(150), nullable=False)
     body = db.Column(db.Text, default="")
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    # ประกาศของ Agent/Senior ถึงสมาชิกในสาย (หน้าร้าน) — NULL = ประกาศของระบบที่แอดมินตั้ง
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 

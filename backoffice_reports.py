@@ -9,11 +9,11 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, session, url_for
 
 from app import (
     BET_TYPE_LABELS, EXTRA_BET_TYPES, RATE_TABLE_ORDER, _bet_history_range, app, active_lottery_rooms,
-    app_now, current_user, db, get_lottery_rates, hold_cap_for, normalize_bet_type, partner_owner, partner_required,
+    app_now, current_user, db, group_visible, get_lottery_rates, hold_cap_for, normalize_bet_type, partner_owner, partner_required,
     room_category_name, senior_agent_ids, senior_owner, senior_required,
 )
 from models import (
@@ -27,6 +27,11 @@ ROLES = {
     "senior": {"decorator": senior_required, "owner": senior_owner, "shell": "backoffice_shell_senior.html"},
 }
 PNL_TITLES = {"member": "แพ้-ชนะ สมาชิก/ประเภท", "date": "แพ้-ชนะ สุทธิ"}
+
+
+def room_visible(room):
+    """ตลาดนี้ผู้ใช้ปัจจุบัน (รวมผู้ช่วยที่ถูกจำกัดสิทธิ์กลุ่มหวยพิเศษ) มองเห็นไหม"""
+    return group_visible(room_category_name(room) or "อื่นๆ")
 
 
 def bet_types_list():
@@ -98,8 +103,15 @@ def effective_hold_percent(role, owner, member, room, cache):
 def market_and_period():
     """ตัวเลือกตลาด (ห้อง) + งวด ที่ใช้ร่วมกันทุกหน้า — ค่าเริ่มต้น: ห้องแรกที่มีงวดเปิดอยู่ ไม่งั้นห้องแรก"""
     rooms = active_lottery_rooms().all()
+    rooms = [r for r in rooms if room_visible(r)]
     room_id = request.values.get("room_id", type=int)
+    remembered = False
+    if room_id is None:
+        room_id = session.get("bo_room_id")
+        remembered = True
     room = next((r for r in rooms if r.id == room_id), None)
+    if room is not None and not remembered:
+        session["bo_room_id"] = room.id
     if room is None:
         now = app_now()
         open_room_ids = {
@@ -110,7 +122,16 @@ def market_and_period():
         room = next((r for r in rooms if r.id in open_room_ids), rooms[0] if rooms else None)
     periods = ThaiLotteryPeriod.query.filter_by(room_id=room.id).order_by(ThaiLotteryPeriod.id.desc()).limit(15).all() if room else []
     period_id = request.values.get("period_id", type=int)
-    period = next((p for p in periods if p.id == period_id), periods[0] if periods else None)
+    date_value = (request.values.get("date") or "").strip()
+    period = next((p for p in periods if p.id == period_id), None)
+    if period is None and date_value:
+        period = next((p for p in periods if p.period_date == date_value), None)
+        if period is not None:
+            session["bo_date"] = date_value
+    if period is None and not request.values.get("room_id") and session.get("bo_date"):
+        period = next((p for p in periods if p.period_date == session.get("bo_date")), None)
+    if period is None:
+        period = periods[0] if periods else None
     return rooms, room, periods, period
 
 
@@ -194,7 +215,7 @@ def make_overall(role):
         return render_template(
             "bo_overall.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
             rooms=rooms, room=room, periods=periods, period=period, types=types, labels=BET_TYPE_LABELS,
-            totals=totals, summary=summary, caps=caps, rows=rows[:300], view_filter=view_filter, sort=sort,
+            show_market_bar=True, totals=totals, summary=summary, caps=caps, rows=rows[:300], view_filter=view_filter, sort=sort,
             bet_count=len(bets),
         )
 
@@ -245,6 +266,7 @@ def make_takelist(role):
         return render_template(
             "bo_takelist.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
             rooms=rooms, room=room, periods=periods, period=period, types=types, labels=BET_TYPE_LABELS, rows=rows,
+            show_market_bar=True,
         )
 
     view.__name__ = endpoint
@@ -444,6 +466,7 @@ def make_winners(role):
         return render_template(
             "bo_winners.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
             rooms=rooms, room=room, periods=periods, period=period, rows=rows, totals=dict(totals), labels=BET_TYPE_LABELS,
+            show_market_bar=True,
         )
 
     view.__name__ = endpoint
@@ -574,3 +597,146 @@ for _role in ROLES:
     app.add_url_rule(f"/{_role}/acceptance", endpoint=_ep, view_func=_view, methods=["GET", "POST"])
     _ep, _view = make_transfers(_role)
     app.add_url_rule(f"/{_role}/transfers", endpoint=_ep, view_func=_view, methods=["GET", "POST"])
+
+
+# ----------------------------- ยกเลิกรายการแทง (โดยผู้ดูแล) -----------------------------
+from app import cancel_ticket_bets  # noqa: E402
+from models import Announcement  # noqa: E402
+
+
+def make_cancel(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_cancel_bets"
+
+    @cfg["decorator"]
+    def view(ticket_code=None):
+        owner = cfg["owner"](current_user())
+        now = app_now()
+        base = scope_query(role, owner).join(ThaiLotteryPeriod, ThaiLotteryBet.period_id == ThaiLotteryPeriod.id).filter(
+            ThaiLotteryBet.status == "pending", ThaiLotteryPeriod.is_open.is_(True), ThaiLotteryPeriod.close_time > now,
+            ThaiLotteryBet.ticket_code.isnot(None),
+        )
+        if request.method == "POST":
+            bets = base.filter(ThaiLotteryBet.ticket_code == ticket_code).all()
+            if not bets:
+                flash("ไม่พบโพยที่ยกเลิกได้ (อาจปิดรับแล้ว ถูกยกเลิกแล้ว หรือไม่ใช่สมาชิกในสายของคุณ)", "error")
+                return redirect(url_for(endpoint))
+            member = bets[0].user
+            refund = cancel_ticket_bets(bets, f"ยกเลิกโดย {owner.username}")
+            adjust_credit(member, refund, f"ยกเลิกโพย {ticket_code} โดย {owner.username}")
+            notify_user(member, "โพยถูกยกเลิก", f"โพย {ticket_code} ถูกยกเลิก คืนเครดิต {refund:,.2f}", "wallet")
+            db.session.commit()
+            flash(f"ยกเลิกโพย {ticket_code} ของ {member.username} คืนเครดิต {refund:,.2f} แล้ว", "success")
+            return redirect(url_for(endpoint))
+        tickets = {}
+        for bet in base.order_by(ThaiLotteryBet.id.desc()).limit(3000).all():
+            row = tickets.setdefault(bet.ticket_code, {
+                "code": bet.ticket_code, "member": bet.user, "period": bet.period, "count": 0, "stake": 0.0, "paid": 0.0,
+                "time": (bet.created_at + timedelta(hours=7)).strftime("%d/%m/%Y %H:%M"), "remark": bet.remark or "",
+            })
+            row["count"] += 1
+            row["stake"] += float(bet.amount)
+            row["paid"] += float(bet.amount) - float(bet.discount_amount or 0)
+        return render_template(
+            "bo_cancel.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            tickets=list(tickets.values())[:200],
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+# ----------------------------- หน้าร้าน: ประกาศถึงสมาชิก -----------------------------
+def make_storefront(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_storefront"
+
+    @cfg["decorator"]
+    def view():
+        owner = cfg["owner"](current_user())
+        if request.method == "POST":
+            action = request.form.get("action")
+            if action == "create":
+                title = (request.form.get("title") or "").strip()
+                body = (request.form.get("body") or "").strip()
+                if not title:
+                    flash("กรุณากรอกหัวข้อประกาศ", "error")
+                else:
+                    db.session.add(Announcement(title=title[:150], body=body[:2000], is_active=True, owner_id=owner.id))
+                    db.session.commit()
+                    flash("เพิ่มประกาศถึงสมาชิกแล้ว", "success")
+            else:
+                item = Announcement.query.filter_by(id=request.form.get("id", type=int), owner_id=owner.id).first()
+                if item is None:
+                    flash("ไม่พบประกาศ", "error")
+                elif action == "toggle":
+                    item.is_active = not item.is_active
+                    db.session.commit()
+                    flash("อัปเดตสถานะประกาศแล้ว", "success")
+                elif action == "delete":
+                    db.session.delete(item)
+                    db.session.commit()
+                    flash("ลบประกาศแล้ว", "success")
+            return redirect(url_for(endpoint))
+        items = Announcement.query.filter_by(owner_id=owner.id).order_by(Announcement.created_at.desc()).limit(100).all()
+        return render_template(
+            "bo_storefront.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            items=items, shift=timedelta(hours=7),
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+# ----------------------------- รอผลเดิมพัน (สรุป 3 ฝ่าย) -----------------------------
+def make_pending(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_pending_summary"
+
+    @cfg["decorator"]
+    def view():
+        owner = cfg["owner"](current_user())
+        rooms_by_id = {r.id: r for r in LotteryRoom.query.all()}
+        bets = scope_query(role, owner).filter(ThaiLotteryBet.status == "pending").all()
+        commission, _ = ledger_maps(role, owner, [b.id for b in bets])
+        cache = {}
+        by_room, by_type = defaultdict(lambda: defaultdict(float)), defaultdict(lambda: defaultdict(float))
+        for bet in bets:
+            room = rooms_by_id.get(bet.period.room_id) if bet.period else None
+            percent = effective_hold_percent(role, owner, bet.user, room, cache) if room else 0.0
+            stake, payout = float(bet.amount), float(bet.amount) * float(bet.rate)
+            for bucket in (by_room[room.name if room else "-"], by_type[BET_TYPE_LABELS.get(bet.bet_type, bet.bet_type)]):
+                bucket["count"] += 1
+                bucket["stake"] += stake
+                bucket["discount"] += float(bet.discount_amount or 0)
+                bucket["comm"] += commission.get(bet.id, 0.0)
+                bucket["held"] += stake * percent / 100
+                bucket["risk"] += payout * percent / 100
+        def finish(table):
+            rows = [{"name": name, **dict(values)} for name, values in table.items()]
+            rows.sort(key=lambda r: -r["stake"])
+            total = defaultdict(float)
+            for row in rows:
+                for key, value in row.items():
+                    if key != "name":
+                        total[key] += value
+            return rows, dict(total)
+        room_rows, room_total = finish(by_room)
+        type_rows, type_total = finish(by_type)
+        return render_template(
+            "bo_pending.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            room_rows=room_rows, room_total=room_total, type_rows=type_rows, type_total=type_total,
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+for _role in ROLES:
+    _ep, _view = make_cancel(_role)
+    app.add_url_rule(f"/{_role}/cancel-bets", endpoint=_ep, view_func=_view, methods=["GET"])
+    app.add_url_rule(f"/{_role}/cancel-bets/<string:ticket_code>", endpoint=_ep + "_do", view_func=_view, methods=["POST"])
+    _ep, _view = make_storefront(_role)
+    app.add_url_rule(f"/{_role}/storefront", endpoint=_ep, view_func=_view, methods=["GET", "POST"])
+    _ep, _view = make_pending(_role)
+    app.add_url_rule(f"/{_role}/pending-summary", endpoint=_ep, view_func=_view, methods=["GET"])

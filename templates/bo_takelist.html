@@ -10,18 +10,9 @@
 <main class="partner-dashboard-main">
   <header class="partner-dashboard-head">
     <div><span class="eyebrow">TAKE LIST</span><h1 class="page-title">รายการเก็บของตามสมาชิก</h1>
-      <p class="section-desc">ยอดซื้อของสมาชิกแต่ละคน แยกประเภท พร้อมยอดที่คุณรับไว้ตามสัดส่วนถือหุ้น — เลือกตลาดและงวดจากด้านล่าง</p></div>
+      <p class="section-desc">ยอดซื้อของสมาชิกแต่ละคน แยกประเภท พร้อมยอดที่คุณรับไว้ตามสัดส่วนถือหุ้น — เลือกตลาดและงวดจากแถบด้านบน</p></div>
     <div class="partner-balance"><span>สมาชิกที่มียอด</span><strong>{{ rows|length }}</strong></div>
   </header>
-  <form method="get" class="tk-bar">
-    <select class="form-input" name="room_id" onchange="this.form.period_id.value='';this.form.submit()" aria-label="ตลาด">
-      {% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room and r.id == room.id else '' }}>{{ r.name }}</option>{% endfor %}
-    </select>
-    <select class="form-input" name="period_id" onchange="this.form.submit()" aria-label="งวด">
-      {% for p in periods %}<option value="{{ p.id }}" {{ 'selected' if period and p.id == period.id else '' }}>งวด {{ p.period_date }}</option>{% endfor %}
-    </select>
-    <button class="btn btn-primary" type="submit">ดูข้อมูล</button>
-  </form>
   <article class="panel">
     <div class="table-wrap">
       <table class="data-table tk-table">

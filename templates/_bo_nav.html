@@ -13,7 +13,8 @@
     {{ nav_group('รายการแทง', 'fa-ticket', [
       ('/partner/overall', 'ดูของรวม/คาดคะเนได้เสีย'),
       ('/partner/bets/member-types', 'ดูของสมาชิก/ประเภท'),
-      ('/partner/bets/pending', 'รอผลเดิมพัน'),
+      ('/partner/pending-summary', 'รอผลเดิมพัน'),
+      ('/partner/cancel-bets', 'ยกเลิกรายการแทง'),
       ('/partner/acceptance', 'ตั้งค่ารับของแยกตามชนิด'),
       ('/partner/bets/acceptance-by-type', 'ตั้งสู้รายเลข (ทีละตลาด)'),
       ('/partner/bets', 'รายการแทงทั้งหมด'),
@@ -48,13 +49,15 @@
       ('/partner/statement', 'ประวัติการเงิน'),
       ('/partner/finance', 'เบิกคอม/บัญชีรับเงิน'),
     ], base, current) }}
+    {{ nav_group('หน้าร้าน', 'fa-store', [('/partner/storefront', 'ประกาศถึงสมาชิก')], base, current) }}
     {% if is_owner %}{{ nav_group('ผู้ช่วย', 'fa-user-shield', [('/partner/assistants', 'จัดการผู้ช่วย')], base, current) }}{% endif %}
     <a href="{{ base }}/partner/login-history" class="bo-nav-single {{ 'is-active' if current == '/partner/login-history' else '' }}"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
   {% else %}
     {{ nav_group('รายการแทง', 'fa-ticket', [
       ('/senior/overall', 'ดูของรวม/คาดคะเนได้เสีย'),
       ('/senior/bets/member-types', 'ดูของสมาชิก/ประเภท'),
-      ('/senior/pending', 'รอผลเดิมพัน'),
+      ('/senior/pending-summary', 'รอผลเดิมพัน'),
+      ('/senior/cancel-bets', 'ยกเลิกรายการแทง'),
       ('/senior/acceptance', 'ตั้งค่ารับของแยกตามชนิด'),
       ('/senior/bets/acceptance-by-type', 'ตั้งสู้รายเลข (ทีละตลาด)'),
       ('/senior/bets', 'รายการแทงทั้งหมด'),
@@ -89,6 +92,7 @@
       ('/senior/statement', 'ประวัติการเงิน'),
       ('/senior/finance', 'เบิกคอม/บัญชีรับเงิน'),
     ], base, current) }}
+    {{ nav_group('หน้าร้าน', 'fa-store', [('/senior/storefront', 'ประกาศถึงสมาชิก')], base, current) }}
     {% if is_owner %}{{ nav_group('ผู้ช่วย', 'fa-user-shield', [('/senior/assistants', 'จัดการผู้ช่วย')], base, current) }}{% endif %}
     <a href="{{ base }}/senior/login-history" class="bo-nav-single {{ 'is-active' if current == '/senior/login-history' else '' }}"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
   {% endif %}

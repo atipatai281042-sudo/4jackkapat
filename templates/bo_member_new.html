@@ -48,13 +48,14 @@
 
     <article class="panel wz-pane" data-pane="2">
       <p class="wz-hint">เลือก "ปิด" เพื่อไม่ให้สมาชิกแทงกลุ่มหวยนั้น (เริ่มต้น = เปิดทั้งหมด)</p>
+      {% set extra_slots = [] %}{% for g in groups %}{% for t in tiers_by_group[g] if t != 1 and t not in extra_slots %}{% set _ = extra_slots.append(t) %}{% endfor %}{% endfor %}
       <div class="table-wrap"><table class="data-table wz-mini">
-        <thead><tr><th style="text-align:left;">กลุ่มหวย</th><th>เปิด/ปิด</th>{% set has_t2 = (tiers_by_group.values()|map('length')|list + [1])|max > 1 %}{% if has_t2 %}<th>{{ tier_names[2] }}</th>{% endif %}</tr></thead>
+        <thead><tr><th style="text-align:left;">กลุ่มหวย</th><th>เปิด/ปิด</th>{% for t in extra_slots|sort %}<th>ชุดอัตราจ่ายที่ {{ t }}</th>{% endfor %}</tr></thead>
         <tbody>
           {% for g in groups %}{% set ci = loop.index0 %}
           <tr><td style="text-align:left;">{{ g }}</td>
             <td><select class="form-input" name="acc_{{ ci }}"><option value="1">เปิด</option><option value="0">ปิด</option></select></td>
-            {% if has_t2 %}<td>{% if 2 in tiers_by_group[g] %}<select class="form-input" name="acc_{{ ci }}_t2"><option value="1">เปิด</option><option value="0">ปิด</option></select>{% else %}-{% endif %}</td>{% endif %}</tr>
+            {% for t in extra_slots|sort %}<td>{% if t in tiers_by_group[g] %}<small style="display:block;opacity:.75;">{{ tier_names_by_group[g][t] }}</small><select class="form-input" name="acc_{{ ci }}_t{{ t }}"><option value="1">เปิด</option><option value="0">ปิด</option></select>{% else %}-{% endif %}</td>{% endfor %}</tr>
           {% endfor %}
         </tbody></table></div>
       <div class="wz-nav"><button type="button" class="btn btn-ghost" data-go="1">← ย้อนกลับ</button><button type="button" class="btn btn-primary" data-go="3">ถัดไป →</button></div>
@@ -90,7 +91,7 @@
       <details class="wz-group" {{ 'open' if loop.first else '' }}><summary>{{ g }}</summary>
         {% for tier in tiers_by_group[g] %}
         <div class="table-wrap"><table class="data-table wz-mini">
-          <thead><tr><th style="text-align:left;">{{ tier_names[tier] }}</th>{% for bt in bet_types %}<th>{{ labels[bt] }}</th>{% endfor %}</tr></thead>
+          <thead><tr><th style="text-align:left;">{{ tier_names_by_group[g][tier] }}</th>{% for bt in bet_types %}<th>{{ labels[bt] }}</th>{% endfor %}</tr></thead>
           <tbody>
             <tr><td style="text-align:left;">จ่าย</td>{% for bt in bet_types %}<td><input class="form-input" type="number" step="any" min="0" name="p_{{ ci }}_{{ tier }}_{{ bt }}"></td>{% endfor %}</tr>
             <tr><td style="text-align:left;">ลด %</td>{% for bt in bet_types %}<td><input class="form-input" type="number" step="any" min="0" max="100" name="d_{{ ci }}_{{ tier }}_{{ bt }}"></td>{% endfor %}</tr>

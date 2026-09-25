@@ -1,0 +1,28 @@
+{% extends shell %}
+{% block title %}ยกเลิกรายการแทง — mklotto{% endblock %}
+{% block content %}
+<style>
+  .cn-table th, .cn-table td { white-space: nowrap; }
+  .cn-table td.num, .cn-table th.num { text-align: right; }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">CANCEL BETS</span><h1 class="page-title">ยกเลิกรายการแทง</h1>
+      <p class="section-desc">ยกเลิกโพยของสมาชิกในสายได้จนกว่าจะปิดรับแทงของงวดนั้น — ระบบคืนเครดิตที่หักจริง (ยอดแทง − ส่วนลด) ให้สมาชิก และคืนค่าคอมมิชชั่นของสายที่จ่ายไปแล้ว</p></div>
+    <div class="partner-balance"><span>โพยที่ยกเลิกได้</span><strong>{{ tickets|length }}</strong></div>
+  </header>
+  <article class="panel"><div class="table-wrap">
+    <table class="data-table cn-table">
+      <thead><tr><th>เวลาแทง</th><th>สมาชิก</th><th>ตลาด/งวด</th><th>โพย</th><th class="num">รายการ</th><th class="num">ยอดแทง</th><th class="num">คืนเครดิต</th><th>หมายเหตุ</th><th></th></tr></thead>
+      <tbody>
+        {% for t in tickets %}
+        <tr><td>{{ t.time }}</td><td>{{ t.member.username }}{% if t.member.full_name %} ({{ t.member.full_name }}){% endif %}</td>
+          <td>{{ t.period.room.name if t.period.room else '-' }} · {{ t.period.period_date }}</td><td>{{ t.code }}</td>
+          <td class="num">{{ t.count }}</td><td class="num">{{ '{:,.2f}'.format(t.stake) }}</td><td class="num">{{ '{:,.2f}'.format(t.paid) }}</td><td>{{ t.remark or '' }}</td>
+          <td><form method="post" action="{{ url_for(endpoint + '_do', ticket_code=t.code) }}" onsubmit="return confirm('ยกเลิกโพย {{ t.code }} ของ {{ t.member.username }} และคืนเครดิตให้สมาชิกใช่หรือไม่');"><button class="btn btn-danger btn-xs" type="submit">ยกเลิกโพย</button></form></td></tr>
+        {% else %}<tr><td colspan="9" class="empty-state-text">ไม่มีโพยที่ยกเลิกได้ (เหลือเฉพาะงวดที่ยังเปิดรับแทง)</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div></article>
+</main>
+{% endblock %}

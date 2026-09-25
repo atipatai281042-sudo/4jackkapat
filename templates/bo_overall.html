@@ -21,12 +21,6 @@
   </header>
 
   <form method="get" class="ov-bar" id="ov-select">
-    <select class="form-input" name="room_id" onchange="this.form.period_id.value='';this.form.submit()" aria-label="ตลาด">
-      {% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room and r.id == room.id else '' }}>{{ r.name }}</option>{% endfor %}
-    </select>
-    <select class="form-input" name="period_id" onchange="this.form.submit()" aria-label="งวด">
-      {% for p in periods %}<option value="{{ p.id }}" {{ 'selected' if period and p.id == period.id else '' }}>งวด {{ p.period_date }}{% if p.is_open %} (เปิดรับ){% endif %}</option>{% endfor %}
-    </select>
     <select class="form-input" name="sort" onchange="this.form.submit()" aria-label="เรียง">
       <option value="max" {{ 'selected' if sort == 'max' else '' }}>คาดคะเนยอดเสีย มาก → น้อย</option>
       <option value="stake" {{ 'selected' if sort == 'stake' else '' }}>ยอดซื้อ มาก → น้อย</option>

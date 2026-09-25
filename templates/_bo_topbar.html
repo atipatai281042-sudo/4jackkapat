@@ -1,0 +1,65 @@
+{# แถบบนของหลังบ้าน Agent/Senior: เลือกตลาด + งวด (ใช้ร่วมกันทุกหน้าที่อิงตลาด) และเครื่องคิดเลข #}
+<style>
+  .bo-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(148,163,184,.2); }
+  .bo-tools form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0; }
+  .bo-tools select { width: auto; min-width: 190px; }
+  .bo-tools .bo-tool-btn { margin-left: auto; }
+  .bo-calc { position: fixed; right: 22px; bottom: 22px; width: 250px; background: #111827; border: 1px solid rgba(148,163,184,.35); border-radius: 12px; padding: 12px; z-index: 3000; box-shadow: 0 12px 34px rgba(0,0,0,.5); display: none; }
+  .bo-calc.show { display: block; }
+  .bo-calc input { width: 100%; text-align: right; font-size: 1.25rem; padding: 8px; border-radius: 8px; border: 1px solid #334155; background: #0b1220; color: #fff; margin-bottom: 8px; }
+  .bo-calc .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .bo-calc button { padding: 10px 0; border-radius: 8px; border: 0; background: #1e293b; color: #e2e8f0; font-size: 1rem; cursor: pointer; }
+  .bo-calc button.op { background: #f59e0b; color: #111; font-weight: 700; }
+  .bo-calc button.eq { background: #22c55e; color: #052e16; font-weight: 700; }
+  .bo-calc .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: #cbd5e1; font-size: .85rem; }
+</style>
+<div class="bo-tools">
+  {% if show_market_bar and rooms %}
+  <form method="get" id="bo-market-form">
+    <select class="form-input" name="room_id" onchange="this.form.date.value='';this.form.submit()" aria-label="ตลาด">
+      {% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room and r.id == room.id else '' }}>{{ r.name }}</option>{% endfor %}
+    </select>
+    <select class="form-input" name="date" onchange="this.form.submit()" aria-label="งวดวันที่">
+      {% for p in periods %}<option value="{{ p.period_date }}" {{ 'selected' if period and p.id == period.id else '' }}>{{ p.period_date }}{% if p.is_open %} (เปิดรับ){% endif %}</option>{% endfor %}
+    </select>
+    {% for key in ('sort', 'type') %}{% if request.args.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.args.get(key) }}">{% endif %}{% endfor %}
+  </form>
+  {% endif %}
+  <button type="button" class="btn btn-ghost btn-sm bo-tool-btn" id="bo-calc-toggle" aria-label="เครื่องคิดเลข"><i class="fas fa-calculator"></i> เครื่องคิดเลข</button>
+</div>
+<div class="bo-calc" id="bo-calc" role="dialog" aria-label="เครื่องคิดเลข">
+  <div class="head"><span><i class="fas fa-calculator"></i> เครื่องคิดเลข</span><button type="button" id="bo-calc-close" style="background:none;color:#94a3b8;padding:0 6px;">✕</button></div>
+  <input id="bo-calc-display" inputmode="decimal" autocomplete="off" value="0" aria-label="ผลลัพธ์">
+  <div class="keys" id="bo-calc-keys">
+    <button type="button" data-k="C">C</button><button type="button" data-k="⌫">⌫</button><button type="button" data-k="%" class="op">%</button><button type="button" data-k="/" class="op">÷</button>
+    <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" data-k="*" class="op">×</button>
+    <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" data-k="-" class="op">−</button>
+    <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" data-k="+" class="op">+</button>
+    <button type="button" data-k="0">0</button><button type="button" data-k=".">.</button><button type="button" data-k="=" class="eq" style="grid-column: span 2;">=</button>
+  </div>
+</div>
+<script>
+(function () {
+  var box = document.getElementById('bo-calc'), disp = document.getElementById('bo-calc-display');
+  document.getElementById('bo-calc-toggle').addEventListener('click', function () { box.classList.toggle('show'); if (box.classList.contains('show')) disp.focus(); });
+  document.getElementById('bo-calc-close').addEventListener('click', function () { box.classList.remove('show'); });
+  function calc() {
+    var expr = disp.value.replace(/[^0-9+\-*/.%()]/g, '');
+    if (!expr) return;
+    try {
+      // % หลังตัวเลข = หาร 100 (เช่น 200*5% = 10)
+      var out = Function('"use strict"; return (' + expr.replace(/(\d+(?:\.\d+)?)%/g, '($1/100)') + ')')();
+      disp.value = String(Math.round(out * 1e8) / 1e8);
+    } catch (e) { disp.value = 'Error'; }
+  }
+  document.getElementById('bo-calc-keys').addEventListener('click', function (e) {
+    var k = e.target.getAttribute && e.target.getAttribute('data-k');
+    if (!k) return;
+    if (k === 'C') disp.value = '0';
+    else if (k === '⌫') disp.value = disp.value.length > 1 ? disp.value.slice(0, -1) : '0';
+    else if (k === '=') calc();
+    else disp.value = (disp.value === '0' || disp.value === 'Error') && /[0-9.]/.test(k) ? k : (disp.value === 'Error' ? k : disp.value + k);
+  });
+  disp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); calc(); } });
+})();
+</script>

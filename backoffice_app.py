@@ -208,7 +208,7 @@ def dashboard():
         transactions = WalletTransaction.query.filter_by(user_id=user.id).order_by(
             WalletTransaction.created_at.desc()
         ).limit(8).all()
-        announcements = Announcement.query.filter_by(is_active=True).order_by(
+        announcements = Announcement.query.filter_by(is_active=True, owner_id=None).order_by(
             Announcement.created_at.desc()
         ).limit(5).all()
         return render_template(

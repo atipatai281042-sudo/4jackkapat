@@ -1,0 +1,37 @@
+{% extends shell %}
+{% block title %}หน้าร้าน — ประกาศถึงสมาชิก — mklotto{% endblock %}
+{% block content %}
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">STOREFRONT</span><h1 class="page-title">หน้าร้าน — ประกาศถึงสมาชิก</h1>
+      <p class="section-desc">ข้อความที่นี่จะแสดงบนหน้าห้องแทงหวยของสมาชิกในสายของคุณ (แสดง 3 รายการล่าสุดที่เปิดใช้งาน)</p></div>
+    <div class="partner-balance"><span>ประกาศทั้งหมด</span><strong>{{ items|length }}</strong></div>
+  </header>
+  <div class="partner-content-grid">
+    <article class="panel partner-topup-panel">
+      <div class="partner-panel-heading"><div><span class="eyebrow">NEW</span><h2 class="panel-title">เพิ่มประกาศ</h2></div><i class="fas fa-bullhorn partner-muted-icon"></i></div>
+      <form method="post" class="partner-topup-form">
+        <input type="hidden" name="action" value="create">
+        <div class="form-group"><label class="form-label">หัวข้อ *</label><input class="form-input" name="title" maxlength="150" required></div>
+        <div class="form-group"><label class="form-label">รายละเอียด</label><textarea class="form-input" name="body" rows="5" maxlength="2000"></textarea></div>
+        <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-paper-plane"></i> ประกาศ</button>
+      </form>
+    </article>
+    <article class="panel">
+      <div class="partner-panel-heading"><div><span class="eyebrow">LIST</span><h2 class="panel-title">ประกาศของคุณ</h2></div></div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>หัวข้อ</th><th>วันที่</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody>
+          {% for item in items %}
+          <tr><td><strong>{{ item.title }}</strong>{% if item.body %}<small class="table-subtext" style="white-space:pre-line;">{{ item.body[:160] }}</small>{% endif %}</td>
+            <td>{{ (item.created_at + shift).strftime('%d/%m/%Y %H:%M') }}</td><td>{{ 'แสดง' if item.is_active else 'ซ่อน' }}</td>
+            <td style="display:flex;gap:6px;">
+              <form method="post"><input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="{{ item.id }}"><button class="btn btn-ghost btn-xs" type="submit">{{ 'ซ่อน' if item.is_active else 'แสดง' }}</button></form>
+              <form method="post" onsubmit="return confirm('ลบประกาศนี้ใช่หรือไม่');"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{ item.id }}"><button class="btn btn-danger btn-xs" type="submit">ลบ</button></form>
+            </td></tr>
+          {% else %}<tr><td colspan="4" class="empty-state-text">ยังไม่มีประกาศ</td></tr>{% endfor %}
+        </tbody></table></div>
+    </article>
+  </div>
+</main>
+{% endblock %}
