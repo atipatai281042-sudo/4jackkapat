@@ -1,0 +1,59 @@
+{% extends shell %}
+{% block title %}ตั้งค่ารับของแยกตามชนิด — mklotto{% endblock %}
+{% block content %}
+<style>
+  .ac-table th, .ac-table td { text-align: center; white-space: nowrap; }
+  .ac-table td:nth-child(1), .ac-table th:nth-child(1) { width: 36px; }
+  .ac-table td:nth-child(2), .ac-table th:nth-child(2) { text-align: left; }
+  .ac-table input.form-input { width: 90px; padding: 4px 6px; text-align: right; }
+  .ac-table tr.ac-group td { background: rgba(245,158,11,.14); font-weight: 700; text-align: left; }
+  .ac-table tr.ac-all td { background: rgba(56,189,248,.12); }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">ACCEPTANCE</span><h1 class="page-title">ตั้งค่ารับของแยกตามชนิด</h1>
+      <p class="section-desc">ยอดสูงสุดที่คุณถือสู้ต่อเลข ต่อประเภท ของแต่ละตลาด (ตามสัดส่วน % ถือหุ้น) — ส่วนที่เกินส่งต่อให้บริษัท เว้นว่าง = ไม่จำกัด, ใส่ 0 = ไม่ถือ</p></div>
+  </header>
+  <article class="panel">
+    <form method="post" id="ac-form">
+      <div class="table-wrap">
+        <table class="data-table ac-table">
+          <thead><tr><th><input type="checkbox" id="ac-selall" aria-label="เลือกทั้งหมด"></th><th>ตลาด</th>{% for t in types %}<th>{{ labels[t] }}</th>{% endfor %}</tr>
+            <tr class="ac-all"><td></td><td style="text-align:right;">กรอกทุกแถวที่เลือก</td>{% for t in types %}<td><input class="form-input" type="number" min="0" step="any" data-all="{{ t }}"></td>{% endfor %}</tr></thead>
+          <tbody>
+            {% for group, rooms in grouped.items() %}
+            <tr class="ac-group"><td colspan="{{ 2 + types|length }}">{{ group }}</td></tr>
+            {% for room in rooms %}
+            <tr><td><input type="checkbox" name="sel" value="{{ room.id }}"></td><td>{{ room.name }}</td>
+              {% for t in types %}<td><input class="form-input" data-bt="{{ t }}" type="number" min="0" step="any" name="cap_{{ room.id }}_{{ t }}" value="{{ '%g'|format(caps[(room.id, t)]) if (room.id, t) in caps else '' }}"></td>{% endfor %}</tr>
+            {% endfor %}{% else %}<tr><td colspan="{{ 2 + types|length }}" class="empty-state-text">ยังไม่มีห้องหวย</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:14px;"><button class="btn btn-primary" type="submit"><i class="fas fa-floppy-disk"></i> บันทึกที่เลือก</button>
+        <span class="section-desc" style="margin-left:10px;">ติ๊กเลือกตลาด (แก้ช่องไหนระบบติ๊กให้) แล้วกดบันทึก</span></div>
+    </form>
+  </article>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById('ac-form');
+  var selAll = document.getElementById('ac-selall');
+  selAll.addEventListener('change', function () { form.querySelectorAll('input[name="sel"]').forEach(function (b) { b.checked = selAll.checked; }); });
+  form.addEventListener('input', function (e) {
+    if (e.target.hasAttribute('data-all')) {
+      form.querySelectorAll('tbody tr').forEach(function (tr) {
+        var box = tr.querySelector('input[name="sel"]');
+        if (!box || !box.checked) return;
+        tr.querySelectorAll('input[data-bt="' + e.target.dataset.all + '"]').forEach(function (i) { i.value = e.target.value; });
+      });
+      return;
+    }
+    var tr = e.target.closest('tr'), box = tr && tr.querySelector('input[name="sel"]');
+    if (box) box.checked = true;
+  });
+})();
+</script>
+{% endblock %}

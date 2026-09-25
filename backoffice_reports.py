@@ -13,7 +13,7 @@ from flask import abort, flash, redirect, render_template, request, url_for
 
 from app import (
     BET_TYPE_LABELS, EXTRA_BET_TYPES, RATE_TABLE_ORDER, _bet_history_range, app, active_lottery_rooms,
-    app_now, current_user, db, get_lottery_rates, normalize_bet_type, partner_owner, partner_required,
+    app_now, current_user, db, get_lottery_rates, hold_cap_for, normalize_bet_type, partner_owner, partner_required,
     room_category_name, senior_agent_ids, senior_owner, senior_required,
 )
 from models import (
@@ -162,11 +162,14 @@ def make_overall(role):
             row.bet_type: row.amount_limit for row in limit_model.query.filter_by(**{owner_field: owner.id, "room_id": room.id})
         } if room else {}
         prior_held = defaultdict(float)  # ตั้งสู้ต่อเลข: นับสะสมตามลำดับโพย เหมือนตอนตรวจรางวัลจริง
+        cap_cache = {}
         for bet in sorted(bets, key=lambda b: b.id):
             percent = effective_hold_percent(role, owner, bet.user, room, cache)
             stake, payout = float(bet.amount), float(bet.amount) * float(bet.rate)
             held = stake * percent / 100
-            cap = caps.get(bet.bet_type)
+            cap = cap_cache.get((bet.bet_type, bet.number), "?")
+            if cap == "?":
+                cap = cap_cache[(bet.bet_type, bet.number)] = hold_cap_for(role, owner.id, room.id, period.id, bet.bet_type, bet.number)
             if cap is not None and percent > 0:
                 held = min(held, max(0.0, float(cap) - prior_held[(bet.bet_type, bet.number)]))
             prior_held[(bet.bet_type, bet.number)] += held
@@ -219,11 +222,14 @@ def make_takelist(role):
                 row.bet_type: row.amount_limit for row in limit_model.query.filter_by(**{owner_field: owner.id, "room_id": room.id})
             }
             prior_held = defaultdict(float)
+            cap_cache = {}
             for bet in sorted(scope_query(role, owner).filter(ThaiLotteryBet.period_id == period.id).all(), key=lambda b: b.id):
                 members[bet.user_id] = bet.user
                 percent = effective_hold_percent(role, owner, bet.user, room, cache)
                 held = float(bet.amount) * percent / 100
-                cap = caps.get(bet.bet_type)
+                cap = cap_cache.get((bet.bet_type, bet.number), "?")
+                if cap == "?":
+                    cap = cap_cache[(bet.bet_type, bet.number)] = hold_cap_for(role, owner.id, room.id, period.id, bet.bet_type, bet.number)
                 if cap is not None and percent > 0:
                     held = min(held, max(0.0, float(cap) - prior_held[(bet.bet_type, bet.number)]))
                 prior_held[(bet.bet_type, bet.number)] += held
@@ -401,3 +407,170 @@ def dashboard_extras(role, owner):
         for entry in logins
     ]
     return {"today_cards": cards, "hold_rows": hold_rows, "login_rows": login_rows}
+
+
+# ----------------------------- รายการที่ถูกรางวัล -----------------------------
+from app import adjust_credit, notify_user  # noqa: E402
+
+
+def make_winners(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_winners"
+
+    @cfg["decorator"]
+    def view():
+        owner = cfg["owner"](current_user())
+        rooms, room, periods, period = market_and_period()
+        query = scope_query(role, owner).filter(ThaiLotteryBet.status == "win")
+        if period:
+            query = query.filter(ThaiLotteryBet.period_id == period.id)
+        bets = query.order_by(ThaiLotteryBet.id.asc()).limit(1000).all()
+        commission, stock = ledger_maps(role, owner, [b.id for b in bets])
+        rows = []
+        totals = defaultdict(float)
+        for bet in bets:
+            stake, win = float(bet.amount), float(bet.reward_amount)
+            member_net = win - stake + float(bet.discount_amount or 0)
+            owner_net = stock.get(bet.id, 0.0) + commission.get(bet.id, 0.0)
+            rows.append({
+                "bet": bet, "member_net": member_net, "owner_net": owner_net, "company_net": -(member_net + owner_net),
+                "time": (bet.created_at + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            totals["stake"] += stake
+            totals["win"] += win
+            totals["member"] += member_net
+            totals["owner"] += owner_net
+            totals["company"] += -(member_net + owner_net)
+        return render_template(
+            "bo_winners.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            rooms=rooms, room=room, periods=periods, period=period, rows=rows, totals=dict(totals), labels=BET_TYPE_LABELS,
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+# ----------------------------- ตั้งค่ารับของแยกตามชนิด (ทุกตลาดในตารางเดียว) -----------------------------
+def make_acceptance(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_acceptance"
+
+    @cfg["decorator"]
+    def view():
+        owner = cfg["owner"](current_user())
+        types = bet_types_list()
+        limit_model = PartnerAcceptanceLimit if role == "partner" else SeniorAcceptanceLimit
+        owner_field = "partner_id" if role == "partner" else "senior_id"
+        rooms = active_lottery_rooms().all()
+        by_id = {r.id: r for r in rooms}
+        if request.method == "POST":
+            selected = {int(x) for x in request.form.getlist("sel") if x.isdigit()} & set(by_id)
+            if not selected:
+                flash("กรุณาเลือกตลาดที่ต้องการบันทึกอย่างน้อย 1 ตลาด", "error")
+                return redirect(url_for(endpoint))
+            try:
+                for room_id in selected:
+                    for bet_type in types:
+                        raw = (request.form.get(f"cap_{room_id}_{bet_type}") or "").strip()
+                        row = limit_model.query.filter_by(**{owner_field: owner.id, "room_id": room_id, "bet_type": bet_type}).first()
+                        if raw == "":
+                            if row:
+                                db.session.delete(row)
+                            continue
+                        value = float(raw)
+                        if value < 0:
+                            raise ValueError("ต้องไม่ติดลบ")
+                        if row is None:
+                            row = limit_model(**{owner_field: owner.id, "room_id": room_id, "bet_type": bet_type})
+                            db.session.add(row)
+                        row.amount_limit = value
+            except ValueError:
+                db.session.rollback()
+                flash("ตั้งสู้ต้องเป็นตัวเลขที่ไม่ติดลบ", "error")
+                return redirect(url_for(endpoint))
+            db.session.commit()
+            flash(f"บันทึกตั้งสู้ {len(selected)} ตลาดแล้ว", "success")
+            return redirect(url_for(endpoint))
+        caps = {(row.room_id, row.bet_type): row.amount_limit for row in limit_model.query.filter(getattr(limit_model, owner_field) == owner.id)}
+        grouped = {}
+        for room in rooms:
+            grouped.setdefault(room_category_name(room) or "อื่นๆ", []).append(room)
+        return render_template(
+            "bo_acceptance.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            grouped=grouped, types=types, labels=BET_TYPE_LABELS, caps=caps,
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+# ----------------------------- เติมเงิน / ถอนกลับ (สมาชิก) -----------------------------
+def make_transfers(role):
+    cfg = ROLES[role]
+    endpoint = f"{role}_transfers"
+
+    @cfg["decorator"]
+    def view():
+        owner = cfg["owner"](current_user())
+        keyword = (request.values.get("q") or "").strip()
+        query = scoped_members_for_transfers(role, owner)
+        if keyword:
+            like = f"%{keyword}%"
+            query = query.filter(User.username.ilike(like) | User.full_name.ilike(like))
+        members = query.order_by(User.username.asc()).limit(300).all()
+        if request.method == "POST":
+            allowed = {m.id: m for m in members}
+            plan = []
+            for member_id, member in allowed.items():
+                raw = (request.form.get(f"amt_{member_id}") or "").strip()
+                if raw == "":
+                    continue
+                try:
+                    amount = round(float(raw), 2)
+                except ValueError:
+                    flash(f"จำนวนเงินของ {member.username} ไม่ถูกต้อง", "error")
+                    return redirect(url_for(endpoint, q=keyword or None))
+                if amount != 0:
+                    plan.append((member, amount))
+            deposits = sum(a for _, a in plan if a > 0)
+            if deposits > owner.credit_balance + 1e-9:
+                flash(f"เครดิตของคุณไม่พอ (ต้องใช้ {deposits:,.2f} มี {owner.credit_balance:,.2f})", "error")
+                return redirect(url_for(endpoint, q=keyword or None))
+            for member, amount in plan:
+                if amount < 0 and -amount > member.credit_balance + 1e-9:
+                    flash(f"{member.username} มีเครดิตไม่พอให้ถอน ({member.credit_balance:,.2f})", "error")
+                    return redirect(url_for(endpoint, q=keyword or None))
+            for member, amount in plan:
+                if amount > 0:
+                    adjust_credit(owner, -amount, f"โอนเครดิตให้ {member.username}")
+                    adjust_credit(member, amount, f"ได้รับเครดิตจาก {owner.username}")
+                    notify_user(member, "ได้รับเครดิต", f"เครดิตเพิ่ม {amount:,.2f}", "wallet")
+                else:
+                    adjust_credit(member, amount, f"ถอนเครดิตกลับโดย {owner.username}")
+                    adjust_credit(owner, -amount, f"รับเครดิตคืนจาก {member.username}")
+                    notify_user(member, "ถูกถอนเครดิต", f"ถอนเครดิต {-amount:,.2f}", "wallet")
+            db.session.commit()
+            flash(f"ทำรายการ {len(plan)} รายการเรียบร้อย" if plan else "ไม่มีรายการที่กรอกจำนวนเงิน", "success" if plan else "warning")
+            return redirect(url_for(endpoint, q=keyword or None))
+        return render_template(
+            "bo_transfers.html", shell=cfg["shell"], role=role, endpoint=endpoint, partner=owner, senior=owner,
+            members=members, keyword=keyword,
+        )
+
+    view.__name__ = endpoint
+    return endpoint, view
+
+
+def scoped_members_for_transfers(role, owner):
+    if role == "partner":
+        return User.query.filter_by(partner_id=owner.id, role="member")
+    return User.query.filter(User.partner_id.in_(senior_agent_ids(owner) or [-1]), User.role == "member")
+
+
+for _role in ROLES:
+    _ep, _view = make_winners(_role)
+    app.add_url_rule(f"/{_role}/winners", endpoint=_ep, view_func=_view, methods=["GET"])
+    _ep, _view = make_acceptance(_role)
+    app.add_url_rule(f"/{_role}/acceptance", endpoint=_ep, view_func=_view, methods=["GET", "POST"])
+    _ep, _view = make_transfers(_role)
+    app.add_url_rule(f"/{_role}/transfers", endpoint=_ep, view_func=_view, methods=["GET", "POST"])

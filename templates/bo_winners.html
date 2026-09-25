@@ -1,0 +1,37 @@
+{% extends shell %}
+{% block title %}รายการที่ถูกรางวัล — mklotto{% endblock %}
+{% block content %}
+<style>
+  .wn-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
+  .wn-table th, .wn-table td { white-space: nowrap; text-align: right; }
+  .wn-table td:nth-child(-n+5), .wn-table th:nth-child(-n+5) { text-align: left; }
+  .wn-pos { color: #4ade80; font-weight: 700; } .wn-neg { color: #f87171; font-weight: 700; }
+</style>
+{% macro money(v) %}<span class="{{ 'wn-pos' if v > 0.004 else ('wn-neg' if v < -0.004 else '') }}">{{ '{:,.2f}'.format(v) }}</span>{% endmacro %}
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">WINNERS</span><h1 class="page-title">รายการที่ถูกรางวัล</h1>
+      <p class="section-desc">โพยที่ถูกรางวัลของงวดที่เลือก พร้อมได้เสียของสมาชิก ส่วนของคุณ และบริษัท</p></div>
+    <div class="partner-balance"><span>รายการที่ถูก</span><strong>{{ rows|length }}</strong></div>
+  </header>
+  <form method="get" class="wn-bar">
+    <select class="form-input" name="room_id" onchange="this.form.period_id.value='';this.form.submit()" aria-label="ตลาด">{% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room and r.id == room.id else '' }}>{{ r.name }}</option>{% endfor %}</select>
+    <select class="form-input" name="period_id" onchange="this.form.submit()" aria-label="งวด">{% for p in periods %}<option value="{{ p.id }}" {{ 'selected' if period and p.id == period.id else '' }}>งวด {{ p.period_date }}</option>{% endfor %}</select>
+    <button class="btn btn-primary" type="submit">ดูข้อมูล</button>
+  </form>
+  <article class="panel"><div class="table-wrap">
+    <table class="data-table wn-table">
+      <thead><tr><th>#</th><th>ชื่อผู้ใช้</th><th>โพย</th><th>เลข</th><th>เวลา</th><th>อัตราจ่าย</th><th>ยอดแทง</th><th>จ่าย</th><th>สมาชิก</th><th>คุณ</th><th>บริษัท</th><th>หมายเหตุ</th></tr></thead>
+      <tbody>
+        {% for r in rows %}{% set b = r.bet %}
+        <tr><td>{{ loop.index }}</td><td>{{ b.user.username }}{% if b.user.full_name %} ({{ b.user.full_name }}){% endif %}</td><td>{{ b.ticket_code or '-' }}</td>
+          <td>{{ b.number }} <small style="opacity:.7;">{{ labels.get(b.bet_type, b.bet_type) }}</small></td><td>{{ r.time }}</td>
+          <td>{{ '%g'|format(b.rate) }}</td><td>{{ '{:,.2f}'.format(b.amount) }}</td><td>{{ '{:,.2f}'.format(b.reward_amount) }}</td>
+          <td>{{ money(r.member_net) }}</td><td>{{ money(r.owner_net) }}</td><td>{{ money(r.company_net) }}</td><td style="text-align:left;">{{ b.remark or '' }}</td></tr>
+        {% else %}<tr><td colspan="12" class="empty-state-text">ไม่มีรายการที่ถูกรางวัล</td></tr>{% endfor %}
+        {% if rows %}<tr style="font-weight:700;"><td colspan="6">รวม</td><td>{{ '{:,.2f}'.format(totals.stake) }}</td><td>{{ '{:,.2f}'.format(totals.win) }}</td><td>{{ money(totals.member) }}</td><td>{{ money(totals.owner) }}</td><td>{{ money(totals.company) }}</td><td></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div></article>
+</main>
+{% endblock %}

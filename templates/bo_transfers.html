@@ -1,0 +1,31 @@
+{% extends shell %}
+{% block title %}เติมเงิน — mklotto{% endblock %}
+{% block content %}
+<style>
+  .tr-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
+  .tr-table th, .tr-table td { white-space: nowrap; }
+  .tr-table td.num, .tr-table th.num { text-align: right; }
+  .tr-table input.form-input { width: 120px; padding: 4px 6px; text-align: right; }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div><span class="eyebrow">TRANSFERS</span><h1 class="page-title">เติมเงิน / ถอนกลับ</h1>
+      <p class="section-desc">ใส่จำนวนเงินเป็น <strong>บวก</strong> เพื่อฝากเครดิตให้สมาชิก (หักจากเครดิตของคุณ) หรือ <strong>ลบ</strong> เพื่อถอนกลับมาที่คุณ — กรอกได้หลายคนแล้วกดบันทึกครั้งเดียว</p></div>
+    <div class="partner-balance"><span>เครดิตของคุณ</span><strong>{{ '{:,.2f}'.format(partner.credit_balance) }}</strong></div>
+  </header>
+  <form method="get" class="tr-bar"><input class="form-input" name="q" value="{{ keyword }}" placeholder="ค้นหาชื่อผู้ใช้/ชื่อ"><button class="btn btn-ghost" type="submit"><i class="fas fa-search"></i> ค้นหา</button></form>
+  <article class="panel">
+    <form method="post"><input type="hidden" name="q" value="{{ keyword }}">
+      <div class="table-wrap"><table class="data-table tr-table">
+        <thead><tr><th>#</th><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th class="num">จำนวนเงิน</th><th class="num">+ฝาก / −ถอน</th></tr></thead>
+        <tbody>
+          {% for m in members %}
+          <tr><td>{{ loop.index }}</td><td>{{ m.username }}</td><td>{{ m.full_name or '-' }}</td><td class="num">{{ '{:,.2f}'.format(m.credit_balance) }}</td>
+            <td class="num"><input class="form-input" type="number" step="0.01" name="amt_{{ m.id }}" placeholder="0.00" aria-label="จำนวนเงิน {{ m.username }}"></td></tr>
+          {% else %}<tr><td colspan="5" class="empty-state-text">ไม่มีข้อมูล</td></tr>{% endfor %}
+        </tbody></table></div>
+      <div style="margin-top:14px;"><button class="btn btn-primary" type="submit" {{ 'disabled' if not members else '' }}><i class="fas fa-money-bill-transfer"></i> บันทึกรายการ</button></div>
+    </form>
+  </article>
+</main>
+{% endblock %}

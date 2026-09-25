@@ -499,11 +499,11 @@ ASSISTANT_PERMISSION_LABELS = {
 }
 # หน้าไหน (ตามชื่อ endpoint หลังตัดคำนำหน้า partner_/senior_) ต้องใช้สิทธิ์อะไร — หน้าที่ไม่อยู่ในรายการเปิดให้ผู้ช่วยทุกคน
 ASSISTANT_ENDPOINT_PERMISSIONS = (
-    (("bets", "bet_", "pending_bets", "overall"), "bets"),
+    (("bets", "bet_", "pending_bets", "overall", "acceptance"), "bets"),
     (("member", "agents", "online", "settings", "stock", "blocked"), "members"),
     (("takelist",), "takelist"),
-    (("report", "pnl", "results"), "reports"),
-    (("topup", "deposit", "finance", "statement"), "transfer"),
+    (("report", "pnl", "results", "winners"), "reports"),
+    (("topup", "deposit", "finance", "statement", "transfer"), "transfer"),
 )
 
 
@@ -736,15 +736,25 @@ def create_senior_commission(bet):
     return entry
 
 
+def hold_cap_for(role, owner_id, room_id, period_id, bet_type, number):
+    """เพดานตั้งสู้ของเลขนี้: ตั้งเฉพาะเลขในงวดนั้นไว้ → ใช้ค่านั้น ไม่งั้นใช้เพดานของตลาด+ประเภท ไม่มีเลย = None (ไม่จำกัด)"""
+    if role == "partner":
+        number_model, limit_model, owner_field = PartnerAcceptanceNumber, PartnerAcceptanceLimit, "partner_id"
+    else:
+        number_model, limit_model, owner_field = SeniorAcceptanceNumber, SeniorAcceptanceLimit, "senior_id"
+    row = number_model.query.filter_by(**{owner_field: owner_id, "period_id": period_id, "bet_type": bet_type, "number": number}).first()
+    if row is not None:
+        return float(row.amount_limit)
+    row = limit_model.query.filter_by(**{owner_field: owner_id, "room_id": room_id, "bet_type": bet_type}).first()
+    return float(row.amount_limit) if row is not None else None
+
+
 def apply_hold_cap(role, owner_id, bet, room_id, hold_percent):
     """"ตั้งสู้": ยอดสูงสุดที่ผู้ดูแลถือไว้ต่อเลขต่อประเภทในงวดนี้ (ตามสัดส่วน % ถือหุ้น) — ส่วนที่เกินส่งต่อให้บริษัท
     ไม่มีการตั้งค่า = ไม่จำกัด, ตั้งเป็น 0 = ไม่ถือเลย คืน % ที่ถือจริงของโพยนี้ (คิดสะสมตามลำดับโพย)"""
-    limit_model, owner_field = (
-        (PartnerAcceptanceLimit, "partner_id") if role == "partner" else (SeniorAcceptanceLimit, "senior_id")
-    )
-    row = limit_model.query.filter_by(**{owner_field: owner_id, "room_id": room_id, "bet_type": bet.bet_type}).first()
+    cap = hold_cap_for(role, owner_id, room_id, bet.period_id, bet.bet_type, bet.number)
     stake = float(bet.amount)
-    if row is None or stake <= 0:
+    if cap is None or stake <= 0:
         return hold_percent
     ledger = PartnerStockLedger if role == "partner" else SeniorStockLedger
     owner_col = ledger.partner_id if role == "partner" else ledger.senior_id
@@ -755,7 +765,7 @@ def apply_hold_cap(role, owner_id, bet, room_id, hold_percent):
         ThaiLotteryBet.bet_type == bet.bet_type, ThaiLotteryBet.number == bet.number,
         ThaiLotteryBet.id < bet.id,
     ).scalar() or 0.0
-    remaining = max(0.0, float(row.amount_limit) - float(prior))
+    remaining = max(0.0, cap - float(prior))
     held = min(stake * hold_percent / 100, remaining)
     return held / stake * 100
 
@@ -3106,7 +3116,8 @@ def partner_assistants():
         PartnerAssistant.created_at.desc()
     ).all()
     return render_template("partner_manage.html", view="assistants", partner=partner, assistants=assistants,
-                           perm_labels=ASSISTANT_PERMISSION_LABELS)
+                           perm_labels=ASSISTANT_PERMISSION_LABELS,
+                           last_seen=assistants_last_seen([a.assistant_user_id for a in assistants]))
 
 
 @app.route("/partner/assistants/<int:assistant_id>/permissions", methods=["POST"])
@@ -3699,6 +3710,16 @@ def partner_results():
                            grouped_results=grouped_results, latest_periods=latest_periods)
 
 
+def assistants_last_seen(assistant_user_ids):
+    """{user_id: 'dd/mm/yyyy HH:MM'} เวลาเข้าสู่ระบบล่าสุดของผู้ช่วย (เวลาไทย)"""
+    latest = {}
+    if not assistant_user_ids:
+        return latest
+    for row in LoginHistory.query.filter(LoginHistory.user_id.in_(assistant_user_ids)).order_by(LoginHistory.id.asc()):
+        latest[row.user_id] = (row.created_at + timedelta(hours=7)).strftime("%d/%m/%Y %H:%M") if row.created_at else "-"
+    return latest
+
+
 def online_agents_for(agent_ids):
     """Agent ที่เข้าสู่ระบบภายใน 10 นาทีล่าสุด (ดูจากประวัติการเข้าสู่ระบบ)"""
     if not agent_ids:
@@ -4113,7 +4134,8 @@ def senior_assistants():
         SeniorAssistant.created_at.desc()
     ).all()
     return render_template("senior_manage.html", view="assistants", senior=senior, assistants=assistants,
-                           perm_labels=ASSISTANT_PERMISSION_LABELS)
+                           perm_labels=ASSISTANT_PERMISSION_LABELS,
+                           last_seen=assistants_last_seen([a.assistant_user_id for a in assistants]))
 
 
 @app.route("/senior/assistants/<int:assistant_id>/permissions", methods=["POST"])
