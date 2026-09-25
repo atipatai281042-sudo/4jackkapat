@@ -56,7 +56,7 @@
         {% set is_upcoming = period and period.open_time and period.open_time > now %}
         {% set can_bet = room.is_active and period and not is_upcoming %}
         <div>
-            <div class="room-card card h-100 shadow-sm border-0 position-relative overflow-hidden category-{{ room.api_category or 'default' }} {% if room.image_url %}has-room-image{% endif %} {% if not can_bet %}is-closed{% endif %}" data-bg-color="{{ room.bg_color }}" {% if room.image_url %}style="--room-image: url('{{ room.image_url }}');"{% endif %}>
+            <div class="room-card card h-100 shadow-sm border-0 position-relative overflow-hidden category-{{ room.api_category or 'default' }} {% if room.image_url %}has-room-image{% endif %} {% if not can_bet %}is-closed{% else %}is-clickable{% endif %}" data-bg-color="{{ room.bg_color }}" {% if room.image_url %}style="--room-image: url('{{ room.image_url }}');"{% endif %}>
                 <div class="room-visual" aria-hidden="true">
                     {% if room.image_url %}
                         <img class="room-image-backdrop" src="{{ room.image_url }}" alt="">
@@ -107,18 +107,16 @@
                         </div>
                     {% endif %}
 
-                    <!-- ปุ่มกดเข้าสู่ห้อง -->
+                    <!-- กดที่การ์ดได้เลย: ไปหน้าส่งโพยของห้องนี้ (ห้องที่ปิดรับ/รอเปิดยังแสดงป้ายสถานะเหมือนเดิม) -->
+                    {% if can_bet %}
+                        <a href="{{ url_for('lottery_thai', room_id=room.id) }}" class="stretched-link room-card-link" aria-label="เข้าห้อง {{ room.name }} เพื่อส่งโพย"></a>
+                    {% else %}
                     <div>
-                        {% if can_bet %}
-                            <a href="{{ url_for('lottery_thai', room_id=room.id) }}" class="btn btn-primary room-action w-100 py-2 fw-bold shadow-sm">
-                                <i class="fas fa-sign-in-alt me-1"></i> {{ room.button_text or 'เข้าสู่ห้อง' }}
-                            </a>
-                        {% else %}
-                            <button class="btn btn-secondary room-action room-action-disabled w-100 py-2 fw-bold" disabled aria-disabled="true">
-                                <i class="fas fa-lock me-1"></i> {{ 'รอเปิดรับ' if is_upcoming else 'ปิดรับแทง' }}
-                            </button>
-                        {% endif %}
+                        <button class="btn btn-secondary room-action room-action-disabled w-100 py-2 fw-bold" disabled aria-disabled="true">
+                            <i class="fas fa-lock me-1"></i> {{ 'รอเปิดรับ' if is_upcoming else 'ปิดรับแทง' }}
+                        </button>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -181,6 +179,9 @@
     .room-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
     .room-grid > div { min-width: 0; }
     .room-card.is-closed { filter: grayscale(.75); }
+    .room-card.is-clickable { cursor: pointer; }
+    .room-card.is-clickable:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(0,0,0,.35) !important; }
+    .room-card-link:focus-visible { outline: 3px solid #fbbf24; outline-offset: -3px; }
     @media (max-width: 640px) {
         .rooms-page { padding: 4px 12px 42px; }
         .rooms-heading { margin-bottom: 24px !important; }
