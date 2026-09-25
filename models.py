@@ -837,6 +837,66 @@ class LotteryRateSet(db.Model):
         return f"<LotteryRateSet {self.category}#{self.tier} {self.bet_type} x{self.payout_multiplier} -{self.discount_pct}%>"
 
 
+class MemberGroupRate(db.Model):
+    """อัตราจ่าย/ส่วนลด (ลด %) เฉพาะสมาชิก แยกตามกลุ่มหวย + ชุดอัตราจ่าย (tier) ที่ Agent หรือ Senior ตั้งให้
+    owner_id = ผู้ตั้ง (Agent ที่ดูแลตรง หรือ Senior ในสาย) — ค่าว่าง (NULL) = ไม่ได้ทับค่า"""
+    __tablename__ = "member_group_rates"
+    __table_args__ = (db.UniqueConstraint("owner_id", "member_id", "category", "tier", "bet_type", name="uq_member_group_rate"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    category = db.Column(db.String(100), nullable=False)
+    tier = db.Column(db.Integer, nullable=False, default=1)
+    bet_type = db.Column(db.String(30), nullable=False)
+    payout_multiplier = db.Column(db.Float, nullable=True)
+    discount_pct = db.Column(db.Float, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MemberGroupLimit(db.Model):
+    """ขั้นต่ำ / สูงสุด / สูงสุดต่อเลข ของสมาชิก แยกตามกลุ่มหวยและประเภทการแทง (NULL = ไม่ได้ตั้ง)"""
+    __tablename__ = "member_group_limits"
+    __table_args__ = (db.UniqueConstraint("owner_id", "member_id", "category", "bet_type", name="uq_member_group_limit"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    category = db.Column(db.String(100), nullable=False)
+    bet_type = db.Column(db.String(30), nullable=False)
+    min_bet = db.Column(db.Integer, nullable=True)
+    max_bet = db.Column(db.Integer, nullable=True)
+    max_number_bet = db.Column(db.Integer, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MemberGroupAccess(db.Model):
+    """เปิด/ปิดกลุ่มหวย (tier = 0) หรือเปิด/ปิดชุดอัตราจ่าย (tier >= 1) ของสมาชิกคนนี้ — ไม่มีแถว = เปิด"""
+    __tablename__ = "member_group_access"
+    __table_args__ = (db.UniqueConstraint("owner_id", "member_id", "category", "tier", name="uq_member_group_access"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    category = db.Column(db.String(100), nullable=False)
+    tier = db.Column(db.Integer, nullable=False, default=0)
+    is_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MemberGroupStock(db.Model):
+    """% ถือหุ้นของผู้ดูแล (Agent/Senior) ต่อสมาชิกคนนี้ แยกตามกลุ่มหวย — ทับค่าระดับห้อง แต่ไม่ทับค่าเฉพาะห้อง"""
+    __tablename__ = "member_group_stocks"
+    __table_args__ = (db.UniqueConstraint("owner_id", "member_id", "category", name="uq_member_group_stock"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    category = db.Column(db.String(100), nullable=False)
+    hold_percent = db.Column(db.Float, nullable=False, default=0.0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class ThaiLotteryPeriod(db.Model):
     __tablename__ = "thai_lottery_periods"
 

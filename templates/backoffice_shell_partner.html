@@ -47,6 +47,10 @@
         <a href="{{ url_for('partner_stock') }}" class="{{ 'is-active' if request.endpoint == 'partner_stock' else '' }}"><i class="fas fa-chart-pie"></i><span>% ถือหุ้น</span></a>
         <a href="{{ url_for('partner_blocked_numbers') }}" class="{{ 'is-active' if request.endpoint == 'partner_blocked_numbers' else '' }}"><i class="fas fa-ban"></i><span>เลขอั้นในสาย</span></a>
         <a href="{{ url_for('partner_login_history') }}" class="{{ 'is-active' if request.endpoint == 'partner_login_history' else '' }}"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
+        <a href="{{ url_for('partner_member_settings', section='rates') }}" class="{{ 'is-active' if request.endpoint == 'partner_member_settings' and section == 'rates' else '' }}"><i class="fas fa-percent"></i><span>อัตราจ่าย/คอมสมาชิก</span></a>
+        <a href="{{ url_for('partner_member_settings', section='limits') }}" class="{{ 'is-active' if request.endpoint == 'partner_member_settings' and section == 'limits' else '' }}"><i class="fas fa-arrows-up-down"></i><span>ขั้นต่ำ/สูงสุดสมาชิก</span></a>
+        <a href="{{ url_for('partner_member_settings', section='access') }}" class="{{ 'is-active' if request.endpoint == 'partner_member_settings' and section == 'access' else '' }}"><i class="fas fa-toggle-on"></i><span>เปิด-ปิดกลุ่มหวยสมาชิก</span></a>
+        <a href="{{ url_for('partner_member_settings', section='stock') }}" class="{{ 'is-active' if request.endpoint == 'partner_member_settings' and section == 'stock' else '' }}"><i class="fas fa-user-pen"></i><span>ข้อมูล/ถือหุ้นสมาชิก</span></a>
         <a class="bo-logout" href="__BACKOFFICE_LOGOUT__"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
       </nav>
       <div class="bo-profile">

@@ -1,0 +1,185 @@
+{% extends shell %}
+{% block title %}{{ section_title }} — mklotto{% endblock %}
+{% block content %}
+<style>
+  .mg-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+  .mg-tabs a { padding: 7px 14px; border-radius: 6px; border: 1px solid rgba(245,158,11,.5); color: #fbbf24; text-decoration: none; font-size: .9rem; }
+  .mg-tabs a.on { background: #f59e0b; color: #111; font-weight: 700; }
+  .mg-tabs.sub a { border-color: rgba(148,163,184,.4); color: #cbd5e1; }
+  .mg-tabs.sub a.on { background: #38bdf8; color: #06202b; }
+  .mg-search { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 14px; }
+  .mg-table { min-width: 900px; }
+  .mg-table th, .mg-table td { text-align: center; vertical-align: middle; }
+  .mg-table td:nth-child(2), .mg-table td:nth-child(3) { text-align: left; }
+  .mg-table small { display: block; opacity: .75; font-weight: 400; }
+  .mg-table input.form-input { width: 84px; padding: 4px 6px; text-align: right; }
+  .mg-table input.mg-wide { width: 150px; text-align: left; }
+  .mg-table tr.mg-all td { background: rgba(245,158,11,.12); }
+  .mg-hide { display: none !important; }
+  .mg-savebar { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+  .mg-note { opacity: .8; font-size: .85rem; }
+</style>
+<main class="partner-dashboard-main">
+  <header class="partner-dashboard-head">
+    <div>
+      <span class="eyebrow">MEMBER SETTINGS</span>
+      <h1 class="page-title">{{ section_title }}</h1>
+      <p class="section-desc">ปรับตามกลุ่มหวย : <strong>{{ category or '-' }}</strong> — ค่าที่ตั้งจะบังคับใช้ตอนสมาชิกส่งโพยทันที เว้นว่าง = ใช้ค่ามาตรฐาน</p>
+    </div>
+    <div class="partner-balance"><span>สมาชิกที่แสดง</span><strong>{{ members|length }}</strong></div>
+  </header>
+
+  <div class="mg-tabs">
+    {% for g in groups %}<a href="{{ url_for(endpoint, section=section, category=g, sub=sub, q=keyword or None) }}" class="{{ 'on' if g == category else '' }}">{{ g }}</a>{% else %}<span class="section-desc">ยังไม่มีห้องหวยที่เปิดใช้งาน</span>{% endfor %}
+  </div>
+
+  <article class="panel">
+    {% if subs|length > 1 %}
+    <div class="mg-tabs sub">
+      {% for key, label in subs %}<a href="{{ url_for(endpoint, section=section, category=category, sub=key, tier=tier, q=keyword or None) }}" class="{{ 'on' if key == sub else '' }}">{{ label }}</a>{% endfor %}
+    </div>
+    {% endif %}
+    {% if section == 'rates' and tiers|length > 1 %}
+    <div class="mg-tabs sub">
+      {% for t in tiers %}<a href="{{ url_for(endpoint, section=section, category=category, sub=sub, tier=t, q=keyword or None) }}" class="{{ 'on' if t == tier else '' }}">{{ tier_names[t] }}</a>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="get" class="mg-search">
+      <input type="hidden" name="category" value="{{ category }}"><input type="hidden" name="sub" value="{{ sub }}"><input type="hidden" name="tier" value="{{ tier }}">
+      <input class="form-input" name="q" value="{{ keyword }}" placeholder="ค้นหาชื่อผู้ใช้/ชื่อ">
+      <button class="btn btn-ghost" type="submit"><i class="fas fa-search"></i> ค้นหา</button>
+    </form>
+
+    <form method="post" id="mg-form">
+      <input type="hidden" name="category" value="{{ category }}"><input type="hidden" name="sub" value="{{ sub }}"><input type="hidden" name="tier" value="{{ tier }}"><input type="hidden" name="q" value="{{ keyword }}">
+      <div class="table-wrap">
+        <table class="data-table mg-table">
+
+          {% if section == 'rates' %}
+          <thead>
+            <tr><th style="width:36px;"><input type="checkbox" id="mg-selall" aria-label="เลือกทั้งหมด"></th><th>ผู้ใช้</th><th>ชื่อ</th>
+              {% for bt in bet_types %}<th>{{ labels[bt] }}<small>{% if sub == 'payout' %}รับมา {{ '%g'|format(received_rates.get(bt, 0)) }}{% else %}รับมา {{ '%g'|format(received_discounts.get(bt, 0)) }}%{% endif %}</small></th>{% endfor %}</tr>
+            <tr class="mg-all"><td></td><td colspan="2" style="text-align:right;">ตั้งค่าให้ทุกคนที่เลือก</td>
+              {% for bt in bet_types %}<td><input class="form-input" type="number" step="any" min="0" data-all="{{ bt }}" aria-label="ตั้งทั้งหมด {{ labels[bt] }}"></td>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            {% for m in members %}
+            <tr>
+              <td><input type="checkbox" name="sel" value="{{ m.id }}"></td><td>{{ m.username }}</td><td>{{ m.full_name or '-' }}</td>
+              {% for bt in bet_types %}{% set c = cells.get((m.id, bt)) %}
+              <td>
+                <input class="form-input {{ '' if sub == 'payout' else 'mg-hide' }}" data-kind="payout" data-bt="{{ bt }}" type="number" step="any" min="0" name="p_{{ m.id }}_{{ bt }}" value="{{ '%g'|format(c.payout_multiplier) if c and c.payout_multiplier is not none else '' }}" placeholder="{{ '%g'|format(received_rates.get(bt, 0)) }}">
+                <input class="form-input {{ '' if sub == 'discount' else 'mg-hide' }}" data-kind="discount" data-bt="{{ bt }}" type="number" step="any" min="0" max="100" name="d_{{ m.id }}_{{ bt }}" value="{{ '%g'|format(c.discount_pct) if c and c.discount_pct is not none else '' }}" placeholder="{{ '%g'|format(received_discounts.get(bt, 0)) }}">
+              </td>
+              {% endfor %}
+            </tr>
+            {% else %}<tr><td colspan="{{ 3 + bet_types|length }}" class="empty-state-text">ไม่มีสมาชิกในสาย</td></tr>{% endfor %}
+          </tbody>
+
+          {% elif section == 'limits' %}
+          <thead>
+            <tr><th style="width:36px;"><input type="checkbox" id="mg-selall" aria-label="เลือกทั้งหมด"></th><th>ผู้ใช้</th><th>ชื่อ</th>
+              {% for bt in bet_types %}<th>{{ labels[bt] }}<small>{% if sub == 'min' %}ระบบ ≥ {{ '{:,}'.format(type_rules[bt].min) }}{% else %}ระบบ ≤ {{ '{:,}'.format(type_rules[bt].max) }}{% endif %}</small></th>{% endfor %}</tr>
+            <tr class="mg-all"><td></td><td colspan="2" style="text-align:right;">ตั้งค่าให้ทุกคนที่เลือก</td>
+              {% for bt in bet_types %}<td><input class="form-input" type="number" step="1" min="1" data-all="{{ bt }}" aria-label="ตั้งทั้งหมด {{ labels[bt] }}"></td>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            {% for m in members %}
+            <tr>
+              <td><input type="checkbox" name="sel" value="{{ m.id }}"></td><td>{{ m.username }}</td><td>{{ m.full_name or '-' }}</td>
+              {% for bt in bet_types %}{% set c = cells.get((m.id, bt)) %}
+              <td>
+                <input class="form-input {{ '' if sub == 'min' else 'mg-hide' }}" data-kind="min" data-bt="{{ bt }}" type="number" step="1" min="1" name="min_{{ m.id }}_{{ bt }}" value="{{ c.min_bet if c and c.min_bet is not none else '' }}" placeholder="{{ type_rules[bt].min }}">
+                <input class="form-input {{ '' if sub == 'max' else 'mg-hide' }}" data-kind="max" data-bt="{{ bt }}" type="number" step="1" min="1" name="max_{{ m.id }}_{{ bt }}" value="{{ c.max_bet if c and c.max_bet is not none else '' }}" placeholder="{{ type_rules[bt].max }}">
+                <input class="form-input {{ '' if sub == 'num' else 'mg-hide' }}" data-kind="num" data-bt="{{ bt }}" type="number" step="1" min="1" name="num_{{ m.id }}_{{ bt }}" value="{{ c.max_number_bet if c and c.max_number_bet is not none else '' }}" placeholder="{{ type_rules[bt].max }}">
+              </td>
+              {% endfor %}
+            </tr>
+            {% else %}<tr><td colspan="{{ 3 + bet_types|length }}" class="empty-state-text">ไม่มีสมาชิกในสาย</td></tr>{% endfor %}
+          </tbody>
+
+          {% elif section == 'access' %}
+          <thead>
+            <tr><th>ผู้ใช้</th><th>ชื่อ</th><th>กลุ่มหวย</th>{% for t in tiers if t != 1 %}<th>{{ tier_names[t] }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            {% for m in members %}
+            <tr>
+              <td>{{ m.username }}</td><td>{{ m.full_name or '-' }}</td>
+              <td><select class="form-input" name="g_{{ m.id }}"><option value="1" {{ 'selected' if access.get((m.id, 0), True) else '' }}>เปิด</option><option value="0" {{ '' if access.get((m.id, 0), True) else 'selected' }}>ปิด</option></select></td>
+              {% for t in tiers if t != 1 %}<td><select class="form-input" name="t{{ t }}_{{ m.id }}"><option value="1" {{ 'selected' if access.get((m.id, t), True) else '' }}>เปิด</option><option value="0" {{ '' if access.get((m.id, t), True) else 'selected' }}>ปิด</option></select></td>{% endfor %}
+            </tr>
+            {% else %}<tr><td colspan="{{ 3 + tiers|length }}" class="empty-state-text">ไม่มีสมาชิกในสาย</td></tr>{% endfor %}
+          </tbody>
+
+          {% else %}
+          <thead>
+            <tr><th style="width:36px;"><input type="checkbox" id="mg-selall" aria-label="เลือกทั้งหมด"></th><th>ผู้ใช้</th><th>ชื่อ</th>
+              {% if sub == 'general' %}<th>ชื่อ-สกุล</th><th>โทร</th><th>สถานะ</th><th>เครดิต</th><th>Login ล่าสุด</th>
+              {% elif sub == 'password' %}<th>รหัสผ่านใหม่</th>
+              {% else %}<th>% ถือหุ้น ({{ category }})</th><th>เครดิต</th>{% endif %}</tr>
+          </thead>
+          <tbody>
+            {% for m in members %}
+            <tr>
+              <td><input type="checkbox" name="sel" value="{{ m.id }}"></td><td>{{ m.username }}</td><td>{{ m.full_name or '-' }}</td>
+              {% if sub == 'general' %}
+              <td><input class="form-input mg-wide" name="name_{{ m.id }}" value="{{ m.full_name or '' }}" maxlength="120"></td>
+              <td><input class="form-input mg-wide" name="phone_{{ m.id }}" value="{{ m.phone or '' }}" maxlength="20"></td>
+              <td><select class="form-input" name="active_{{ m.id }}"><option value="1" {{ 'selected' if m.is_active else '' }}>ใช้งาน</option><option value="0" {{ '' if m.is_active else 'selected' }}>ระงับ</option></select></td>
+              <td>{{ '{:,.2f}'.format(m.credit_balance) }}</td>
+              <td>{% set ll = last_login.get(m.id) %}{{ ll.created_at.strftime('%d/%m/%Y %H:%M') if ll and ll.created_at else '-' }}</td>
+              {% elif sub == 'password' %}
+              <td><input class="form-input mg-wide" type="text" autocomplete="off" name="pw_{{ m.id }}" placeholder="เว้นว่าง = ไม่เปลี่ยน" minlength="6"></td>
+              {% else %}
+              <td><input class="form-input" type="number" step="any" min="0" max="100" name="hold_{{ m.id }}" value="{{ '%g'|format(stocks[m.id]) if m.id in stocks else '' }}" placeholder="ค่าห้อง"> %</td>
+              <td>{{ '{:,.2f}'.format(m.credit_balance) }}</td>
+              {% endif %}
+            </tr>
+            {% else %}<tr><td colspan="8" class="empty-state-text">ไม่มีสมาชิกในสาย</td></tr>{% endfor %}
+          </tbody>
+          {% endif %}
+
+        </table>
+      </div>
+      <div class="mg-savebar">
+        <button class="btn btn-primary" type="submit"><i class="fas fa-floppy-disk"></i> {{ 'บันทึก' if section == 'access' else 'บันทึกที่เลือก' }}</button>
+        <span class="mg-note">
+          {% if section == 'access' %}ระบบบันทึกทุกคนที่แสดงในตาราง{% else %}ติ๊กเลือกสมาชิก (แก้ช่องไหนระบบติ๊กให้อัตโนมัติ) แล้วกดบันทึก ช่องที่ว่างจะกลับไปใช้ค่ามาตรฐาน{% endif %}
+        </span>
+      </div>
+    </form>
+  </article>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById('mg-form');
+  if (!form) return;
+  var selAll = document.getElementById('mg-selall');
+  var boxes = function () { return form.querySelectorAll('input[name="sel"]'); };
+  if (selAll) selAll.addEventListener('change', function () { boxes().forEach(function (b) { b.checked = selAll.checked; }); });
+  // แก้ช่องไหน = ติ๊กเลือกแถวนั้นให้
+  form.addEventListener('input', function (e) {
+    var tr = e.target.closest('tr');
+    if (!tr || e.target.hasAttribute('data-all')) return;
+    var box = tr.querySelector('input[name="sel"]');
+    if (box) box.checked = true;
+  });
+  // แถว "ตั้งค่าให้ทุกคนที่เลือก": คัดลอกค่าไปยังแถวที่ติ๊กไว้ (เฉพาะช่องที่กำลังแสดง)
+  form.querySelectorAll('input[data-all]').forEach(function (all) {
+    all.addEventListener('input', function () {
+      form.querySelectorAll('tbody tr').forEach(function (tr) {
+        var box = tr.querySelector('input[name="sel"]');
+        if (!box || !box.checked) return;
+        tr.querySelectorAll('input[data-bt="' + all.dataset.all + '"]').forEach(function (input) {
+          if (!input.classList.contains('mg-hide')) input.value = all.value;
+        });
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}

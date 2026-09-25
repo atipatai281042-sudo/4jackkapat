@@ -142,7 +142,7 @@
     </div>
 
     <div class="bp-countdown" id="bp-countdown" data-remaining="{{ remaining_seconds }}">
-      {% if active_period %}เหลือเวลา <span id="bp-countdown-value">--</span>{% else %}ขณะนี้ยังไม่มีงวดเปิดรับแทงในห้องนี้{% endif %}
+      {% if active_period %}เหลือเวลา <span id="bp-countdown-value">--</span>{% elif group_blocked %}กลุ่มหวยนี้ถูกปิดสำหรับบัญชีของคุณ{% else %}ขณะนี้ยังไม่มีงวดเปิดรับแทงในห้องนี้{% endif %}
     </div>
 
     <div class="bp-cols">
@@ -156,7 +156,7 @@
         </div>
 
         {% if not active_period %}
-          <div class="bp-closed" style="margin-top: 14px;">ยังไม่มีงวดที่เปิดรับแทงในขณะนี้</div>
+          <div class="bp-closed" style="margin-top: 14px;">{% if group_blocked %}กลุ่มหวยนี้ถูกปิดสำหรับบัญชีของคุณ กรุณาติดต่อเอเย่นต์{% else %}ยังไม่มีงวดที่เปิดรับแทงในขณะนี้{% endif %}</div>
         {% else %}
         <div class="bp-tabs">
           <button type="button" class="bp-tab on" data-tab="quick">แทงเร็ว</button>

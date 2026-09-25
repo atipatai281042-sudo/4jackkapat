@@ -31,7 +31,8 @@ ORIGINAL_FETCH_RESULTS = fetch_results
 from models import (
     db, User, Reward, RedemptionHistory, PointLog,
     HeroBanner, MediaImage, LotteryRoom, BlockedNumber,
-    LotteryPayoutRule, LotteryTypeRule, LotteryRateSet, ThaiLotteryPeriod, ThaiLotteryBet,
+    LotteryPayoutRule, LotteryTypeRule, LotteryRateSet, ThaiLotteryPeriod,
+    MemberGroupRate, MemberGroupLimit, MemberGroupAccess, MemberGroupStock, ThaiLotteryBet,
     PartnerProfile, PartnerAssistant, PartnerMemberLimit, PartnerRoomSetting, PartnerPayoutRule,
     PartnerAcceptanceLimit, PartnerAcceptanceNumber, PartnerStockShare, PartnerStockLedger,
     PartnerBlockedNumber, PartnerPresence, CommissionLedger, VipTier,
@@ -703,8 +704,12 @@ def apply_partner_stock_holding(bet, is_win):
     if member_share is not None:
         hold_percent = member_share.hold_percent
     else:
-        share = PartnerStockShare.query.filter_by(partner_id=partner.id, room_id=room_id).first()
-        hold_percent = share.hold_percent if share else 0.0
+        group_percent = member_group_stock_percent(partner.id, member.id, room_category_name(bet.period.room))
+        if group_percent is not None:
+            hold_percent = group_percent
+        else:
+            share = PartnerStockShare.query.filter_by(partner_id=partner.id, room_id=room_id).first()
+            hold_percent = share.hold_percent if share else 0.0
     if hold_percent <= 0:
         return
     house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
@@ -775,8 +780,12 @@ def apply_senior_stock_holding(bet, is_win):
     if member_share is not None:
         hold_percent = member_share.hold_percent
     else:
-        share = SeniorStockShare.query.filter_by(senior_id=senior.id, room_id=room_id).first()
-        hold_percent = share.hold_percent if share else 0.0
+        group_percent = member_group_stock_percent(senior.id, member.id, room_category_name(bet.period.room))
+        if group_percent is not None:
+            hold_percent = group_percent
+        else:
+            share = SeniorStockShare.query.filter_by(senior_id=senior.id, room_id=room_id).first()
+            hold_percent = share.hold_percent if share else 0.0
     if hold_percent <= 0:
         return
     house_pnl = float(bet.amount) if not is_win else (float(bet.amount) - float(bet.reward_amount))
@@ -1083,27 +1092,116 @@ def user_lottery_rates(user, category=None, tier=1):
     return rates
 
 
+def member_setting_owner_ids(member):
+    """ผู้ดูแลที่ตั้งค่ารายกลุ่มหวยให้สมาชิกคนนี้ได้ เรียงจากใกล้สุด: Agent ที่ดูแลตรง → Senior ในสาย
+    (Agent ที่อยู่สูงกว่าในสายไม่ได้ตั้งค่ารายสมาชิก — ทำผ่าน Agent ย่อยโดยตรง)"""
+    agent = getattr(member, "partner", None)
+    if agent is None or not getattr(member, "id", None):
+        return []
+    owners = [agent.id]
+    senior = agent_upline_senior(agent)
+    if senior is not None:
+        owners.append(senior.id)
+    return owners
+
+
+def member_group_enabled(member, category, tier=0):
+    """tier = 0: กลุ่มหวยเปิดอยู่ไหม / tier >= 1: ชุดอัตราจ่ายนั้นเปิดอยู่ไหม — ปิดโดยคนใดคนหนึ่ง = ปิด"""
+    owners = member_setting_owner_ids(member)
+    if not owners:
+        return True
+    return MemberGroupAccess.query.filter(
+        MemberGroupAccess.member_id == member.id, MemberGroupAccess.owner_id.in_(owners),
+        MemberGroupAccess.category == category, MemberGroupAccess.tier == tier,
+        MemberGroupAccess.is_enabled.is_(False),
+    ).first() is None
+
+
+def member_group_limits(member, category):
+    """{bet_type: {"min", "max", "per_number"}} รวมทุกผู้ดูแล — เข้มงวดที่สุดชนะ (ขั้นต่ำเอาสูงสุด, ขั้นสูงเอาต่ำสุด)"""
+    owners = member_setting_owner_ids(member)
+    result = {}
+    if not owners:
+        return result
+    for row in MemberGroupLimit.query.filter(
+        MemberGroupLimit.member_id == member.id, MemberGroupLimit.owner_id.in_(owners),
+        MemberGroupLimit.category == category,
+    ):
+        cur = result.setdefault(row.bet_type, {"min": None, "max": None, "per_number": None})
+        if row.min_bet is not None:
+            cur["min"] = row.min_bet if cur["min"] is None else max(cur["min"], row.min_bet)
+        if row.max_bet is not None:
+            cur["max"] = row.max_bet if cur["max"] is None else min(cur["max"], row.max_bet)
+        if row.max_number_bet is not None:
+            cur["per_number"] = row.max_number_bet if cur["per_number"] is None else min(cur["per_number"], row.max_number_bet)
+    return result
+
+
+def member_group_rate_overrides(member, category, tier):
+    """{bet_type: (payout|None, discount|None)} — ผู้ดูแลที่ใกล้สมาชิกที่สุดชนะ (Agent ก่อน Senior) แยกกันรายช่อง"""
+    owners = member_setting_owner_ids(member)
+    result = {}
+    if not owners:
+        return result
+    rows = MemberGroupRate.query.filter(
+        MemberGroupRate.member_id == member.id, MemberGroupRate.owner_id.in_(owners),
+        MemberGroupRate.category == category, MemberGroupRate.tier == tier,
+    ).all()
+    for owner_id in owners:
+        for row in rows:
+            if row.owner_id != owner_id:
+                continue
+            payout, discount = result.get(row.bet_type, (None, None))
+            if payout is None and row.payout_multiplier is not None:
+                payout = row.payout_multiplier
+            if discount is None and row.discount_pct is not None:
+                discount = row.discount_pct
+            result[row.bet_type] = (payout, discount)
+    return result
+
+
+def member_number_total(user, period, bet_type, number):
+    """ยอดแทงเลขนี้ (ประเภทนี้ งวดนี้) ที่สมาชิกส่งไปแล้วและยังไม่ถูกยกเลิก — ใช้ตรวจ 'สูงสุดต่อเลข'"""
+    total = db.session.query(func.coalesce(func.sum(ThaiLotteryBet.amount), 0)).filter(
+        ThaiLotteryBet.user_id == user.id, ThaiLotteryBet.period_id == period.id,
+        ThaiLotteryBet.bet_type == bet_type, ThaiLotteryBet.number == number,
+        ThaiLotteryBet.status != "cancelled",
+    ).scalar()
+    return int(total or 0)
+
+
+def member_group_stock_percent(owner_id, member_id, category):
+    row = MemberGroupStock.query.filter_by(owner_id=owner_id, member_id=member_id, category=category).first()
+    return row.hold_percent if row else None
+
+
 def build_rate_tables(user, category, member_min, member_max, type_rules=None):
     """ตารางอัตราจ่ายของแต่ละชุดที่หมวดนี้มี — ค่าที่สมาชิกได้จริง (ใช้แสดงและให้หน้าเว็บคำนวณส่วนลด)"""
     type_rules = type_rules or get_type_rules()
+    group_limits = member_group_limits(user, category)
     tables = []
     for tier in available_rate_tiers(category):
+        if tier != 1 and not member_group_enabled(user, category, tier):
+            continue
         rates = user_lottery_rates(user, category, tier)
         for bet_type in list(rates):
             personal = member_specific_rate(user, bet_type)
             if personal is not None:
                 rates[bet_type] = personal
+        overrides = member_group_rate_overrides(user, category, tier)
         tier_set = get_rate_set(category, tier)
         rows = []
         for key in RATE_TABLE_ORDER + tuple(t for t in EXTRA_BET_TYPES if rates.get(t)):
             rule = type_rules.get(key, {"discount": 0.0, "min": 1, "max": MAX_BET_AMOUNT})
+            payout_ov, discount_ov = overrides.get(key, (None, None))
+            glim = group_limits.get(key) or {}
             rows.append({
                 "key": key,
                 "label": BET_TYPE_LABELS[key],
-                "rate": rates.get(key, 0),
-                "discount": tier_set[key].discount_pct if key in tier_set else rule["discount"],
-                "min": max(rule["min"], member_min),
-                "max": min(rule["max"], member_max),
+                "rate": payout_ov if payout_ov is not None else rates.get(key, 0),
+                "discount": discount_ov if discount_ov is not None else (tier_set[key].discount_pct if key in tier_set else rule["discount"]),
+                "min": max(rule["min"], member_min, glim.get("min") or 0),
+                "max": min(rule["max"], member_max, glim.get("max") or MAX_BET_AMOUNT),
             })
         tables.append({"tier": tier, "name": RATE_TIER_NAMES[tier], "rows": rows})
     return tables
@@ -1124,8 +1222,15 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
     category = room_category_name(period.room) if period.room_id else ""
     if rate_tier not in available_rate_tiers(category):
         raise ValueError("ไม่พบอัตราจ่ายที่เลือก กรุณาลองใหม่")
+    if not member_group_enabled(user, category):
+        raise ValueError("กลุ่มหวยนี้ถูกปิดสำหรับบัญชีของคุณ กรุณาติดต่อเอเย่นต์")
+    if rate_tier != 1 and not member_group_enabled(user, category, rate_tier):
+        raise ValueError("อัตราจ่ายที่เลือกถูกปิดสำหรับบัญชีของคุณ")
     tier_set = get_rate_set(category, rate_tier)
     rates = user_lottery_rates(user, category, rate_tier)
+    group_limits = member_group_limits(user, category)
+    group_overrides = member_group_rate_overrides(user, category, rate_tier)
+    number_totals = {}
     validated_entries = []
     total_amount = 0
     total_paid = 0.0  # ยอดที่หักจากเครดิตจริง = ยอดแทง − ส่วนลด
@@ -1141,9 +1246,25 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
                 raise ValueError(f"{label} แทงขั้นต่ำ {type_rule['min']:,} บาทต่อรายการ")
             if amount > type_rule["max"]:
                 raise ValueError(f"{label} แทงได้สูงสุด {type_rule['max']:,} บาทต่อรายการ")
-        discount_pct = tier_set[bet_type].discount_pct if bet_type in tier_set else (type_rule["discount"] if type_rule else 0.0)
+        glim = group_limits.get(bet_type)
+        if glim:
+            label = BET_TYPE_LABELS.get(bet_type, bet_type)
+            if glim["min"] is not None and amount < glim["min"]:
+                raise ValueError(f"{label} แทงขั้นต่ำ {glim['min']:,} บาทต่อรายการ (ตามที่ผู้ดูแลตั้งไว้)")
+            if glim["max"] is not None and amount > glim["max"]:
+                raise ValueError(f"{label} แทงได้สูงสุด {glim['max']:,} บาทต่อรายการ (ตามที่ผู้ดูแลตั้งไว้)")
+            if glim["per_number"] is not None:
+                key = (bet_type, raw_number)
+                number_totals[key] = number_totals.get(key, 0) + amount
+                if member_number_total(user, period, bet_type, raw_number) + number_totals[key] > glim["per_number"]:
+                    raise ValueError(f"{label} เลข {raw_number} แทงรวมได้สูงสุด {glim['per_number']:,} บาทต่อเลข")
+        group_payout, group_discount = group_overrides.get(bet_type, (None, None))
+        if group_discount is not None:
+            discount_pct = group_discount
+        else:
+            discount_pct = tier_set[bet_type].discount_pct if bet_type in tier_set else (type_rule["discount"] if type_rule else 0.0)
         discount = round(amount * discount_pct / 100, 2)
-        validated_entries.append((bet_type, raw_number, amount, discount))
+        validated_entries.append((bet_type, raw_number, amount, discount, group_payout))
         total_amount += amount
         total_paid += amount - discount
 
@@ -1156,7 +1277,7 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
 
     ticket_code = f"TK-{app_now().strftime('%Y%m%d%H%M%S%f')}-{random.randint(100, 999)}"
     created = 0
-    for bet_type, raw_number, amount, discount in validated_entries:
+    for bet_type, raw_number, amount, discount, group_payout in validated_entries:
 
         blocked_rate = partner_blocked_rate(user, period.room_id, bet_type, raw_number)
         blocked = None
@@ -1177,7 +1298,7 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
         elif blocked and blocked.payout_multiplier > 0:
             rate = blocked.payout_multiplier
         else:
-            personal_rate = member_specific_rate(user, bet_type)
+            personal_rate = group_payout if group_payout is not None else member_specific_rate(user, bet_type)
             rate = personal_rate if personal_rate is not None else rates[bet_type]
 
         total_reward = int(amount * rate)
@@ -1639,6 +1760,9 @@ def lottery_thai():
     member_max = int(min(limit.max_bet, MAX_BET_AMOUNT)) if limit else MAX_BET_AMOUNT
     type_rules = get_type_rules()
     category = room_category_name(room)
+    group_blocked = not member_group_enabled(user, category)
+    if group_blocked:
+        active_period = None  # กลุ่มหวยนี้ถูกผู้ดูแลปิดไว้ — แสดงเหมือนไม่มีงวดเปิดรับ
     tier_tables = build_rate_tables(user, category, member_min, member_max, type_rules)
     my_rates = {row["key"]: row["rate"] for row in tier_tables[0]["rows"]}
 
@@ -1658,6 +1782,7 @@ def lottery_thai():
         payout_rates=my_rates,
         blocked_rates=blocked_rates,
         tier_tables=tier_tables,
+        group_blocked=group_blocked,
         max_entries=MAX_BET_ENTRIES,
         remaining_seconds=max(0, int((active_period.close_time - now).total_seconds())) if active_period else 0,
     )
@@ -5882,6 +6007,9 @@ def seed_data():
         for user in User.query.all():
             refresh_vip_status(user)
         db.session.commit()
+
+
+import backoffice_settings  # noqa: E402,F401  (ลงทะเบียนหน้าตั้งค่ารายกลุ่มหวยของ Agent/Senior)
 
 
 if __name__ == "__main__":
