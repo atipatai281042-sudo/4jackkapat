@@ -33,7 +33,7 @@
         <span class="bo-nav-label">ภาพรวม</span>
         <a href="__BACKOFFICE_HOME__"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
 
-        {{ admin_nav('', request.path) }}
+        {{ admin_nav('', request.path, staff_perms) }}
         <a class="bo-logout" href="__BACKOFFICE_LOGOUT__"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
       </nav>
     </aside>

@@ -229,6 +229,20 @@ class Announcement(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class AdminStaff(db.Model):
+    """ทีมงานของแอดมิน: เข้าหลังบ้านแอดมินได้เฉพาะหมวดที่ได้รับสิทธิ์ (บัญชีที่ไม่มีแถวนี้ = แอดมินเต็มสิทธิ์)"""
+    __tablename__ = "admin_staff"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    permissions = db.Column(db.String(255), nullable=False, default="")
+    note = db.Column(db.String(200), default="")
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+
 class AdminAuditLog(db.Model):
     __tablename__ = "admin_audit_logs"
 

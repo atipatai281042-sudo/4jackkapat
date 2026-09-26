@@ -259,8 +259,10 @@ def dashboard():
     }
     announcements = HeroBanner.query.order_by(HeroBanner.created_at.desc()).limit(5).all()
     recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+    from app import admin_staff_permissions
     return render_template(
         "backoffice_admin_collapsible.html",
+        staff_perms=admin_staff_permissions(user),
         stats=stats,
         announcements=announcements,
         recent_users=recent_users,

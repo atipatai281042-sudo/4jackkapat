@@ -1,0 +1,52 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}ทีมงานแอดมิน — mklotto{% endblock %}
+{% block content %}
+<style>
+  .st-perms { display: grid; gap: 6px; }
+  .st-perms label { display: flex; gap: 8px; align-items: flex-start; font-size: .88rem; }
+  .st-card { border: 1px solid rgba(148,163,184,.2); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .st-card header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .st-off { color: #f87171; }
+</style>
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">STAFF</span><h1 class="page-title">ทีมงานแอดมิน</h1>
+      <p class="section-desc">เพิ่มทีมงานที่เข้าหลังบ้านได้เฉพาะหมวดที่คุณให้สิทธิ์ · ทีมงานจัดการบัญชีแอดมิน/ทีมงาน และ Import/Export ไม่ได้ · ทุกการกระทำถูกบันทึกใน Audit log</p></div>
+    <a href="{{ url_for('admin_admins') }}" class="btn btn-ghost">บัญชีแอดมินเต็มสิทธิ์</a>
+  </header>
+  <div class="dashboard-layout">
+    <article class="panel">
+      <h2 class="panel-title">เพิ่มทีมงาน</h2>
+      <form method="post" class="admin-form">
+        <div class="form-group"><label class="form-label">ชื่อผู้ใช้</label><input class="form-input" name="username" minlength="4" required autocomplete="off"></div>
+        <div class="form-group"><label class="form-label">ชื่อ</label><input class="form-input" name="full_name"></div>
+        <div class="form-group"><label class="form-label">รหัสผ่าน (อย่างน้อย 6 ตัว)</label><input class="form-input" name="password" minlength="6" required autocomplete="new-password"></div>
+        <div class="form-group"><label class="form-label">สิทธิ์</label>
+          <div class="st-perms">{% for key, label in labels.items() %}<label><input type="checkbox" name="perm" value="{{ key }}" {{ 'checked' if key in ('users', 'tickets', 'reports') else '' }}> {{ label }}</label>{% endfor %}</div>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-user-plus"></i> เพิ่มทีมงาน</button>
+      </form>
+    </article>
+    <article class="panel">
+      <h2 class="panel-title">ทีมงานทั้งหมด ({{ rows|length }})</h2>
+      {% for r in rows %}{% set perms = r.permissions.split(',') %}
+      <div class="st-card">
+        <header>
+          <div><strong>{{ r.user.username }}</strong> <small>{{ r.user.full_name }}</small>
+            {% if not r.user.is_active %}<span class="st-off"> · ถูกระงับ</span>{% endif %}
+            <small class="table-subtext">เข้าระบบล่าสุด {{ last_login.get(r.user_id, '-') }}</small></div>
+          <div style="display:flex;gap:6px;">
+            <form method="post" action="{{ url_for('admin_user_password', user_id=r.user_id) }}" onsubmit="return confirm('ตั้งรหัสผ่านใหม่ (สุ่ม) ให้ {{ r.user.username }} ?');"><input type="hidden" name="next" value="/admin/staff"><button class="btn btn-ghost btn-xs" type="submit">รีเซ็ตรหัส</button></form>
+            <form method="post" action="{{ url_for('admin_user_status', user_id=r.user_id) }}" onsubmit="return confirm('{{ 'เปิดใช้งาน' if not r.user.is_active else 'ระงับ' }} {{ r.user.username }} ?');"><input type="hidden" name="next" value="/admin/staff"><button class="btn {{ 'btn-primary' if not r.user.is_active else 'btn-danger' }} btn-xs" type="submit">{{ 'เปิดใช้งาน' if not r.user.is_active else 'ระงับ' }}</button></form>
+          </div>
+        </header>
+        <form method="post" action="{{ url_for('admin_staff_permissions_update', staff_id=r.id) }}">
+          <div class="st-perms">{% for key, label in labels.items() %}<label><input type="checkbox" name="perm" value="{{ key }}" {{ 'checked' if key in perms else '' }}> {{ label }}</label>{% endfor %}</div>
+          <button class="btn btn-ghost btn-xs" type="submit" style="margin-top:8px;">บันทึกสิทธิ์</button>
+        </form>
+      </div>
+      {% else %}<p class="empty-state-text">ยังไม่มีทีมงาน</p>{% endfor %}
+    </article>
+  </div>
+</div></section>
+{% endblock %}

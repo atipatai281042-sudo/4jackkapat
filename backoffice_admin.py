@@ -12,12 +12,12 @@ from flask import abort, flash, redirect, render_template, request, session, url
 from sqlalchemy import func
 
 from app import (
-    ACCOUNT_TEXT_PATTERN, BET_TYPE_LABELS, EXTRA_BET_TYPES, RATE_TABLE_ORDER, _bet_history_range, active_lottery_rooms,
+    ACCOUNT_TEXT_PATTERN, ADMIN_STAFF_PERMISSION_LABELS, admin_staff_permissions, BET_TYPE_LABELS, EXTRA_BET_TYPES, RATE_TABLE_ORDER, _bet_history_range, active_lottery_rooms,
     adjust_credit, admin_required, agent_upline_chain, agent_upline_senior, app, app_now, audit_admin, cancel_ticket_bets,
     current_user, db, get_lottery_rates, notify_user, record_wallet_transaction, room_category_name, senior_agent_ids,
 )
 from models import (
-    AdminAuditLog, CommissionLedger, LoginHistory, LotteryRoom, MemberGroupAccess, MemberGroupLimit, MemberGroupRate,
+    AdminAuditLog, AdminStaff, CommissionLedger, LoginHistory, LotteryRoom, MemberGroupAccess, MemberGroupLimit, MemberGroupRate,
     MemberGroupStock, PartnerAcceptanceLimit, PartnerAssistant, PartnerPresence, PartnerProfile, PartnerStockLedger,
     PartnerStockShare, SeniorAcceptanceLimit, SeniorAssistant, SeniorCommissionLedger, SeniorProfile, SeniorStockLedger,
     SeniorStockShare, ThaiLotteryBet, ThaiLotteryPeriod, User, WalletTransaction,
@@ -67,7 +67,24 @@ def assistant_owner_map():
     return result
 
 
+def acting_as_staff():
+    """ผู้ที่กำลังใช้งานเป็นทีมงาน (ไม่ใช่แอดมินเต็มสิทธิ์) ไหม"""
+    return admin_staff_permissions(current_user()) is not None
+
+
+def guard_admin_target(target):
+    """ทีมงานห้ามแตะบัญชีแอดมิน/ทีมงานด้วยกัน (ระงับ รีเซ็ตรหัส ปรับเครดิต ฯลฯ)"""
+    if target.role == "admin" and acting_as_staff():
+        abort(403)
+
+
+def staff_user_ids():
+    return {row[0] for row in db.session.query(AdminStaff.user_id).all()}
+
+
 def role_label(user, assistant_ids):
+    if user.role == "admin" and user.id in staff_user_ids():
+        return "ทีมงานแอดมิน"
     if user.id in assistant_ids:
         return "ผู้ช่วย Agent" if user.role == "partner" else "ผู้ช่วย Senior"
     return ROLE_LABELS.get(user.role, user.role)
@@ -282,6 +299,7 @@ def admin_user_detail(user_id):
 @admin_required
 def admin_user_update(user_id):
     user = db.session.get(User, user_id) or abort(404)
+    guard_admin_target(user)
     full_name = request.form.get("full_name", "").strip()[:120]
     phone = request.form.get("phone", "").strip()[:20]
     user.full_name, user.phone = full_name, phone
@@ -295,11 +313,13 @@ def admin_user_update(user_id):
 @admin_required
 def admin_user_status(user_id):
     user = db.session.get(User, user_id) or abort(404)
+    guard_admin_target(user)
     if user.id == current_user().id:
         flash("ไม่สามารถระงับบัญชีของตัวเองได้", "error")
         return back_to("admin_user_detail", user_id=user.id)
     target_active = not user.is_active
-    if not target_active and user.role == "admin" and User.query.filter_by(role="admin", is_active=True).count() <= 1:
+    full_admins = User.query.filter(User.role == "admin", User.is_active.is_(True), ~User.id.in_(staff_user_ids() or [-1])).count()
+    if not target_active and user.role == "admin" and user.id not in staff_user_ids() and full_admins <= 1:
         flash("ต้องมีแอดมินที่ใช้งานได้อย่างน้อย 1 บัญชี", "error")
         return back_to("admin_user_detail", user_id=user.id)
     user.is_active = target_active
@@ -316,6 +336,7 @@ def admin_user_status(user_id):
 @admin_required
 def admin_user_password(user_id):
     user = db.session.get(User, user_id) or abort(404)
+    guard_admin_target(user)
     if user.id == current_user().id:
         flash("เปลี่ยนรหัสผ่านของตัวเองที่เมนู \"บัญชีของฉัน\"", "info")
         return redirect(url_for("admin_account"))
@@ -339,6 +360,7 @@ def admin_user_password(user_id):
 @admin_required
 def admin_user_credit(user_id):
     user = db.session.get(User, user_id) or abort(404)
+    guard_admin_target(user)
     try:
         amount = round(float(request.form.get("amount", 0)), 2)
     except ValueError:
@@ -363,6 +385,7 @@ def admin_user_credit(user_id):
 def admin_user_move(user_id):
     """ย้ายสังกัด: สมาชิก → Agent อื่น · Agent → Senior อื่น หรือเป็น Agent ย่อยใต้ Agent อื่น"""
     user = db.session.get(User, user_id) or abort(404)
+    guard_admin_target(user)
     assistants = assistant_user_ids()
     if user.id in assistants or user.role not in ("member", "partner"):
         flash("ย้ายสังกัดได้เฉพาะสมาชิกและ Agent", "error")
@@ -426,14 +449,15 @@ def admin_admins():
             db.session.commit()
             flash(f"สร้างบัญชีแอดมิน {username} แล้ว", "success")
         return redirect(url_for("admin_admins"))
-    admins = User.query.filter_by(role="admin").order_by(User.created_at.asc(), User.id.asc()).all()
+    staff_ids = staff_user_ids()
+    admins = [a for a in User.query.filter_by(role="admin").order_by(User.created_at.asc(), User.id.asc()).all() if a.id not in staff_ids]
     last_login = dict(
         db.session.query(LoginHistory.user_id, func.max(LoginHistory.created_at))
         .filter(LoginHistory.user_id.in_([a.id for a in admins] or [-1])).group_by(LoginHistory.user_id).all()
     )
     return render_template(
         "admin_admins.html", admins=admins, last_login={k: local_time(v) for k, v in last_login.items()},
-        active_count=sum(1 for a in admins if a.is_active),
+        active_count=sum(1 for a in admins if a.is_active), staff_count=len(staff_ids),
     )
 
 
@@ -956,3 +980,61 @@ def admin_line_settle(user_id):
     db.session.commit()
     flash(f"ปิดยอด{label}ของ {owner.username} แล้ว ({balance:,.2f})", "success")
     return redirect(url_for("admin_line_detail", user_id=owner.id))
+
+
+# ----------------------------------------------------------------- ทีมงานแอดมิน
+def picked_permissions():
+    return ",".join(key for key in ADMIN_STAFF_PERMISSION_LABELS if key in request.form.getlist("perm"))
+
+
+@app.route("/admin/staff", methods=["GET", "POST"])
+@admin_required
+def admin_staff():
+    """เจ้าของ (แอดมินเต็มสิทธิ์) เพิ่มทีมงานและเลือกสิทธิ์รายหมวด — ทีมงานเข้าหน้านี้ไม่ได้"""
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        full_name = request.form.get("full_name", "").strip()
+        permissions = picked_permissions()
+        if not valid_username(username):
+            flash("ชื่อผู้ใช้ต้องมีอย่างน้อย 4 ตัว และใช้ภาษาอังกฤษ ตัวเลข หรืออักขระพิเศษเท่านั้น", "error")
+        elif not valid_password(password):
+            flash("รหัสผ่านต้องมีอย่างน้อย 6 ตัว และใช้ภาษาอังกฤษ ตัวเลข หรืออักขระพิเศษเท่านั้น", "error")
+        elif username_taken(username):
+            flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
+        elif not permissions:
+            flash("กรุณาเลือกสิทธิ์อย่างน้อย 1 หมวด", "error")
+        else:
+            user = User(username=username, full_name=full_name or username, role="admin", points=0, credit_balance=0.0)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.flush()
+            db.session.add(AdminStaff(user_id=user.id, permissions=permissions, created_by=current_user().id))
+            audit_admin(current_user(), "create_staff", "user", user.id, permissions)
+            db.session.commit()
+            flash(f"เพิ่มทีมงาน {username} แล้ว", "success")
+        return redirect(url_for("admin_staff"))
+    rows = AdminStaff.query.order_by(AdminStaff.id.desc()).all()
+    last_login = dict(
+        db.session.query(LoginHistory.user_id, func.max(LoginHistory.created_at))
+        .filter(LoginHistory.user_id.in_([r.user_id for r in rows] or [-1])).group_by(LoginHistory.user_id).all()
+    )
+    return render_template(
+        "admin_staff.html", rows=rows, labels=ADMIN_STAFF_PERMISSION_LABELS,
+        last_login={k: local_time(v) for k, v in last_login.items()},
+    )
+
+
+@app.route("/admin/staff/<int:staff_id>/permissions", methods=["POST"])
+@admin_required
+def admin_staff_permissions_update(staff_id):
+    row = db.session.get(AdminStaff, staff_id) or abort(404)
+    permissions = picked_permissions()
+    if not permissions:
+        flash("กรุณาเลือกสิทธิ์อย่างน้อย 1 หมวด (หรือระงับบัญชีแทน)", "error")
+    else:
+        row.permissions = permissions
+        audit_admin(current_user(), "update_staff_permissions", "user", row.user_id, permissions)
+        db.session.commit()
+        flash(f"บันทึกสิทธิ์ของ {row.user.username} แล้ว", "success")
+    return redirect(url_for("admin_staff"))

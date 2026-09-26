@@ -4,7 +4,8 @@
 <section class="admin-section"><div class="container">
   <header class="page-head">
     <div><span class="eyebrow">ADMIN ACCOUNTS</span><h1 class="page-title">บัญชีแอดมิน</h1>
-      <p class="section-desc">เพิ่ม ระงับ หรือตั้งรหัสผ่านใหม่ให้แอดมิน — ต้องมีแอดมินที่ใช้งานได้อย่างน้อย 1 บัญชี</p></div>
+      <p class="section-desc">แอดมินเต็มสิทธิ์ — เพิ่ม ระงับ หรือตั้งรหัสผ่านใหม่ · ต้องมีแอดมินที่ใช้งานได้อย่างน้อย 1 บัญชี · ต้องการให้คนช่วยงานเฉพาะบางหมวด ให้เพิ่มเป็น "ทีมงาน"</p></div>
+    <a href="{{ url_for('admin_staff') }}" class="btn btn-primary"><i class="fas fa-people-group"></i> ทีมงานแอดมิน ({{ staff_count }})</a>
   </header>
   <div class="dashboard-layout">
     <article class="panel">

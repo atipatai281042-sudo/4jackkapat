@@ -42,7 +42,7 @@ from models import (
     PartnerMemberRate, SeniorMemberRate, PartnerMemberStockShare, SeniorMemberStockShare,
     WalletTransaction, Notification, AdminAuditLog, ResponsiblePlayProfile,
     SystemSetting, DepositRequest, WithdrawalRequest, UserBankAccount, LotteryCategory,
-    LoginHistory, Announcement
+    LoginHistory, Announcement, AdminStaff
 )
 
 # ==========================================================
@@ -157,6 +157,7 @@ def inject_globals():
     contact_setting = SystemSetting.query.filter_by(key="admin_contact_url").first()
     return {
         "current_user": user,
+        "staff_perms": admin_staff_permissions(user) if user is not None and user.is_admin else None,
         "unread_notifications": Notification.query.filter_by(user_id=user.id, is_read=False).count() if user else 0,
         "now": app_now(),
         "HeroBanner": HeroBanner,
@@ -553,8 +554,71 @@ def admin_required(view):
             return redirect(url_for("login"))
         if not user.is_admin:
             abort(403)
+        if not admin_staff_allowed(user, request.endpoint):
+            abort(403)
         return view(*args, **kwargs)
     return wrapper
+
+
+ADMIN_STAFF_PERMISSION_LABELS = {
+    "users": "ผู้ใช้/สมาชิก/สายงาน (ดู แก้ไข ย้ายสังกัด ระงับ)",
+    "password": "รีเซ็ตรหัสผ่านผู้ใช้",
+    "money": "เครดิต · อนุมัติฝาก-ถอน · ปิดยอดคอม/หุ้น",
+    "tickets": "โพยสมาชิก · ยกเลิกโพย",
+    "reports": "รายงานทั้งระบบ",
+    "lottery": "ผลหวย · อัตราจ่าย · งวด · ห้อง · หมวด",
+    "content": "ประกาศ · แบนเนอร์ · สื่อ · ติดต่อ · แบรนด์ · ของรางวัล",
+    "audit": "Audit log",
+}
+_STAFF_ENDPOINTS = {
+    "users": (
+        "admin", "admin_users", "admin_user_new", "admin_user_detail", "admin_user_update", "admin_user_status",
+        "admin_user_move", "admin_lines", "admin_line_detail", "admin_partners", "admin_seniors", "admin_update_partner",
+        "admin_update_senior", "admin_add_partner_bank_account", "admin_delete_partner_bank_account",
+        "admin_add_senior_bank_account", "admin_delete_senior_bank_account", "admin_logins", "admin_toggle_user",
+        "admin_toggle_bank_account",
+    ),
+    "password": ("admin_user_password",),
+    "money": (
+        "admin_user_credit", "admin_adjust_credits", "admin_adjust_points", "admin_wallet", "admin_process_deposit",
+        "admin_process_withdrawal", "admin_partner_payout", "admin_senior_payout", "admin_line_settle", "admin_deposit_account",
+    ),
+    "tickets": ("admin_lottery_tickets", "admin_lottery_ticket", "admin_cancel_ticket"),
+    "reports": ("admin_reports", "admin_report_pnl", "admin_report_overall"),
+    "lottery": (
+        "admin_thai_lottery", "admin_periods", "admin_period_action", "admin_lottery_rooms", "admin_lottery_room_edit",
+        "admin_add_lottery_room", "admin_delete_lottery_room", "admin_blocked_numbers", "admin_delete_blocked_number",
+        "admin_lottery_categories", "admin_rename_lottery_category", "admin_delete_lottery_category",
+    ),
+    "content": (
+        "admin_announcements", "admin_toggle_announcement", "admin_delete_announcement", "admin_banners", "admin_delete_banner",
+        "admin_delete_uploaded_banner", "admin_media", "admin_delete_media", "admin_contact", "admin_branding",
+        "admin_add_reward", "admin_edit_reward", "admin_delete_reward", "admin_purge_reward", "admin_update_redemption", "admin_vip",
+    ),
+    "audit": ("admin_audit",),
+}
+STAFF_ENDPOINT_PERMISSION = {endpoint: perm for perm, endpoints in _STAFF_ENDPOINTS.items() for endpoint in endpoints}
+STAFF_ALWAYS_ALLOWED = {"admin_account"}  # เปลี่ยนรหัสผ่านตัวเอง
+
+
+def admin_staff_row(user):
+    return AdminStaff.query.filter_by(user_id=user.id).first() if user else None
+
+
+def admin_staff_permissions(user):
+    """None = แอดมินเต็มสิทธิ์ · ไม่งั้นคือเซตสิทธิ์ของทีมงาน"""
+    row = admin_staff_row(user)
+    if row is None:
+        return None
+    return {item.strip() for item in (row.permissions or "").split(",") if item.strip()}
+
+
+def admin_staff_allowed(user, endpoint):
+    perms = admin_staff_permissions(user)
+    if perms is None or endpoint in STAFF_ALWAYS_ALLOWED:
+        return True
+    needed = STAFF_ENDPOINT_PERMISSION.get(endpoint)
+    return needed is not None and needed in perms  # หน้าที่ไม่อยู่ในรายการ (จัดการแอดมิน/ทีมงาน/import-export) = เฉพาะเจ้าของ
 
 
 ASSISTANT_PERMISSION_LABELS = {

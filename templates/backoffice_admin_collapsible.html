@@ -30,7 +30,7 @@
       <span class="bo-nav-label">ภาพรวม</span>
       <a class="is-active" href="{{ url_for('dashboard') }}"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
 
-      {{ admin_nav(main_app_url, '/dashboard') }}
+      {{ admin_nav(main_app_url, '/dashboard', staff_perms) }}
       <a class="bo-logout" href="{{ url_for('logout') }}"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
     </nav>
   </aside>

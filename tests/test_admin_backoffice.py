@@ -71,7 +71,7 @@ def bet(ids, key, number, amount=100, bet_type="2up"):
 def admin_urls(ids):
     return [
         "/admin", "/admin/users", "/admin/users?role=member&q=mem&status=active", "/admin/users?role=assistant", "/admin/users?role=partner",
-        "/admin/users/new", f"/admin/users/{ids['m1']}", f"/admin/users/{ids['agent']}", f"/admin/users/{ids['senior']}",
+        "/admin/users/new", "/admin/staff", f"/admin/users/{ids['m1']}", f"/admin/users/{ids['agent']}", f"/admin/users/{ids['senior']}",
         f"/admin/users/{ids['helper']}", f"/admin/users/{ids['admin']}", "/admin/admins", "/admin/account", "/admin/logins",
         "/admin/lines", f"/admin/lines/{ids['senior']}", f"/admin/lines/{ids['agent']}", f"/admin/lines/{ids['sub']}",
         "/admin/periods", "/admin/periods?state=open", "/admin/reports", "/admin/reports?range=today",
@@ -444,3 +444,68 @@ def test_non_admin_cannot_reach_admin_pages(world):
     for url in ("/admin/users", "/admin/reports", "/admin/lines", "/admin/periods", "/admin/admins"):
         assert member_client.get(url).status_code == 403, url
     assert member_client.post(f"/admin/users/{ids['m0']}/password", data={"new_password": "hacked99"}).status_code == 403
+
+
+def staff_client(client, perms, name="staff1"):
+    client.post("/admin/staff", data={"username": name, "password": "staffpass1", "full_name": "S", "perm": perms})
+    with app.app_context():
+        staff_id = User.query.filter_by(username=name).first().id
+    other = app.test_client()
+    other.environ_base["HTTP_X_BACKOFFICE_INTERNAL"] = app.config["SECRET_KEY"]
+    with other.session_transaction() as session:
+        session["user_id"] = staff_id
+    return other, staff_id
+
+
+def test_staff_only_reaches_the_categories_they_were_given(world):
+    client, ids = world
+    staff, staff_id = staff_client(client, ["tickets", "reports"])
+    assert staff.get("/admin/lottery-tickets").status_code == 200
+    assert staff.get("/admin/reports").status_code == 200
+    assert staff.get("/admin/account").status_code == 200  # เปลี่ยนรหัสตัวเองได้เสมอ
+    for url in ("/admin/users", "/admin/thai-lottery", "/admin/periods", "/admin/wallet", "/admin/audit", "/admin/staff", "/admin/admins", "/admin/import-data"):
+        assert staff.get(url).status_code == 403, url
+    assert staff.post(f"/admin/users/{ids['m1']}/password", data={"new_password": "hacked99"}).status_code == 403
+    assert staff.post(f"/admin/users/{ids['m1']}/credit", data={"action": "add", "amount": "10"}).status_code == 403
+    nav = staff.get("/admin/reports").get_data(as_text=True)
+    assert "/admin/reports/pnl" in nav and "/admin/thai-lottery" not in nav and "/admin/staff" not in nav
+
+
+def test_staff_cannot_touch_admin_accounts_or_create_staff(world):
+    client, ids = world
+    staff, staff_id = staff_client(client, ["users", "password", "money", "tickets"])
+    assert staff.post(f"/admin/users/{ids['admin']}/password", data={"new_password": "hacked99"}).status_code == 403
+    assert staff.post(f"/admin/users/{ids['admin']}/status").status_code == 403
+    assert staff.post(f"/admin/users/{ids['admin']}/credit", data={"action": "add", "amount": "5"}).status_code == 403
+    assert staff.post("/admin/staff", data={"username": "sneaky1", "password": "abcdef", "perm": ["users"]}).status_code == 403
+    assert staff.post("/admin/admins", data={"username": "sneaky2", "password": "abcdef"}).status_code == 403
+    # แต่ทำงานที่ได้สิทธิ์ได้ตามปกติ
+    assert staff.post(f"/admin/users/{ids['m1']}/password", data={"new_password": "okpass12"}).status_code == 302
+    with app.app_context():
+        assert db.session.get(User, ids["m1"]).check_password("okpass12")
+        assert User.query.filter(User.username.in_(["sneaky1", "sneaky2"])).count() == 0
+
+
+def test_staff_cannot_open_or_change_owner_login_and_is_suspendable(world):
+    client, ids = world
+    staff, staff_id = staff_client(client, ["users"])
+    client.post(f"/admin/users/{staff_id}/status")  # เจ้าของระงับทีมงาน → เข้าไม่ได้ทันที
+    assert staff.get("/admin/users").status_code in (302, 403)
+    with app.app_context():
+        assert db.session.get(User, staff_id).is_active is False
+    client.post(f"/admin/users/{staff_id}/status")
+    assert staff.get("/admin/users").status_code == 200
+
+
+def test_staff_permission_update_and_validation(world):
+    client, ids = world
+    staff, staff_id = staff_client(client, ["users"])
+    bad = client.post("/admin/staff", data={"username": "nopermx", "password": "abcdef"}, follow_redirects=True)
+    assert "อย่างน้อย 1 หมวด" in bad.get_data(as_text=True)
+    from app import AdminStaff
+    with app.app_context():
+        row = AdminStaff.query.filter_by(user_id=staff_id).first()
+        row_id = row.id
+    client.post(f"/admin/staff/{row_id}/permissions", data={"perm": ["reports", "lottery"]})
+    assert staff.get("/admin/users").status_code == 403
+    assert staff.get("/admin/periods").status_code == 200
