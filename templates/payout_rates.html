@@ -10,7 +10,7 @@
   .pr-cat { margin: 26px 0 10px; font-size: 1.15rem; font-weight: 700; }
 </style>
 <section class="page-section"><div class="container">
-  <header class="page-head"><div><h1 class="page-title">อัตราการจ่าย</h1><p class="section-desc">อัตราจ่ายและส่วนลดของแต่ละหมวดหมู่หวย{% if current_user and current_user.is_authenticated %} (ค่าที่บัญชีของคุณได้รับจริง){% endif %}</p></div></header>
+  <header class="page-head"><div><h1 class="page-title">อัตราการจ่าย</h1><p class="section-desc">อัตราจ่ายและส่วนลดของแต่ละหมวดหมู่หวย{% if current_user %} (ค่าที่บัญชีของคุณได้รับจริง){% endif %}</p></div></header>
   {% for section in sections %}
     <h2 class="pr-cat">{{ section.category }}</h2>
     <div class="pr-grid">

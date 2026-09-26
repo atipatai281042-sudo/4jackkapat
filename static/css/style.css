@@ -1031,3 +1031,19 @@ select.form-input { color-scheme: dark; cursor: pointer; }
   .partner-members-panel .data-table .form-input-sm { width: 100%; min-width: 80px; padding: 6px 8px; font-size: 14px; }
   .partner-members-panel .data-table .btn-xs { padding: 6px 8px; font-size: 11px; white-space: nowrap; }
 }
+
+/* เมนู "บัญชีของฉัน" (รวมตั้งค่าการเล่น/เปลี่ยนรหัสผ่าน/กฎกติกา/ติดต่อเรา) และลิงก์ท้ายเว็บ */
+.nav-menu { position: relative; }
+.nav-menu > summary { list-style: none; cursor: pointer; display: flex; align-items: center; }
+.nav-menu > summary::-webkit-details-marker { display: none; }
+.nav-menu .nav-menu-caret { font-size: .65rem; margin-left: 5px; transition: transform .2s; }
+.nav-menu[open] .nav-menu-caret { transform: rotate(180deg); }
+.nav-menu-list { position: absolute; right: 0; top: calc(100% + 6px); min-width: 210px; z-index: 1500; display: grid; padding: 6px;
+  background: var(--color-surface, #101a2c); border: 1px solid var(--color-border, rgba(255,255,255,.12)); border-radius: 10px; box-shadow: 0 14px 34px rgba(0,0,0,.45); }
+.nav-menu-list a { padding: 9px 12px; border-radius: 7px; color: var(--color-text, #e7edf7); text-decoration: none; font-size: 14px; white-space: nowrap; }
+.nav-menu-list a:hover { background: rgba(212, 175, 55, .12); color: var(--color-primary, #f3b63f); }
+@media (max-width: 900px) {
+  .nav-menu-list { position: static; box-shadow: none; border: 0; padding: 0 0 0 14px; min-width: 0; background: transparent; }
+}
+.footer-links a { color: var(--color-text-muted); text-decoration: none; }
+.footer-links a:hover { color: var(--color-primary, #f3b63f); text-decoration: underline; }

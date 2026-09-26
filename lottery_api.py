@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 DEFAULT_BASE_URL = "https://thailottoapi.com"
 
 
-def fetch_json(path, params=None, timeout=20):
+def fetch_json(path, params=None, timeout=8):
     base_url = os.environ.get("THAILOTTO_API_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
     query = urlencode({key: value for key, value in (params or {}).items() if value})
     url = f"{base_url}{path}"

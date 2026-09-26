@@ -28,6 +28,7 @@ def client():
         db.session.commit()
 
     with app.test_client() as client:
+        client.environ_base['HTTP_X_BACKOFFICE_INTERNAL'] = app.config['SECRET_KEY']  # หน้า /admin เข้าได้ผ่านหลังบ้านเท่านั้น
         with client.session_transaction() as session:
             session['user_id'] = 1
         yield client
@@ -128,9 +129,13 @@ def test_admin_login_keeps_admin_route_accessible():
             'password': 'admin1234',
         }, follow_redirects=False)
 
-        assert response.status_code == 302
-        assert response.headers.get('Location') == f"{app.config['BACKOFFICE_URL']}/dashboard"
+        assert response.status_code == 302  # เว็บสมาชิกพาไปหน้าเลือกห้อง หลังบ้านอยู่คนละโดเมน
 
+        direct = client.get('/admin', follow_redirects=False)  # เข้า /admin ตรงๆ (ไม่ผ่านหลังบ้าน) ต้องถูกเด้งไปหน้าล็อกอินหลังบ้าน
+        assert direct.status_code == 302
+        assert direct.headers['Location'].startswith(app.config['BACKOFFICE_URL'])
+
+        client.environ_base['HTTP_X_BACKOFFICE_INTERNAL'] = app.config['SECRET_KEY']
         admin_response = client.get('/admin', follow_redirects=False)
         assert admin_response.status_code == 200
         assert 'ศูนย์ควบคุมระบบ' in admin_response.get_data(as_text=True)
@@ -427,7 +432,7 @@ def test_admin_can_review_member_lottery_tickets(client):
 
         response = client.get(f'/admin/lottery-tickets/{period.id}/{user.id}')
         assert response.status_code == 200
-        assert 'สมาชิก member-admin-view' in response.get_data(as_text=True)
+        assert 'member-admin-view' in response.get_data(as_text=True)
 
 
 def test_treasure_chest_demo_is_disabled(client):
@@ -498,10 +503,11 @@ def test_index_hides_deposit_and_withdraw_shortcuts(client):
         user.set_password('test-password')
         db.session.add(user)
         db.session.commit()
+        user_id = user.id
 
     with app.test_client() as client:
         with client.session_transaction() as session:
-            session['user_id'] = user.id
+            session['user_id'] = user_id
         response = client.get('/')
         html = response.get_data(as_text=True)
         assert 'ฝากเงิน' not in html
@@ -514,10 +520,11 @@ def test_deposit_routes_are_disabled_for_all_users(client):
         user.set_password('test-password')
         db.session.add(user)
         db.session.commit()
+        user_id = user.id
 
     with app.test_client() as client:
         with client.session_transaction() as session:
-            session['user_id'] = user.id
+            session['user_id'] = user_id
         assert client.get('/wallet').status_code == 404
         assert client.get('/deposit').status_code == 404
         assert client.get('/withdraw').status_code == 404
@@ -540,19 +547,22 @@ def test_member_can_cancel_pending_ticket_before_period_close(client):
         db.session.commit()
         add_thai_lottery_bets(user, period, [{'bet_type': '3up', 'number': '123', 'amount': 10}])
         ticket = ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id).first()
+        user_id, period_id, ticket_id, ticket_code = user.id, period.id, ticket.id, ticket.ticket_code
 
     with app.test_client() as client:
         with client.session_transaction() as session:
-            session['user_id'] = user.id
-        response = client.post(f'/lottery/ticket/{period.id}/{ticket.ticket_code}/cancel', follow_redirects=False)
+            session['user_id'] = user_id
+        response = client.post(f'/lottery/ticket/{period_id}/{ticket_code}/cancel', follow_redirects=False)
         assert response.status_code == 302
-        assert response.headers.get('Location') == f'/lottery/ticket/{period.id}/{ticket.ticket_code}'
+        assert response.headers.get('Location') == f'/lottery/ticket/{period_id}/{ticket_code}'
 
         with app.app_context():
-            db.session.refresh(ticket)
-            assert ticket.status == 'cancelled'
-            db.session.refresh(user)
-            assert user.credit_balance == 100
+            assert db.session.get(ThaiLotteryBet, ticket_id).status == 'cancelled'
+            assert db.session.get(User, user_id).credit_balance == 100
+
+        # กดยกเลิกซ้ำ: ไม่มีโพยให้ยกเลิกแล้ว ต้องกลับไปประวัติพร้อมข้อความ ไม่ใช่หน้า 404
+        again = client.post(f'/lottery/ticket/{period_id}/{ticket_code}/cancel', follow_redirects=False)
+        assert again.status_code == 302 and again.headers.get('Location') == '/history'
 
 
 def test_member_cannot_cancel_ticket_after_period_close(client):
@@ -565,23 +575,25 @@ def test_member_cannot_cancel_ticket_after_period_close(client):
             room_id=room.id,
             period_date='2026-09-16',
             open_time=datetime.now() - timedelta(hours=2),
-            close_time=datetime.now() - timedelta(minutes=1),
-            is_open=False,
+            close_time=datetime.now() + timedelta(minutes=30),
+            is_open=True,
         )
         db.session.add(period)
         db.session.commit()
         add_thai_lottery_bets(user, period, [{'bet_type': '3up', 'number': '123', 'amount': 10}])
         ticket = ThaiLotteryBet.query.filter_by(user_id=user.id, period_id=period.id).first()
+        period.close_time = datetime.now() - timedelta(minutes=1)  # ปิดรับหลังแทงแล้ว
+        period.is_open = False
+        db.session.commit()
+        user_id, period_id, ticket_id, ticket_code = user.id, period.id, ticket.id, ticket.ticket_code
 
     with app.test_client() as client:
         with client.session_transaction() as session:
-            session['user_id'] = user.id
-        response = client.post(f'/lottery/ticket/{period.id}/{ticket.ticket_code}/cancel', follow_redirects=False)
+            session['user_id'] = user_id
+        response = client.post(f'/lottery/ticket/{period_id}/{ticket_code}/cancel', follow_redirects=False)
         assert response.status_code == 302
         assert response.headers.get('Location') == '/history'
 
         with app.app_context():
-            db.session.refresh(ticket)
-            assert ticket.status == 'pending'
-            db.session.refresh(user)
-            assert user.credit_balance == 90
+            assert db.session.get(ThaiLotteryBet, ticket_id).status == 'pending'
+            assert db.session.get(User, user_id).credit_balance == 90

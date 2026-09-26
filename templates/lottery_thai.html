@@ -1,13 +1,8 @@
 {% extends "base.html" %}
 
-{% block head %}
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-{% endblock %}
-
 {% block title %}แทงหวย {{ room.name }} - สมบัติสี่จักรพรรดิ{% endblock %}
 
 {% block content %}
-{# หน้าส่งโพยรูปแบบใหม่ — หน้าเดิมเก็บไว้ที่ lottery_thai_old.html #}
 {% set blocked_order = ['2 ตัวล่าง', 'วิ่งล่าง', '3 ตัวโต๊ด', '2 ตัวบน', '3 ตัวบน', 'วิ่งบน', '3 ตัวล่าง'] %}
 <style>
     .bp-page { --bp-cream: #fdecd2; --bp-pink: #f9e1e4; --bp-red: #dc3545; --bp-orange: #ff9800; --bp-green: #4caf50;
@@ -111,12 +106,11 @@
   <aside class="bp-side">
     <div class="bp-clock" id="bp-clock">--</div>
     <div class="bp-user">
-      ชื่อผู้ใช้งาน: <b>{{ current_user.username }}</b><br>
-      ระดับ: <b>Member</b><br>
-      จำนวนเงิน: <b id="bp-balance">{{ "{:,.0f}".format(current_user.credit_balance) }}</b>
+      ระดับ: <b>{% if current_user.is_admin %}แอดมิน{% elif current_user.is_senior %}Senior{% elif current_user.is_partner %}Agent{% elif current_user.vip_tier %}{{ current_user.vip_tier.name }}{% else %}สมาชิก{% endif %}</b>
     </div>
     <div class="bp-user-links">
-      <a href="{{ url_for('wallet') }}"><i class="fas fa-user"></i> ข้อมูลผู้ใช้</a>
+      <a href="{{ url_for('history') }}"><i class="fas fa-receipt"></i> ประวัติโพย</a>
+      <a href="{{ url_for('rules_page') }}"><i class="fas fa-book"></i> กฎกติกา</a>
     </div>
     <details class="bp-side-rates" id="bp-rates" open>
       <summary class="bp-rates-head"><span>อัตราจ่าย <small class="bp-rates-hint">(แตะเพื่อดู/ซ่อน)</small></span><span>{{ room.name }}</span></summary>
@@ -171,14 +165,7 @@
         </div>
 
         <div class="bp-panel" id="bp-quick">
-          <div class="bp-head"><span>แทงเร็ว</span></div>
-          <div class="bp-head" style="margin-top: 6px;">
-            <span>[{{ room.category or 'หวย' }}] {{ room.name }}</span>
-            <span>{{ active_period.period_date }}</span>
-          </div>
-          <hr style="border-color: rgba(220,53,69,.35); margin: 12px 0;">
-
-          <div class="bp-modes" id="bp-modes">
+          <div class="bp-modes" id="bp-modes" style="margin-top: 0;">
             <button type="button" class="bp-mode on" data-mode="2">2 ตัว</button>
             <button type="button" class="bp-mode" data-mode="3">3 ตัว</button>
             <button type="button" class="bp-mode" data-mode="6">6 กลับ</button>
@@ -191,7 +178,7 @@
           </div>
 
           <div class="bp-actions" style="justify-content: flex-end;">
-            <button type="button" class="bp-btn salmon" id="bp-reset"><i class="fas fa-trash"></i> ยกเลิก</button>
+            <button type="button" class="bp-btn salmon" id="bp-reset"><i class="fas fa-eraser"></i> ล้างช่องกรอก</button>
           </div>
 
           <div id="bp-double-wrap" style="margin-top: 8px;">
@@ -212,8 +199,7 @@
         </div>
 
         <div class="bp-panel" id="bp-paste" style="display: none;">
-          <div class="bp-head"><span>วางโพย</span></div>
-          <div style="margin-top: 10px;">
+          <div>
             <label for="bp-paste-text" style="font-size: .72rem; font-weight: 700;">วางโพย</label>
             <textarea id="bp-paste-text" class="bp-input" rows="5" placeholder="การวางโพยระบบจะตัดทุกอย่างหลังเครื่องหมาย = ออก&#10;ตัวอย่าง 187 = 25*23 , 497 = 25*25"></textarea>
           </div>
@@ -237,16 +223,15 @@
           * ยกเลิกโพยได้จนกว่าจะปิดรับแทง<br>
           *** แทงได้ไม่เกิน {{ '{:,}'.format(max_entries) }} รายการ ต่อ 1 โพย ***<br>
           <span style="display: block; margin-top: 4px;">ถ้าเกินกรุณาแยกโพยเพิ่ม ขอบคุณครับ</span>
+          <a href="{{ url_for('rules_page') }}" style="display: inline-block; margin-top: 6px; font-weight: 600; color: #b91c1c; text-decoration: underline;">อ่านกฎกติกาและวิธีคิดรางวัล</a>
         </div>
 
         <div class="bp-summary">
-          <div class="bp-now" id="bp-now">--</div>
-          <div class="bp-left">{% if active_period %}เหลือเวลา <span id="bp-left-value">--</span>{% endif %}</div>
           <div>[{{ room.category or 'หวย' }}] {{ room.name }}{% if active_period %} - {{ active_period.period_date }}{% endif %}</div>
           <div class="bp-total">รวม <span id="bp-total">0</span> บาท</div>
           <div id="bp-discount-line" style="display: none; font-size: .9rem; color: #4b5563;">ส่วนลด <span id="bp-discount">0</span> บาท · หักเครดิตจริง <span id="bp-net">0</span> บาท</div>
           <div class="bp-buttons">
-            <button type="button" class="bp-btn salmon" id="bp-clear">ล้างตาราง</button>
+            <button type="button" class="bp-btn salmon" id="bp-clear">ล้างบิลทั้งหมด</button>
             <button type="button" class="bp-btn green" id="bp-save" disabled>บันทึก</button>
           </div>
         </div>
@@ -267,7 +252,7 @@
           </tbody>
         </table>
 
-        <h4 style="margin-top: 26px;">เลขจ่ายครึ่ง / เลขปิดรับ</h4>
+        <h4 style="margin-top: 26px;">เลขจ่ายครึ่ง / เลขปิดรับ <small style="font-weight: 400; color: #6b7280;">(เลขปิดรับแทงไม่ได้)</small></h4>
         <table class="bp-table bp-plain">
           <thead><tr><th>เลขมาแรง</th><th>เลขจ่ายครึ่ง</th><th>เลขปิดรับ</th></tr></thead>
           <tbody>
@@ -284,14 +269,17 @@
 
         <h4 style="margin-top: 26px;">รายการบิลล่าสุด (แสดง 15 รายการ)</h4>
         <table class="bp-table bp-plain bp-bills">
-          <thead><tr><th>เวลาแทง</th><th>ตลาด</th><th>รายการ</th><th>บาท</th><th>หมายเหตุ</th><th>ลบโพย</th><th>โหลดไฟล์</th></tr></thead>
+          <thead><tr><th>เวลาแทง</th><th>รายการ</th><th>บาท</th><th>หมายเหตุ</th><th>ลบโพย</th><th>โหลดไฟล์</th></tr></thead>
           <tbody>
             {% for t in tickets %}
             <tr>
               <td>{{ t.time }}</td>
-              <td>{{ room.name }}</td>
+              {% if t.all_cancelled %}
+              <td colspan="2" style="color: #6b7280;">{% if t.code %}<a href="{{ url_for('lottery_ticket', period_id=t.period_id, ticket_code=t.code) }}" style="color: #6b7280;">ยกเลิกโพยแล้ว</a>{% else %}ยกเลิกโพยแล้ว{% endif %}</td>
+              {% else %}
               <td>{% if t.code %}<a href="{{ url_for('lottery_ticket', period_id=t.period_id, ticket_code=t.code) }}">{{ t.count }} รายการ</a>{% else %}{{ t.count }} รายการ{% endif %}</td>
               <td>{{ '{:,}'.format(t.amount) }}</td>
+              {% endif %}
               <td>{{ t.remark or '-' }}</td>
               <td>
                 {% if t.can_cancel %}
@@ -303,10 +291,11 @@
               <td>{% if t.code %}<a href="{{ url_for('download_lottery_ticket', period_id=t.period_id, ticket_code=t.code) }}" title="โหลดไฟล์โพย"><i class="fas fa-download"></i></a>{% else %}-{% endif %}</td>
             </tr>
             {% else %}
-            <tr><td colspan="7" style="color: #6b7280;">ไม่พบข้อมูลดังกล่าว</td></tr>
+            <tr><td colspan="6" style="color: #6b7280;">ไม่พบข้อมูลดังกล่าว</td></tr>
             {% endfor %}
           </tbody>
         </table>
+        <div style="text-align: right; margin-top: 8px;"><a href="{{ url_for('history') }}" style="color: #b45309; font-weight: 600;">ดูโพยทั้งหมดที่ประวัติโพย &rsaquo;</a></div>
       </section>
     </div>
   </main>
@@ -340,6 +329,7 @@
     }
     const MAX_ENTRIES = {{ max_entries }};
     const HAS_PERIOD = {{ 'true' if active_period else 'false' }};
+    const CLOSED = {{ closed_numbers|tojson }};  // เลขปิดรับ {ประเภท: [เลข]}
 
     const $ = (id) => document.getElementById(id);
     const fmt = (n) => Number(n).toLocaleString('en-US');
@@ -352,12 +342,11 @@
     const remaining0 = parseInt($('bp-countdown').dataset.remaining || '0', 10);
     const pad = (n) => String(n).padStart(2, '0');
     function tick() {
-        $('bp-clock').textContent = $('bp-now').textContent = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(' ', ', ');
+        $('bp-clock').textContent = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(' ', ', ');
         if (!HAS_PERIOD) return;
         const left = Math.max(0, remaining0 - Math.floor((Date.now() - bornAt) / 1000));
         const text = left > 0 ? `${pad(Math.floor(left / 3600))}: ${pad(Math.floor(left % 3600 / 60))}: ${pad(left % 60)}` : 'ปิดรับแล้ว';
         $('bp-countdown-value').textContent = text;
-        $('bp-left-value').textContent = text;
         if (left === 0 && !closed) {
             // ไม่โหลดหน้าใหม่ — โพยที่กำลังกรอกยังอยู่ให้ดู แต่ส่งไม่ได้แล้ว
             closed = true;
@@ -401,11 +390,13 @@
         'eo':  { label: 'คู่คี่',    choices: ['คู่', 'คี่'], cols: [['บน', 'oddeven_up'], ['ล่าง', 'oddeven_down']] },
         'hl':  { label: 'สูงต่ำ',    choices: ['สูง', 'ต่ำ'], cols: [['บน', 'highlow_up'], ['ล่าง', 'highlow_down']] },
     };
-    const hasType = (type) => TIERS.some((t) => t.rows.some((r) => r.key === type));
+    const hasType = (type) => TIERS.some((t) => t.rows.some((r) => r.key === type && Number(r.rate) > 0));
     const colsOf = (m) => MODES[m].cols.filter(([, type]) => hasType(type));
     let picked = [];
-    document.querySelectorAll('#bp-modes .bp-mode[hidden]').forEach((b) => { if (colsOf(b.dataset.mode).length) b.hidden = false; });
-    let mode = '2';
+    document.querySelectorAll('#bp-modes .bp-mode').forEach((b) => { b.hidden = colsOf(b.dataset.mode).length === 0; });
+    const firstMode = [...document.querySelectorAll('#bp-modes .bp-mode')].find((b) => !b.hidden);
+    if (!firstMode) { $('bp-add').disabled = true; $('bp-paste-add').disabled = true; showModal('ห้องนี้ยังไม่เปิดรับแทงประเภทใดเลย กรุณาติดต่อเอเย่นต์'); return; }
+    let mode = firstMode.dataset.mode;
     let reverse = false;
     let bills = [];
 
@@ -527,6 +518,12 @@
         }
         return true;
     }
+    function checkClosed(entries) {
+        for (const e of entries) {
+            if ((CLOSED[e.bet_type] || []).includes(e.number)) { showModal(`เลข ${e.number} (${TYPE_LABEL[e.bet_type]}) ปิดรับแล้ว กรุณาเอาออกจากรายการ`); return false; }
+        }
+        return true;
+    }
     function totalDiscount() {
         const sum = bills.reduce((s, b) => s + b.entries.reduce((x, e) => x + Math.round(e.amount * ((limitsFor(e.bet_type) || {}).discount || 0)) / 100, 0), 0);
         return Math.round(sum * 100) / 100;
@@ -567,7 +564,7 @@
             showModal(mode === 'win' ? 'วินเลขต้องกรอกเลขที่ต่างกันอย่างน้อย 2 ตัว เช่น 1 2 3' : 'ไม่มีรายการที่จะเพิ่ม กรุณาตรวจเลขและราคา');
             return;
         }
-        if (!checkLimits(entries)) return;
+        if (!checkLimits(entries) || !checkClosed(entries)) return;
         const ok = pushBill({
             title: cfg.label + (mode === '2' && reverse ? ' (กลับเลข)' : ''),
             colNames: cols.map((c) => c[0]),
@@ -600,7 +597,7 @@
             if (amt > 0) { entries.push({ bet_type: type, number: num, amount: amt }); if (!used.includes(num)) used.push(num); }
         }));
         if (!entries.length) { showModal('ไม่มีเลขที่ตรงกับราคาที่ใส่\n(เลข 3 หลักใช้ราคา บน/ล่าง/โต๊ด, 2 หลักใช้ บน/ล่าง, 1 หลักใช้ บน/ล่าง)'); return; }
-        if (!checkLimits(entries)) return;
+        if (!checkLimits(entries) || !checkClosed(entries)) return;
         const ok = pushBill({ title: 'วางโพย', colNames: ['บน', 'ล่าง', 'โต๊ด'], amounts: [top || 0, bottom || 0, tote || 0], numbers: used, entries });
         if (ok) { $('bp-paste-text').value = ''; $('bp-paste-top').value = $('bp-paste-bottom').value = $('bp-paste-tote').value = ''; }
     });
@@ -633,6 +630,8 @@
     // ---------- บันทึก (ส่งโพย) ----------
     $('bp-save').addEventListener('click', () => {
         if (!bills.length) return;
+        const allEntries = bills.flatMap((b) => b.entries);
+        if (!checkLimits(allEntries) || !checkClosed(allEntries)) return;
         const total = bills.reduce((s, b) => s + b.entries.reduce((x, e) => x + e.amount, 0), 0);
         const count = entryCount();
         const discount = totalDiscount();
@@ -663,7 +662,7 @@
                     if (data && data.ok) {
                         bills = [];
                         $('bp-remark').value = '';
-                        if (typeof data.balance === 'number') { $('bp-balance').textContent = fmt(Math.round(data.balance)); }
+                        if (typeof data.balance === 'number') { const chip = document.getElementById('header-credit-value'); if (chip) chip.textContent = Number(data.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
                         renderBills();
                         showModal(data.message, { title: 'ส่งโพยสำเร็จ', after: () => location.reload() });
                     } else if (data) {
@@ -693,7 +692,7 @@
         });
     }
 
-    setMode('2');
+    setMode(mode);
     renderBills();
 })();
 </script>

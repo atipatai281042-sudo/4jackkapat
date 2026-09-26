@@ -41,8 +41,11 @@
                         <div class="mb-3">
                             <label class="form-label fw-bold" for="blocked-payout">อัตราจ่ายใหม่</label>
                             <input id="blocked-payout" type="number" name="payout_multiplier" class="form-input"
-                                   min="0.01" step="0.01" placeholder="เช่น 45" required>
+                                   min="0.01" step="0.01" placeholder="เช่น 45">
                             <small class="text-muted">กรอกเป็นจำนวนเท่าที่จ่าย เช่น 45 จากเรทปกติ 90</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-check-label fw-bold"><input type="checkbox" name="close_number" value="1" onchange="document.getElementById('blocked-payout').disabled=this.checked"> ปิดรับเลขนี้ (แทงไม่ได้เลย)</label>
                         </div>
                         <button type="submit" class="btn btn-primary btn-block fw-bold"><i class="fas fa-save"></i> บันทึกเรทเลข</button>
                     </form>
@@ -84,7 +87,7 @@
                                     </span>
                                 </td>
                                 <td><strong class="blocked-number">{{ item.number }}</strong></td>
-                                <td><strong class="blocked-rate">{{ "{:,.2f}".format(item.payout_multiplier) }}</strong></td>
+                                <td><strong class="blocked-rate">{% if item.payout_multiplier <= 0 %}ปิดรับ{% else %}{{ "{:,.2f}".format(item.payout_multiplier) }}{% endif %}</strong></td>
                                 <td>
                                     <form action="{{ url_for('admin_delete_blocked_number', blocked_id=item.id) }}" method="POST" class="d-inline">
                                         <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('ต้องการลบเลขอั้น {{ item.number }} นี้ใช่หรือไม่?')">

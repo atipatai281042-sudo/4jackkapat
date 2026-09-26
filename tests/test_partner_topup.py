@@ -24,6 +24,7 @@ def partner_client():
         ids = {"partner": partner.id, "member": member.id, "other": other.id}
 
     with app.test_client() as client:
+        client.environ_base["HTTP_X_BACKOFFICE_INTERNAL"] = app.config["SECRET_KEY"]
         with client.session_transaction() as session:
             session["user_id"] = ids["partner"]
         yield client, ids
@@ -59,10 +60,9 @@ def test_partner_self_deposit_request_is_disabled(partner_client):
         data={"action": "deposit", "amount": "50", "proof_url": "/static/uploads/proof.png"},
     )
 
-    assert response.status_code == 302
+    assert response.status_code == 404  # ระบบฝาก-ถอนปิดถาวร
     with app.app_context():
         assert DepositRequest.query.filter_by(user_id=ids["partner"]).count() == 0
-    assert response.headers.get("Location") == "/lottery/rooms"
 
 
 def test_member_login_redirects_to_lottery_rooms(partner_client):
@@ -88,5 +88,4 @@ def test_partner_wallet_is_hidden_and_disabled(partner_client):
 
     response = client.get("/wallet", follow_redirects=False)
 
-    assert response.status_code == 302
-    assert response.headers.get("Location") == "/lottery/rooms"
+    assert response.status_code == 404

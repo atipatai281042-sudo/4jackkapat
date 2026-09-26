@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  {% block viewport %}{% if current_user and (current_user.is_admin or current_user.is_partner) %}<meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes" />{% else %}<meta name="viewport" content="width=device-width, initial-scale=1.0" />{% endif %}{% endblock %}
+  {% block viewport %}{% if current_user and (current_user.is_admin or current_user.is_partner or current_user.is_senior) %}<meta name="viewport" content="width=1180, initial-scale=0.3, minimum-scale=0.3, maximum-scale=5.0, user-scalable=yes" />{% else %}<meta name="viewport" content="width=device-width, initial-scale=1.0" />{% endif %}{% endblock %}
   {% block head %}{% endblock %}
   <title>{% block title %}mklotto — ระบบแทงหวยออนไลน์{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -34,17 +34,24 @@
       </button>
 
       <nav class="main-nav" id="main-navigation">
-        <a href="{{ url_for('index') }}" class="nav-link"><i class="fas fa-home me-1"></i> หน้าแรก</a>
+        {% if not current_user %}<a href="{{ url_for('index') }}" class="nav-link"><i class="fas fa-home me-1"></i> หน้าแรก</a>{% endif %}
         <a href="{{ url_for('lottery_rooms') }}" class="nav-link"><i class="fas fa-dice me-1"></i> ห้องแทงหวย</a>
         <a href="{{ url_for('lottery_results') }}" class="nav-link"><i class="fas fa-square-poll-vertical me-1"></i> ผลหวย</a>
         <a href="{{ url_for('payout_rates_page') }}" class="nav-link"><i class="fas fa-sack-dollar me-1"></i> อัตราจ่าย</a>
         {% if current_user %}
-          <a href="{{ url_for('dashboard') }}" class="nav-link"><i class="fas fa-chart-line me-1"></i> แดชบอร์ด</a>
           <a href="{{ url_for('history') }}" class="nav-link"><i class="fas fa-receipt me-1"></i> ประวัติโพย</a>
           {% if points_rewards_enabled %}<a href="{{ url_for('treasure_chest') }}" class="nav-link nav-link-treasure"><i class="fas fa-box-open me-1"></i> เปิดหีบสมบัติ</a>{% endif %}
           <a href="{{ url_for('notifications') }}" class="nav-link"><i class="fas fa-bell me-1"></i> แจ้งเตือน{% if unread_notifications %}<span class="notification-count">{{ unread_notifications }}</span>{% endif %}</a>
           {% if admin_contact_url %}<a href="{{ admin_contact_url }}" class="nav-link nav-link-contact" target="_blank" rel="noopener"><i class="fab fa-line me-1"></i> ติดต่อแอดมิน</a>{% endif %}
-          <a href="{{ url_for('responsible_play') }}" class="nav-link"><i class="fas fa-shield-heart me-1"></i> ตั้งค่าการเล่น</a>
+          <details class="nav-menu">
+            <summary class="nav-link"><i class="fas fa-circle-user me-1"></i> บัญชีของฉัน <i class="fas fa-chevron-down nav-menu-caret"></i></summary>
+            <div class="nav-menu-list">
+              <a href="{{ url_for('responsible_play') }}"><i class="fas fa-shield-heart me-1"></i> ตั้งค่าการเล่น</a>
+              <a href="{{ url_for('change_password') }}"><i class="fas fa-key me-1"></i> เปลี่ยนรหัสผ่าน</a>
+              <a href="{{ url_for('rules_page') }}"><i class="fas fa-book me-1"></i> กฎกติกา</a>
+              <a href="{{ url_for('contact_page') }}"><i class="fas fa-headset me-1"></i> ติดต่อเรา</a>
+            </div>
+          </details>
         {% endif %}
       </nav>
 
@@ -56,18 +63,17 @@
           </div>{% endif %}
           <div class="points-chip credit-chip">
             <span class="points-chip-label">เครดิต</span>
-            <span class="points-chip-value">{{ "{:,.2f}".format(current_user.credit_balance) }}</span>
+            <span class="points-chip-value" id="header-credit-value">{{ "{:,.2f}".format(current_user.credit_balance) }}</span>
           </div>
           {% if current_user.vip_tier %}
             <span class="vip-mini-badge" title="ระดับสมาชิก {{ current_user.vip_tier.name }}">VIP: {{ current_user.vip_tier.badge_text or current_user.vip_tier.name }}</span>
           {% endif %}
           <span class="user-name">
             {{ current_user.username }}
-            <span class="role-badge {{ 'role-badge-admin' if current_user.is_admin else ('role-badge-partner' if current_user.is_partner else 'role-badge-member') }}">
-              {% if current_user.is_admin %}ADMIN{% elif current_user.is_partner %}PARTNER{% else %}MEMBER{% endif %}
+            <span class="role-badge {{ 'role-badge-admin' if current_user.is_admin else ('role-badge-partner' if (current_user.is_partner or current_user.is_senior) else 'role-badge-member') }}">
+              {% if current_user.is_admin %}ADMIN{% elif current_user.is_senior %}SENIOR{% elif current_user.is_partner %}AGENT{% else %}MEMBER{% endif %}
             </span>
           </span>
-          <a href="{{ url_for('change_password') }}" class="btn btn-ghost btn-sm"><i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน</a>
           <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">ออกจากระบบ</a>
         {% else %}
           <a href="{{ url_for('login') }}" class="btn btn-ghost btn-sm">เข้าสู่ระบบ</a>
@@ -97,8 +103,8 @@
 
   <footer class="site-footer">
     <div class="container footer-inner">
-      <p class="footer-text">© {{ now.year }} mklotto — ระบบทายผลตัวเลข</p>
-      <p class="footer-text footer-muted">พัฒนาด้วย Flask + SQLAlchemy</p>
+      <p class="footer-text">© {{ now.year }} {{ brand_name }} — ระบบทายผลตัวเลข</p>
+      <p class="footer-text footer-links"><a href="{{ url_for('rules_page') }}">กฎกติกา</a> · <a href="{{ url_for('payout_rates_page') }}">อัตราจ่าย</a> · <a href="{{ url_for('contact_page') }}">ติดต่อเรา</a> · <a href="{{ url_for('privacy_page') }}">นโยบายความเป็นส่วนตัว</a></p>
     </div>
   </footer>
 

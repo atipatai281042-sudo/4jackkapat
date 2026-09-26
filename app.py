@@ -6,6 +6,7 @@ import os
 import random
 import secrets
 import string
+import time
 import csv
 import io
 import itertools
@@ -500,15 +501,30 @@ def reverse_period_settlement(period, admin_user):
     return True, ""
 
 
+API_SYNC_INTERVAL_SECONDS = 60      # ซิงก์ห้อง/งวด/ผลจาก API ภายนอกอย่างมากสุดนาทีละครั้ง (เดิมทุกหน้าที่เปิด)
+API_SYNC_FAILURE_BACKOFF_SECONDS = 180  # API ล่ม/ช้า → เว้นก่อนลองใหม่ ไม่ให้ทุกคำขอต้องรอ
+_api_sync_state = {"next_at": 0.0}
+
+
 @app.before_request
 def refresh_lottery_catalog_on_each_request():
-    """Force-refresh API-backed lottery rooms on each normal page load."""
-    if (app.testing and fetch_results is ORIGINAL_FETCH_RESULTS) or request.endpoint in {"static", "login", "logout"}:
+    """ซิงก์ห้อง/งวด/ผลหวยจาก API แบบจำกัดความถี่ — ทำเฉพาะตอนเปิดหน้า (GET) ไม่ทำตอนส่งโพยหรือกดปุ่มต่าง ๆ
+    เพราะ worker ตัวเดียวรับทุกคำขอ ถ้าทุกหน้ารอ API ภายนอก ทุกคนจะค้างตามกัน"""
+    if (app.testing and fetch_results is ORIGINAL_FETCH_RESULTS) or request.endpoint in {"static", "login", "logout", "health_check"}:
         return
+    if not app.testing:
+        if request.method != "GET":
+            return
+        current = time.monotonic()
+        if current < _api_sync_state["next_at"]:
+            return
+        _api_sync_state["next_at"] = current + API_SYNC_INTERVAL_SECONDS
     try:
         sync_lottery_api_results()
     except Exception:
         db.session.rollback()
+        if not app.testing:
+            _api_sync_state["next_at"] = time.monotonic() + API_SYNC_FAILURE_BACKOFF_SECONDS
 
 
 def login_required(view):
@@ -1163,10 +1179,12 @@ def ensure_betting_allowed(user, amount, room_id=None):
     if profile and profile.self_excluded_until and profile.self_excluded_until > datetime.now():
         raise ValueError("บัญชีของคุณอยู่ในช่วงพักการเล่น")
     if profile and profile.daily_bet_limit is not None:
-        start_of_day = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        # วันใหม่เริ่มเที่ยงคืนเวลาไทย (created_at เก็บเป็น UTC) และโพยที่ยกเลิกแล้วไม่นับ
+        start_of_day = datetime.combine(app_now().date(), datetime.min.time()) - timedelta(hours=7)
         spent = db.session.query(db.func.coalesce(db.func.sum(ThaiLotteryBet.amount), 0)).filter(
             ThaiLotteryBet.user_id == user.id,
             ThaiLotteryBet.created_at >= start_of_day,
+            ThaiLotteryBet.status != "cancelled",
         ).scalar() or 0
         if float(spent) + float(amount) > float(profile.daily_bet_limit):
             raise ValueError(f"เกินวงเงินเดิมพันต่อวันที่ตั้งไว้ ({profile.daily_bet_limit:,.2f} เครดิต)")
@@ -1538,7 +1556,28 @@ def build_rate_tables(user, category, member_min, member_max, type_rules=None):
     return tables
 
 
+def member_blocked_map(user, room_id):
+    """{(bet_type, number): อัตราจ่าย} ของเลขอั้น/ปิดรับที่สมาชิกคนนี้เจอในห้องนี้ — 0 = ปิดรับ (แทงไม่ได้)
+    ลำดับความสำคัญ: Agent ตรง > Senior ของสาย > เลขอั้นกลางของห้อง (ตรงกับที่ตรวจตอนแทง และที่โชว์ในหน้าแทงหวย)"""
+    result = {}
+    if not room_id:
+        return result
+    for row in BlockedNumber.query.filter_by(room_id=room_id):
+        result[(row.bet_type, row.number)] = float(row.payout_multiplier or 0)
+    if user is not None and user.partner_id:
+        agent = user.partner
+        senior = agent_upline_senior(agent) if agent else None
+        if senior is not None:
+            for row in SeniorBlockedNumber.query.filter_by(senior_id=senior.id, room_id=room_id):
+                result[(row.bet_type, row.number)] = float(row.payout_multiplier or 0)
+        for row in PartnerBlockedNumber.query.filter_by(partner_id=user.partner_id, room_id=room_id):
+            result[(row.bet_type, row.number)] = float(row.payout_multiplier or 0)
+    return result
+
+
 def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
+    """ตรวจทุกรายการก่อน (ไม่แตะฐานข้อมูลถ้ามีรายการใดไม่ผ่าน) แล้วค่อยบันทึกทั้งโพยในครั้งเดียว
+    — ดึงค่าตั้งของสมาชิก/เลขอั้น/วงเงินมาครั้งเดียวต่อโพย ไม่ใช่ต่อรายการ (โพยใหญ่หลักพันรายการต้องไม่ทำให้ระบบค้าง)"""
     if not entries:
         return 0
     if len(entries) > MAX_BET_ENTRIES:
@@ -1561,25 +1600,41 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
     rates = user_lottery_rates(user, category, rate_tier)
     group_limits = member_group_limits(user, category)
     group_overrides = member_group_rate_overrides(user, category, rate_tier)
+    blocked_map = member_blocked_map(user, period.room_id)
+    legacy_limit = get_partner_member_limit(user.partner, user) if user.partner_id else None
+    personal_rates = {}
     number_totals = {}
+    legacy_totals = {}
+    existing_totals = {}
     validated_entries = []
     total_amount = 0
     total_paid = 0.0  # ยอดที่หักจากเครดิตจริง = ยอดแทง − ส่วนลด
     type_rules = get_type_rules()
+
+    def already_bet(bet_type, number):
+        key = (bet_type, number)
+        if key not in existing_totals:
+            existing_totals[key] = member_number_total(user, period, bet_type, number)
+        return existing_totals[key]
+
     for item in entries:
         bet_type, raw_number, amount = validate_lottery_entry(item, rates)
+        label = BET_TYPE_LABELS.get(bet_type, bet_type)
         if amount > MAX_BET_AMOUNT:
             raise ValueError(f"จำนวนเงินเดิมพันต่อรายการต้องไม่เกิน {MAX_BET_AMOUNT:,} เครดิต")
+        if float(rates.get(bet_type) or 0) <= 0:
+            raise ValueError(f"{label} ยังไม่เปิดรับแทงในห้องนี้")
+        blocked_rate = blocked_map.get((bet_type, raw_number))
+        if blocked_rate is not None and blocked_rate <= 0:
+            raise ValueError(f"เลข {raw_number} ({label}) ปิดรับแล้ว กรุณาเอาออกจากโพย")
         type_rule = type_rules.get(bet_type)
         if type_rule:
-            label = BET_TYPE_LABELS.get(bet_type, bet_type)
             if amount < type_rule["min"]:
                 raise ValueError(f"{label} แทงขั้นต่ำ {type_rule['min']:,} บาทต่อรายการ")
             if amount > type_rule["max"]:
                 raise ValueError(f"{label} แทงได้สูงสุด {type_rule['max']:,} บาทต่อรายการ")
         glim = group_limits.get(bet_type)
         if glim:
-            label = BET_TYPE_LABELS.get(bet_type, bet_type)
             if glim["min"] is not None and amount < glim["min"]:
                 raise ValueError(f"{label} แทงขั้นต่ำ {glim['min']:,} บาทต่อรายการ (ตามที่ผู้ดูแลตั้งไว้)")
             if glim["max"] is not None and amount > glim["max"]:
@@ -1587,15 +1642,41 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
             if glim["per_number"] is not None:
                 key = (bet_type, raw_number)
                 number_totals[key] = number_totals.get(key, 0) + amount
-                if member_number_total(user, period, bet_type, raw_number) + number_totals[key] > glim["per_number"]:
+                if already_bet(bet_type, raw_number) + number_totals[key] > glim["per_number"]:
                     raise ValueError(f"{label} เลข {raw_number} แทงรวมได้สูงสุด {glim['per_number']:,} บาทต่อเลข")
+        if legacy_limit:
+            if amount < legacy_limit.min_bet:
+                raise ValueError(f"ยอดแทงขั้นต่ำของคุณคือ {legacy_limit.min_bet:,.2f} เครดิต")
+            if amount > legacy_limit.max_bet:
+                raise ValueError(f"ยอดแทงสูงสุดต่อรายการคือ {legacy_limit.max_bet:,.2f} เครดิต")
+            key = (bet_type, raw_number)
+            legacy_totals[key] = legacy_totals.get(key, 0) + amount  # สูงสุดต่อเลข นับสะสมทั้งโพย + ที่เคยแทงไว้แล้ว
+            if already_bet(bet_type, raw_number) + legacy_totals[key] > legacy_limit.max_number_bet:
+                raise ValueError(f"ยอดแทงสูงสุดต่อเลขคือ {legacy_limit.max_number_bet:,.2f} เครดิต")
+
         group_payout, group_discount, payout_owner, discount_owner = group_overrides.get(bet_type, (None, None, None, None))
         base_discount = tier_set[bet_type].discount_pct if bet_type in tier_set else (type_rule["discount"] if type_rule else 0.0)
         discount_pct = group_discount if group_discount is not None else base_discount
         discount = round(amount * discount_pct / 100, 2)
+
+        if bet_type not in personal_rates:
+            personal_rates[bet_type] = member_specific_rate(user, bet_type)
+        personal_rate = group_payout if group_payout is not None else personal_rates[bet_type]
+        normal_rate = personal_rate if personal_rate is not None else rates[bet_type]
+        payout_excess, payout_grantor = 0.0, None
+        if blocked_rate is not None:
+            rate = min(blocked_rate, normal_rate)  # เลขอั้น = จ่ายครึ่ง ไม่เคยจ่ายเกินอัตราปกติของชุดที่เลือก
+        else:
+            rate = normal_rate
+            if group_payout is not None and rate == group_payout:
+                payout_excess = max(0.0, group_payout - rates[bet_type])
+                payout_grantor = payout_owner if payout_excess > 0 else None
+        if rate <= 0:
+            raise ValueError(f"{label} ยังไม่เปิดรับแทงในห้องนี้")
+
         validated_entries.append({
-            "bet_type": bet_type, "number": raw_number, "amount": amount, "discount": discount,
-            "group_payout": group_payout, "payout_owner": payout_owner,
+            "bet_type": bet_type, "number": raw_number, "amount": amount, "discount": discount, "rate": rate,
+            "payout_excess": payout_excess, "payout_grantor": payout_grantor,
             "discount_excess_pct": max(0.0, discount_pct - base_discount) if group_discount is not None else 0.0,
             "discount_owner": discount_owner if group_discount is not None else None,
         })
@@ -1606,72 +1687,43 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
         return 0
 
     ensure_betting_allowed(user, total_amount, period.room_id)
-    if user.credit_balance < total_paid:
+    total_paid = round(total_paid, 2)
+    if user.credit_balance + 1e-9 < total_paid:
         raise ValueError(f"เครดิตของคุณไม่พอ! (มีอยู่ {user.credit_balance:,.2f} เครดิต)")
 
     ticket_code = f"TK-{app_now().strftime('%Y%m%d%H%M%S%f')}-{random.randint(100, 999)}"
-    created = 0
+    remark_text = (remark or "").strip()[:50] or None
+    new_bets = []
     for entry in validated_entries:
-        bet_type, raw_number, amount, discount = entry["bet_type"], entry["number"], entry["amount"], entry["discount"]
-        group_payout = entry["group_payout"]
-        payout_excess, payout_grantor = 0.0, None
-
-        blocked_rate = partner_blocked_rate(user, period.room_id, bet_type, raw_number)
-        blocked = None
-        if period.room_id and blocked_rate is None:
-            blocked = BlockedNumber.query.filter_by(
-                room_id=period.room_id, bet_type=bet_type, number=raw_number
-            ).first()
-        limit = get_partner_member_limit(user.partner, user) if user.partner_id else None
-        if limit and amount < limit.min_bet:
-            raise ValueError(f"ยอดแทงขั้นต่ำของคุณคือ {limit.min_bet:,.2f} เครดิต")
-        if limit and amount > limit.max_bet:
-            raise ValueError(f"ยอดแทงสูงสุดต่อรายการคือ {limit.max_bet:,.2f} เครดิต")
-        if limit and amount > limit.max_number_bet:
-            raise ValueError(f"ยอดแทงสูงสุดต่อเลขคือ {limit.max_number_bet:,.2f} เครดิต")
-
-        if blocked_rate is not None and blocked_rate > 0:
-            rate = blocked_rate
-        elif blocked and blocked.payout_multiplier > 0:
-            rate = blocked.payout_multiplier
-        else:
-            personal_rate = group_payout if group_payout is not None else member_specific_rate(user, bet_type)
-            rate = personal_rate if personal_rate is not None else rates[bet_type]
-            if group_payout is not None and rate == group_payout:
-                payout_excess = max(0.0, group_payout - rates[bet_type])
-                payout_grantor = entry["payout_owner"] if payout_excess > 0 else None
-
-        total_reward = int(amount * rate)
-        adjust_credit(user, -(amount - discount), f"แทงหวยรัฐบาล งวด {period.period_date} ({bet_type}: {raw_number})")
-
         new_bet = ThaiLotteryBet(
             user_id=user.id,
             period_id=period.id,
-            bet_type=bet_type,
-            number=raw_number,
-            amount=amount,
-            discount_amount=discount,
-            payout_grantor_id=payout_grantor,
-            payout_excess=payout_excess,
+            bet_type=entry["bet_type"],
+            number=entry["number"],
+            amount=entry["amount"],
+            discount_amount=entry["discount"],
+            payout_grantor_id=entry["payout_grantor"],
+            payout_excess=entry["payout_excess"],
             discount_grantor_id=entry["discount_owner"] if entry["discount_excess_pct"] > 0 else None,
             discount_excess_pct=entry["discount_excess_pct"],
-            remark=(remark or "").strip()[:50] or None,
-            rate=rate,
+            remark=remark_text,
+            rate=entry["rate"],
             ticket_code=ticket_code,
-            reward_amount=total_reward,
-            status="pending"
+            reward_amount=int(entry["amount"] * entry["rate"]),
+            status="pending",
         )
         db.session.add(new_bet)
-        db.session.flush()
+        new_bets.append(new_bet)
+    db.session.flush()  # ให้ทุกรายการมี id ก่อนคิดค่าคอม (ครั้งเดียวต่อโพย)
+    # หักเครดิตและแจ้งเตือน "ต่อโพย" ไม่ใช่ต่อรายการ (โพยหลักร้อยรายการไม่ท่วมประวัติกระเป๋า/การแจ้งเตือน)
+    adjust_credit(user, -total_paid, f"แทงหวย งวด {period.period_date} โพย {ticket_code} ({len(new_bets)} รายการ)")
+    for new_bet in new_bets:
         create_partner_commission(new_bet)
         create_agent_upline_commissions(new_bet)
         create_senior_commission(new_bet)
-        notify_user(user, "ส่งโพยสำเร็จ", f"เลข {raw_number} ({bet_type}) ใช้ {amount:,} เครดิต", "bet")
-        created += 1
-
-    if created:
-        db.session.commit()
-    return created
+    notify_user(user, "ส่งโพยสำเร็จ", f"{len(new_bets)} รายการ รวม {total_amount:,} เครดิต (หักจริง {total_paid:,.2f})", "bet")
+    db.session.commit()
+    return len(new_bets)
 
 
 def adjust_points(user: User, change: int, reason: str, admin: User | None = None):
@@ -1787,6 +1839,27 @@ def get_senior_payout_rates(senior):
     }
 
 
+def parse_blocked_number_form():
+    """อ่านฟอร์มเลขอั้น/ปิดรับ (แอดมิน/Agent/Senior ใช้ร่วมกัน)
+    คืน (bet_type, number, อัตราจ่าย, ข้อความผิดพลาด) — ติ๊ก "ปิดรับเลขนี้" = อัตราจ่าย 0 (แทงไม่ได้เลย)"""
+    bet_type = normalize_bet_type(request.form.get("bet_type"))
+    number = request.form.get("number", "").strip()
+    length = BET_NUMBER_LENGTHS.get(bet_type)
+    if not bet_type or length is None:
+        return None, None, None, "กรุณาเลือกประเภทการแทงที่เป็นตัวเลข"
+    if not number.isdigit() or len(number) != length:
+        return None, None, None, f"เลขของ {BET_TYPE_LABELS.get(bet_type, bet_type)} ต้องเป็นตัวเลข {length} หลัก"
+    if request.form.get("close_number") == "1":
+        return bet_type, number, 0.0, None
+    try:
+        payout = float(request.form.get("payout_multiplier", 0))
+    except (TypeError, ValueError):
+        payout = 0.0
+    if payout <= 0:
+        return None, None, None, "กรุณากรอกอัตราจ่ายใหม่ หรือติ๊ก \"ปิดรับเลขนี้\""
+    return bet_type, number, payout, None
+
+
 def partner_blocked_rate(user, room_id, bet_type, number):
     """user = สมาชิกที่กำลังจะแทง — เช็คเลขอั้นของ Agent ตรงก่อน ถ้าไม่เจอค่อยเช็ค
     ของ Senior บนสุดของสาย (ใครตั้งไว้ก่อนใช้ค่านั้น ไม่รวมกัน เพราะเป็นอัตราจ่าย
@@ -1863,9 +1936,18 @@ def index():
     featured_rooms = active_lottery_rooms().limit(6).all()
     featured_periods = {}
     for room in featured_rooms:
-        featured_periods[room.id] = ThaiLotteryPeriod.query.filter_by(room_id=room.id).order_by(ThaiLotteryPeriod.id.desc()).first()
+        featured_periods[room.id] = latest_result_period(room.id)
     
     return render_template("index.html", rewards=rewards, banners=banners, keyword=keyword, featured_rooms=featured_rooms, featured_periods=featured_periods)
+
+
+def latest_result_period(room_id):
+    """งวดล่าสุดที่ "มีผลออกแล้ว" ของห้อง — งวดถัดไปที่เพิ่งเปิดรับ (ยังไม่มีผล) ต้องไม่บังหน้าผลล่าสุด
+    ถ้ายังไม่เคยมีผลเลยให้คืนงวดล่าสุดเพื่อแสดงวันที่งวด"""
+    period = ThaiLotteryPeriod.query.filter(
+        ThaiLotteryPeriod.room_id == room_id, ThaiLotteryPeriod.result_3up.isnot(None), ThaiLotteryPeriod.result_3up != ""
+    ).order_by(ThaiLotteryPeriod.id.desc()).first()
+    return period or ThaiLotteryPeriod.query.filter_by(room_id=room_id).order_by(ThaiLotteryPeriod.id.desc()).first()
 
 
 @app.route("/results")
@@ -1874,8 +1956,7 @@ def lottery_results():
     latest_periods = {}
     grouped_results = {}
     for room in rooms:
-        period = ThaiLotteryPeriod.query.filter_by(room_id=room.id).order_by(ThaiLotteryPeriod.id.desc()).first()
-        latest_periods[room.id] = period
+        latest_periods[room.id] = latest_result_period(room.id)
         category_name = room.category_ref.name if room.category_ref else (room.category or "อื่นๆ")
         grouped_results.setdefault(category_name, []).append(room)
     return render_template("lottery_results.html", rooms=rooms, grouped_results=grouped_results, latest_periods=latest_periods)
@@ -1888,7 +1969,9 @@ def lottery_result_detail(room_id):
         flash("ไม่พบห้องหวยนี้", "error")
         return redirect(url_for("lottery_results"))
     page = request.args.get("page", 1, type=int)
-    pagination = ThaiLotteryPeriod.query.filter_by(room_id=room.id).order_by(ThaiLotteryPeriod.id.desc()).paginate(page=page, per_page=10, error_out=False)
+    pagination = ThaiLotteryPeriod.query.filter(
+        ThaiLotteryPeriod.room_id == room.id, ThaiLotteryPeriod.result_3up.isnot(None), ThaiLotteryPeriod.result_3up != ""
+    ).order_by(ThaiLotteryPeriod.id.desc()).paginate(page=page, per_page=10, error_out=False)
     periods = pagination.items
     latest_period = periods[0] if periods else None
     return render_template("lottery_result_detail.html", room=room, periods=periods, latest_period=latest_period, pagination=pagination)
@@ -2046,30 +2129,15 @@ def lottery_thai():
                     flash("ไม่พบรายการแทงที่ถูกต้อง", "error")
                 return redirect(room_url)
             except ValueError as exc:
+                db.session.rollback()
                 if wants_json:
                     return bet_result(False, str(exc), 400)
                 flash(str(exc), "error")
                 return redirect(room_url)
 
-        bet_type = request.form.get("bet_type")
-        number = request.form.get("number", "").strip()
-        try:
-            amount = int(request.form.get("amount", 0))
-        except ValueError:
-            amount = 0
-
-        if not number or amount <= 0:
-            flash("กรุณากรอกตัวเลขและจำนวนเครดิตให้ถูกต้อง", "error")
-            return redirect(room_url)
-
-        try:
-            created = add_thai_lottery_bets(user, active_period, [{"bet_type": bet_type, "number": number, "amount": amount}], rate_tier=rate_tier, remark=remark)
-            if created:
-                flash(f"ส่งโพยหวยสำเร็จ! เลข {number} ({bet_type}) จำนวน {amount:,} เครดิต", "success")
-            else:
-                flash("ประเภทการแทงไม่ถูกต้อง", "error")
-        except ValueError as exc:
-            flash(str(exc), "error")
+        if wants_json:
+            return bet_result(False, "กรุณาเลือกประเภทและเลขที่ต้องการแทง", 400)
+        flash("กรุณาเลือกประเภทและเลขที่ต้องการแทง", "error")
         return redirect(room_url)
 
     # บิลล่าสุดของสมาชิกในห้องนี้ — จัดกลุ่มตามโพย (ticket_code) เอา 15 ใบล่าสุด
@@ -2089,10 +2157,12 @@ def lottery_thai():
                 "count": 0,
                 "amount": 0,
                 "pending": 0,
+                "cancelled": 0,
                 "remark": bet.remark or "",
             }
         ticket = tickets[code]
         if bet.status == "cancelled":
+            ticket["cancelled"] += 1
             continue
         ticket["count"] += 1
         ticket["amount"] += bet.amount
@@ -2107,6 +2177,7 @@ def lottery_thai():
             ticket["code"] and ticket["pending"] and period and period.is_open
             and period.close_time > now
         )
+        ticket["all_cancelled"] = ticket["count"] == 0 and ticket["cancelled"] > 0
 
     # ผลรางวัล 5 งวดล่าสุดที่ออกแล้ว
     result_rows = []
@@ -2133,12 +2204,14 @@ def lottery_thai():
     tier_tables = build_rate_tables(user, category, member_min, member_max, type_rules)
     my_rates = {row["key"]: row["rate"] for row in tier_tables[0]["rows"]}
 
-    blocked_labels = BET_TYPE_LABELS
-    blocked_rates = {}
-    for item in room.blocked_numbers:
-        label = blocked_labels.get(item.bet_type)
+    blocked_rates = {}  # {ชื่อประเภท: {เลข: อัตราจ่าย}} — 0 = ปิดรับ · รวมเลขอั้นของ Agent/Senior ที่สมาชิกคนนี้โดนจริง
+    closed_numbers = {}  # {bet_type: [เลขปิดรับ]} ให้หน้าเว็บเตือนก่อนส่ง
+    for (bet_type_key, number_key), multiplier in member_blocked_map(user, room.id).items():
+        label = BET_TYPE_LABELS.get(bet_type_key)
         if label:
-            blocked_rates.setdefault(label, {})[item.number] = item.payout_multiplier
+            blocked_rates.setdefault(label, {})[number_key] = multiplier
+        if multiplier <= 0:
+            closed_numbers.setdefault(bet_type_key, []).append(number_key)
 
     return render_template(
         "lottery_thai.html",
@@ -2148,69 +2221,12 @@ def lottery_thai():
         result_rows=result_rows,
         payout_rates=my_rates,
         blocked_rates=blocked_rates,
+        closed_numbers=closed_numbers,
         tier_tables=tier_tables,
         group_blocked=group_blocked,
         max_entries=MAX_BET_ENTRIES,
         remaining_seconds=max(0, int((active_period.close_time - now).total_seconds())) if active_period else 0,
     )
-
-
-@app.route("/lotto/room/<int:room_id>/period/<int:period_id>/submit", methods=["POST"])
-@login_required
-def submit_lotto_action(room_id, period_id):
-    """รองรับการส่งโพยหวยจากหน้า HTML ที่เรียกใช้ url_for('submit_lotto_action', ...)"""
-    user = current_user()
-    room = db.session.get(LotteryRoom, room_id)
-    period = db.session.get(ThaiLotteryPeriod, period_id)
-    close_expired_periods(room_id)
-
-    if not room or not period or period.room_id != room.id or not period.is_open:
-        flash("ขณะนี้ยังไม่มีงวดเปิดรับแทง หรือไม่พบงวดนี้", "error")
-        return redirect(url_for("lottery_thai", room_id=room_id))
-
-    bet_types = request.form.getlist("bet_types[]")
-    numbers = request.form.getlist("numbers[]")
-    amounts = request.form.getlist("amounts[]")
-
-    if bet_types or numbers or amounts:
-        entries = []
-        for idx, bet_type in enumerate(bet_types):
-            entries.append({
-                "bet_type": bet_type,
-                "number": numbers[idx] if idx < len(numbers) else "",
-                "amount": amounts[idx] if idx < len(amounts) else 0,
-            })
-        try:
-            created = add_thai_lottery_bets(user, period, entries)
-            if created:
-                flash(f"ส่งโพยหวยสำเร็จ {created} รายการ", "success")
-            else:
-                flash("ไม่พบรายการแทงที่ถูกต้อง", "error")
-            return redirect(url_for("lottery_thai", room_id=room.id))
-        except ValueError as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("lottery_thai", room_id=room.id))
-
-    bet_type = request.form.get("bet_type")
-    number = request.form.get("number", "").strip()
-    try:
-        amount = int(request.form.get("amount", 0))
-    except ValueError:
-        amount = 0
-
-    if not number or amount <= 0:
-        flash("กรุณากรอกตัวเลขและจำนวนเครดิตให้ถูกต้อง", "error")
-        return redirect(url_for("lottery_thai", room_id=room.id))
-
-    try:
-        created = add_thai_lottery_bets(user, period, [{"bet_type": bet_type, "number": number, "amount": amount}])
-        if created:
-            flash(f"ส่งโพยหวยสำเร็จ! เลข {number} ({bet_type}) จำนวน {amount:,} เครดิต", "success")
-        else:
-            flash("ประเภทการแทงไม่ถูกต้อง", "error")
-    except ValueError as exc:
-        flash(str(exc), "error")
-    return redirect(url_for("lottery_thai", room_id=room.id))
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -2471,16 +2487,20 @@ def lottery_ticket(period_id, ticket_code=None):
         and all(bet.status == "pending" for bet in bets)
     )
 
+    live = [bet for bet in bets if bet.status != "cancelled"]
     return render_template(
         "lottery_ticket.html",
         period=period,
         bets=bets,
-        total_amount=sum(bet.amount for bet in bets),
-        total_discount=sum(bet.discount_amount for bet in bets),
+        total_amount=sum(bet.amount for bet in live),
+        total_discount=sum(bet.discount_amount for bet in live),
         total_reward=sum(bet.reward_amount for bet in bets if bet.status == "win"),
         ticket_code=ticket_code,
         refundable=refundable,
         is_admin_view=False,
+        bet_labels=BET_TYPE_LABELS,
+        status_labels={"pending": "รอผล", "win": "ถูกรางวัล", "lose": "ไม่ถูกรางวัล", "cancelled": "ยกเลิกแล้ว"},
+        shift=timedelta(hours=7),
     )
 
 
@@ -2558,14 +2578,18 @@ def cancel_ticket_bets(bets, reason_text):
 def cancel_lottery_ticket(period_id, ticket_code):
     user = current_user()
     period = db.session.get(ThaiLotteryPeriod, period_id)
-    if not period or not period.is_open or not period.close_time or period.close_time <= app_now():
+    if not period:
         abort(404)
+    if not period.is_open or not period.close_time or period.close_time <= app_now():
+        flash("ปิดรับแทงงวดนี้แล้ว ไม่สามารถยกเลิกโพยได้", "error")
+        return redirect(url_for("history"))
 
     bets = ThaiLotteryBet.query.filter_by(
         user_id=user.id, period_id=period.id, ticket_code=ticket_code, status="pending"
     ).all()
     if not bets:
-        abort(404)
+        flash("ไม่พบโพยที่ยกเลิกได้ (อาจถูกยกเลิกไปแล้ว หรือออกผลแล้ว)", "warning")
+        return redirect(url_for("history"))
 
     refund_amount = cancel_ticket_bets(bets, "สมาชิกยกเลิกเอง")
     adjust_credit(user, refund_amount, f"คืนโพยหวย {ticket_code}")
@@ -2764,28 +2788,8 @@ def withdraw_page():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    user = current_user()
-    recent_logs = PointLog.query.filter_by(user_id=user.id).order_by(PointLog.created_at.desc()).limit(5).all()
-    recent_redemptions = RedemptionHistory.query.filter_by(user_id=user.id).order_by(RedemptionHistory.created_at.desc()).limit(5).all()
-    recent_bets = ThaiLotteryBet.query.filter_by(user_id=user.id).order_by(ThaiLotteryBet.created_at.desc()).limit(5).all()
-    rooms = active_lottery_rooms().all()
-
-    stats = {
-        "points": user.points,
-        "rewards": RedemptionHistory.query.filter_by(user_id=user.id).count(),
-        "bets": ThaiLotteryBet.query.filter_by(user_id=user.id).count(),
-        "rooms": len(rooms),
-    }
-
-    return render_template(
-        "dashboard.html",
-        user=user,
-        recent_logs=recent_logs,
-        recent_redemptions=recent_redemptions,
-        recent_bets=recent_bets,
-        rooms=rooms,
-        stats=stats,
-    )
+    """แดชบอร์ดเดิมมีแต่ข้อมูลที่ซ้ำกับประวัติโพย — ยุบรวมแล้ว (เก็บ URL ไว้ไม่ให้ลิงก์เก่าพัง)"""
+    return redirect(url_for("history"))
 
 
 @app.route("/games/treasure-chest")
@@ -4125,14 +4129,11 @@ def partner_blocked_numbers():
     partner = partner_owner(current_user())
     if request.method == "POST":
         room_id = request.form.get("room_id", type=int)
-        bet_type = normalize_bet_type(request.form.get("bet_type"))
-        number = request.form.get("number", "").strip()
-        try:
-            payout = float(request.form.get("payout_multiplier", 0))
-        except (TypeError, ValueError):
-            payout = 0
-        if not db.session.get(LotteryRoom, room_id) or not bet_type or not number.isdigit() or payout <= 0:
-            flash("กรุณากรอกข้อมูลเลขอั้นให้ถูกต้อง", "error")
+        bet_type, number, payout, error = parse_blocked_number_form()
+        if not db.session.get(LotteryRoom, room_id):
+            flash("กรุณาเลือกห้องหวย", "error")
+        elif error:
+            flash(error, "error")
         else:
             item = PartnerBlockedNumber.query.filter_by(
                 partner_id=partner.id, room_id=room_id, bet_type=bet_type, number=number
@@ -4143,7 +4144,7 @@ def partner_blocked_numbers():
                 db.session.add(item)
             item.payout_multiplier = payout
             db.session.commit()
-            flash("บันทึกเลขอั้นเฉพาะสายแล้ว", "success")
+            flash(f"ปิดรับเลข {number} เฉพาะสายแล้ว" if payout == 0 else "บันทึกเลขอั้นเฉพาะสายแล้ว", "success")
         return redirect(url_for("partner_blocked_numbers"))
 
     rooms = active_lottery_rooms().all()
@@ -5076,14 +5077,11 @@ def senior_blocked_numbers():
     senior = senior_owner(current_user())
     if request.method == "POST":
         room_id = request.form.get("room_id", type=int)
-        bet_type = normalize_bet_type(request.form.get("bet_type"))
-        number = request.form.get("number", "").strip()
-        try:
-            payout = float(request.form.get("payout_multiplier", 0))
-        except (TypeError, ValueError):
-            payout = 0
-        if not db.session.get(LotteryRoom, room_id) or not bet_type or not number.isdigit() or payout <= 0:
-            flash("กรุณากรอกข้อมูลเลขอั้นให้ถูกต้อง", "error")
+        bet_type, number, payout, error = parse_blocked_number_form()
+        if not db.session.get(LotteryRoom, room_id):
+            flash("กรุณาเลือกห้องหวย", "error")
+        elif error:
+            flash(error, "error")
         else:
             item = SeniorBlockedNumber.query.filter_by(
                 senior_id=senior.id, room_id=room_id, bet_type=bet_type, number=number
@@ -5094,7 +5092,7 @@ def senior_blocked_numbers():
                 db.session.add(item)
             item.payout_multiplier = payout
             db.session.commit()
-            flash("บันทึกเลขอั้นทั้งสายแล้ว", "success")
+            flash(f"ปิดรับเลข {number} ทั้งสายแล้ว" if payout == 0 else "บันทึกเลขอั้นทั้งสายแล้ว", "success")
         return redirect(url_for("senior_blocked_numbers"))
 
     rooms = active_lottery_rooms().all()
@@ -5757,38 +5755,25 @@ def admin_blocked_numbers(room_id):
         return redirect(url_for("admin"))
 
     if request.method == "POST":
-        number = request.form.get("number", "").strip()
-        bet_type = request.form.get("bet_type", "").strip()
-        try:
-            payout_multiplier = float(request.form.get("payout_multiplier", 0))
-        except (TypeError, ValueError):
-            payout_multiplier = 0
-
+        bet_type, number, payout_multiplier, error = parse_blocked_number_form()
         rates = get_lottery_rates()
-        if not number or not bet_type or bet_type not in rates or payout_multiplier <= 0:
-            flash("กรุณากรอกประเภท เลข และอัตราจ่ายใหม่ให้ถูกต้อง", "error")
+        if error:
+            flash(error, "error")
             return redirect(url_for("admin_blocked_numbers", room_id=room.id))
-
-        if payout_multiplier >= rates[bet_type]:
-            flash(f"อัตราเลขอั้นต้องน้อยกว่าอัตราปกติ ({rates[bet_type]:,.2f})", "error")
+        if payout_multiplier > 0 and payout_multiplier >= rates.get(bet_type, 0):
+            flash(f"อัตราเลขอั้นต้องน้อยกว่าอัตราปกติ ({rates.get(bet_type, 0):,.2f}) หรือเลือก \"ปิดรับเลขนี้\"", "error")
             return redirect(url_for("admin_blocked_numbers", room_id=room.id))
 
         existing = BlockedNumber.query.filter_by(room_id=room.id, bet_type=bet_type, number=number).first()
         if existing:
             existing.payout_multiplier = payout_multiplier
             db.session.commit()
-            flash(f"ปรับอัตราจ่ายเลข {number} เป็น {payout_multiplier:,.2f} แล้ว", "success")
+            flash(f"ปิดรับเลข {number} แล้ว" if payout_multiplier == 0 else f"ปรับอัตราจ่ายเลข {number} เป็น {payout_multiplier:,.2f} แล้ว", "success")
             return redirect(url_for("admin_blocked_numbers", room_id=room.id))
 
-        new_blocked = BlockedNumber(
-            room_id=room.id,
-            bet_type=bet_type,
-            number=number,
-            payout_multiplier=payout_multiplier,
-        )
-        db.session.add(new_blocked)
+        db.session.add(BlockedNumber(room_id=room.id, bet_type=bet_type, number=number, payout_multiplier=payout_multiplier))
         db.session.commit()
-        flash(f"บันทึกเลขอั้น {number} ({bet_type}) สำหรับห้อง {room.name} เรียบร้อย", "success")
+        flash(f"ปิดรับเลข {number} ({bet_type}) สำหรับห้อง {room.name} เรียบร้อย" if payout_multiplier == 0 else f"บันทึกเลขอั้น {number} ({bet_type}) สำหรับห้อง {room.name} เรียบร้อย", "success")
         return redirect(url_for("admin_blocked_numbers", room_id=room.id))
 
     return render_template("admin_blocked_numbers.html", room=room)
