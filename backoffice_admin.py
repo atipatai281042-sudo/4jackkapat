@@ -12,7 +12,7 @@ from flask import abort, flash, redirect, render_template, request, session, url
 from sqlalchemy import func
 
 from app import (
-    ACCOUNT_TEXT_PATTERN, ADMIN_STAFF_PERMISSION_LABELS, admin_staff_permissions, BET_TYPE_LABELS, EXTRA_BET_TYPES, RATE_TABLE_ORDER, _bet_history_range, active_lottery_rooms,
+    ACCOUNT_TEXT_PATTERN, ADMIN_STAFF_PERMISSION_LABELS, is_owner_admin, BET_TYPE_LABELS, EXTRA_BET_TYPES, RATE_TABLE_ORDER, _bet_history_range, active_lottery_rooms,
     adjust_credit, admin_required, agent_upline_chain, agent_upline_senior, app, app_now, audit_admin, cancel_ticket_bets,
     current_user, db, get_lottery_rates, notify_user, record_wallet_transaction, room_category_name, senior_agent_ids,
 )
@@ -67,14 +67,9 @@ def assistant_owner_map():
     return result
 
 
-def acting_as_staff():
-    """ผู้ที่กำลังใช้งานเป็นทีมงาน (ไม่ใช่แอดมินเต็มสิทธิ์) ไหม"""
-    return admin_staff_permissions(current_user()) is not None
-
-
 def guard_admin_target(target):
-    """ทีมงานห้ามแตะบัญชีแอดมิน/ทีมงานด้วยกัน (ระงับ รีเซ็ตรหัส ปรับเครดิต ฯลฯ)"""
-    if target.role == "admin" and acting_as_staff():
+    """บัญชีแอดมิน/ทีมงาน จัดการได้เฉพาะเจ้าของระบบ (ระงับ รีเซ็ตรหัส ปรับเครดิต ดูรายละเอียด)"""
+    if target.role == "admin" and not is_owner_admin(current_user()):
         abort(403)
 
 
@@ -164,6 +159,8 @@ def admin_users():
     assistants = assistant_user_ids()
 
     query = User.query
+    if not is_owner_admin(current_user()):
+        query = query.filter(User.role != "admin")  # บัญชีแอดมิน/ทีมงานเห็นได้เฉพาะเจ้าของระบบ
     if q:
         like = f"%{q}%"
         query = query.filter(User.username.ilike(like) | User.full_name.ilike(like) | User.phone.ilike(like))
@@ -261,6 +258,7 @@ def admin_user_detail(user_id):
     user = db.session.get(User, user_id)
     if user is None:
         abort(404)
+    guard_admin_target(user)
     assistants = assistant_user_ids()
     is_assistant = user.id in assistants
     owners = assistant_owner_map()

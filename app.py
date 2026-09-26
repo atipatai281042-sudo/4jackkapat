@@ -605,12 +605,26 @@ def admin_staff_row(user):
     return AdminStaff.query.filter_by(user_id=user.id).first() if user else None
 
 
+def is_owner_admin(user):
+    """เจ้าของระบบ = แอดมินเต็มสิทธิ์ที่ชื่อตรงกับ owner_admin_username (ค่าเริ่มต้น adminmk) — เห็นและจัดการบัญชีแอดมิน/ทีมงานได้คนเดียว
+    ถ้าบัญชีเจ้าของไม่มีอยู่/ถูกระงับ ให้แอดมินเต็มสิทธิ์ทุกคนเป็นเจ้าของ (กันล็อกตัวเองออก)"""
+    if user is None or user.role != "admin" or admin_staff_row(user) is not None:
+        return False
+    owner_name = (get_setting("owner_admin_username", "") or "adminmk").strip().lower()
+    owner = User.query.filter(func.lower(User.username) == owner_name, User.role == "admin", User.is_active.is_(True)).first()
+    if owner is None or admin_staff_row(owner) is not None:
+        return True
+    return user.id == owner.id
+
+
 def admin_staff_permissions(user):
-    """None = แอดมินเต็มสิทธิ์ · ไม่งั้นคือเซตสิทธิ์ของทีมงาน"""
+    """None = เจ้าของระบบ (เต็มสิทธิ์ทุกหน้า) · ไม่งั้นคือเซตสิทธิ์ (ทีมงานตามที่ตั้งไว้ · แอดมินคนอื่นได้ทุกหมวดยกเว้นหน้าของเจ้าของ)"""
     row = admin_staff_row(user)
-    if row is None:
+    if row is not None:
+        return {item.strip() for item in (row.permissions or "").split(",") if item.strip()}
+    if is_owner_admin(user):
         return None
-    return {item.strip() for item in (row.permissions or "").split(",") if item.strip()}
+    return set(ADMIN_STAFF_PERMISSION_LABELS)
 
 
 def admin_staff_allowed(user, endpoint):
@@ -5139,6 +5153,8 @@ def admin_adjust_credits(user_id):
 @admin_required
 def admin_toggle_user(user_id):
     target = db.session.get(User, user_id)
+    if target and target.role == "admin" and not is_owner_admin(current_user()):
+        abort(403)
     if target and target.id != current_user().id:
         target.is_active = not target.is_active
         db.session.commit()

@@ -509,3 +509,32 @@ def test_staff_permission_update_and_validation(world):
     client.post(f"/admin/staff/{row_id}/permissions", data={"perm": ["reports", "lottery"]})
     assert staff.get("/admin/users").status_code == 403
     assert staff.get("/admin/periods").status_code == 200
+
+
+def test_only_the_owner_admin_can_see_or_change_admin_accounts(world):
+    client, ids = world  # client = "admin"
+    with app.app_context():
+        owner = make_user("adminmk", "admin")
+        db.session.commit()
+        owner_id = owner.id
+    # มีเจ้าของ adminmk แล้ว → "admin" กลายเป็นแอดมินทั่วไป
+    for url in ("/admin/admins", "/admin/staff", "/admin/import-data", f"/admin/users/{owner_id}"):
+        assert client.get(url).status_code == 403, url
+    assert client.post(f"/admin/users/{owner_id}/password", data={"new_password": "hacked99"}).status_code == 403
+    assert client.post(f"/admin/users/{owner_id}/status").status_code == 403
+    assert client.post(f"/admin/users/{owner_id}/toggle").status_code == 403
+    assert client.post("/admin/admins", data={"username": "sneaky9", "password": "abcdef"}).status_code == 403
+    assert "adminmk" not in client.get("/admin/users").get_data(as_text=True)
+    nav = client.get("/admin/reports").get_data(as_text=True)
+    assert "/admin/admins" not in nav and "/admin/staff" not in nav and "/admin/users" in nav  # เมนูงานทั่วไปยังอยู่
+    assert client.get("/admin/users").status_code == 200 and client.get("/admin/account").status_code == 200
+    # เจ้าของทำได้ทุกอย่าง
+    boss = app.test_client()
+    boss.environ_base["HTTP_X_BACKOFFICE_INTERNAL"] = app.config["SECRET_KEY"]
+    with boss.session_transaction() as session:
+        session["user_id"] = owner_id
+    for url in ("/admin/admins", "/admin/staff", "/admin/import-data", f"/admin/users/{ids['admin']}"):
+        assert boss.get(url).status_code == 200, url
+    assert boss.post(f"/admin/users/{ids['admin']}/password", data={"new_password": "fromowner1"}).status_code == 302
+    with app.app_context():
+        assert db.session.get(User, ids["admin"]).check_password("fromowner1")
