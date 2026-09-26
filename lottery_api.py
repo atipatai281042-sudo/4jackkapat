@@ -45,3 +45,25 @@ def flatten_result_items(payload):
             item.setdefault("category", category_key)
             items.append(item)
     return items
+
+
+HUAYAPP_BASE_URL = "https://api.huayapp.com"
+
+
+def _huayapp_get(path, params=None, timeout=10):
+    base_url = os.environ.get("HUAYAPP_API_BASE_URL", HUAYAPP_BASE_URL).rstrip("/")
+    query = urlencode({key: value for key, value in (params or {}).items() if value not in (None, "")})
+    url = f"{base_url}{path}" + (f"?{query}" if query else "")
+    request = Request(url, headers={"Accept": "application/json", "User-Agent": "loyalty-app/1.0"})
+    with urlopen(request, timeout=timeout) as response:
+        return response.read().decode("utf-8")
+
+
+def fetch_huayapp_all(api_key, timeout=10):
+    """ผลล่าสุดของทุกหวยในคำขอเดียว (lotto_id=all) — คืน dict ตามที่ผู้ให้บริการตอบ (code 200 = สำเร็จ)"""
+    return json.loads(_huayapp_get("/", {"api_key": api_key, "lotto_id": "all"}, timeout))
+
+
+def fetch_huayapp_ip(timeout=8):
+    """IP ขาออกของเซิร์ฟเวอร์นี้ตามที่ผู้ให้บริการมองเห็น — ใช้แจ้งเพื่อลงทะเบียน (whitelist)"""
+    return _huayapp_get("/my-ip.php", None, timeout).strip()

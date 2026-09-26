@@ -61,7 +61,21 @@
                     <input type="text" class="form-control" name="image_url" value="{{ room.image_url }}">
                 </div>
 
-                <div class="mb-4 form-check">
+                            <div class="mb-3">
+                <label class="form-label fw-bold">ประเภทแทงที่ห้องนี้ไม่รับ</label>
+                <div class="d-flex flex-wrap gap-3">
+                    {% for key, label in bet_type_labels.items() %}
+                    <label class="form-check-label"><input type="checkbox" class="form-check-input" name="disabled_types" value="{{ key }}" {% if key in disabled_types %}checked{% endif %}> {{ label }}</label>
+                    {% endfor %}
+                </div>
+                <small class="text-muted">ติ๊กประเภทที่ผู้ให้บริการผลไม่ส่งเลขมาให้ (เช่น 3 ตัวล่างของหวยต่างประเทศ) เพื่อไม่ให้สมาชิกแทงแล้วตรวจไม่ได้</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold" for="close_minutes">ปิดรับก่อนออกผล (นาที)</label>
+                <input type="number" class="form-control" name="close_minutes" id="close_minutes" min="0" max="720" value="{{ room.close_minutes if room.close_minutes is not none else '' }}" placeholder="ว่าง = ใช้ค่ากลาง (ตั้งที่หน้า ตั้งค่า API ผลหวย)">
+                <small class="text-muted">ใช้กับห้องที่ผลหวยมาจากผู้ให้บริการที่ไม่ส่งเวลาปิดรับ (เช่น huayapp)</small>
+            </div>
+<div class="mb-4 form-check">
                     <input type="checkbox" class="form-check-input" name="is_active" id="is_active" {% if room.is_active %}checked{% endif %}>
                     <label class="form-check-label fw-bold" for="is_active">เปิดใช้งานห้องนี้</label>
                 </div>

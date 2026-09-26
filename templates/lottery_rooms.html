@@ -42,6 +42,9 @@
         <p class="text-muted">เลือกห้องแทงหวยที่ต้องการ ตรวจเวลาเปิดรับ และออกเดินทางไปลุ้นโชคในแต่ละงวด</p>
     </div>
 
+    <div class="room-search" style="margin: 0 0 12px;">
+        <input type="search" id="room-search" class="form-control" placeholder="ค้นหาชื่อหวย เช่น ลาว ฮานอย ดาวโจนส์" autocomplete="off" style="max-width: 360px;">
+    </div>
     <!-- แสดงรายการห้องหวยแบบจัดกลุ่มหมวดหมู่ -->
     {% for category, grouped_rooms in room_groups.items() %}
     <section class="lottery-category-section">
@@ -420,5 +423,24 @@ document.querySelectorAll('.room-countdown').forEach(function (counter) {
     updateRoomCountdown();
     countdownInterval = window.setInterval(updateRoomCountdown, 1000);
 });
+</script>
+<script>
+(function () {
+    var input = document.getElementById('room-search');
+    if (!input) return;
+    input.addEventListener('input', function () {
+        var q = input.value.trim().toLowerCase();
+        document.querySelectorAll('.lottery-category-section').forEach(function (section) {
+            var shown = 0;
+            section.querySelectorAll('.room-grid > div').forEach(function (cell) {
+                var name = (cell.querySelector('h4') || {}).textContent || '';
+                var match = !q || name.toLowerCase().indexOf(q) !== -1;
+                cell.style.display = match ? '' : 'none';
+                if (match) shown += 1;
+            });
+            section.style.display = shown ? '' : 'none';
+        });
+    });
+})();
 </script>
 {% endblock %}

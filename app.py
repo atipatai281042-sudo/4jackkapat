@@ -396,12 +396,27 @@ def extra_bet_wins(bet_type, number, period):
     return False
 
 
+BOTTOM_TWO_BET_TYPES = ("2down", "rundown", "oddeven_down", "highlow_down")  # ประเภทที่ต้องมีผล "2 ตัวล่าง" ถึงจะตรวจได้
+
+
+def room_disabled_types(room):
+    """ประเภทแทงที่ห้องนี้ไม่รับ (เซตของ bet_type)"""
+    raw = getattr(room, "disabled_bet_types", "") or ""
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
 def settle_lottery_period(period, admin_user):
     """ตรวจโพยและจ่ายรางวัลของงวดที่มีผลครบแล้ว โดยยังไม่ commit"""
     if period.is_checked:
         return 0
-    if not period.result_3up or len(period.result_3up) != 3 or not period.result_2down or len(period.result_2down) != 2:
+    if not period.result_3up or len(period.result_3up) != 3:
         return None
+    if not period.result_2down or len(period.result_2down) != 2:
+        # ห้องที่ผู้ให้บริการไม่ส่ง 2 ตัวล่างมา ตรวจได้ก็ต่อเมื่อห้องปิดรับประเภทที่ต้องใช้ผลนั้นทั้งหมดแล้ว
+        room = period.room
+        if room is None or not set(BOTTOM_TWO_BET_TYPES) <= room_disabled_types(room):
+            return None
+        period.result_2down = period.result_2down or ""
 
     result_3toad = {"".join(item) for item in itertools.permutations(period.result_3up)}
     result_3front = {item.strip() for item in (period.result_3front or "").split(",") if item.strip()}
@@ -412,9 +427,9 @@ def settle_lottery_period(period, admin_user):
             (bet.bet_type == "3up" and bet.number == period.result_3up)
             or (bet.bet_type == "3toad" and bet.number in result_3toad)
             or (bet.bet_type == "2up" and bet.number == period.result_3up[-2:])
-            or (bet.bet_type == "2down" and bet.number == period.result_2down)
+            or (bet.bet_type == "2down" and bool(period.result_2down) and bet.number == period.result_2down)
             or (bet.bet_type == "runup" and bet.number in period.result_3up)
-            or (bet.bet_type == "rundown" and bet.number in period.result_2down)
+            or (bet.bet_type == "rundown" and bool(period.result_2down) and bet.number in period.result_2down)
             or (bet.bet_type == "3front" and bet.number in result_3front)
             or (bet.bet_type == "3back" and bet.number in result_3back)
             or extra_bet_wins(bet.bet_type, bet.number, period)
@@ -510,7 +525,7 @@ _api_sync_state = {"next_at": 0.0}
 def refresh_lottery_catalog_on_each_request():
     """ซิงก์ห้อง/งวด/ผลหวยจาก API แบบจำกัดความถี่ — ทำเฉพาะตอนเปิดหน้า (GET) ไม่ทำตอนส่งโพยหรือกดปุ่มต่าง ๆ
     เพราะ worker ตัวเดียวรับทุกคำขอ ถ้าทุกหน้ารอ API ภายนอก ทุกคนจะค้างตามกัน"""
-    if (app.testing and fetch_results is ORIGINAL_FETCH_RESULTS) or request.endpoint in {"static", "login", "logout", "health_check"}:
+    if (app.testing and fetch_results is ORIGINAL_FETCH_RESULTS) or request.endpoint in {"static", "login", "logout", "health_check", "lottery_tick"}:
         return
     if not app.testing:
         if request.method != "GET":
@@ -520,7 +535,10 @@ def refresh_lottery_catalog_on_each_request():
             return
         _api_sync_state["next_at"] = current + API_SYNC_INTERVAL_SECONDS
     try:
-        sync_lottery_api_results()
+        from lottery_huayapp import run_lottery_sync  # เลือกผู้ให้บริการผลหวยตามที่ตั้งไว้ในหลังบ้าน (ค่าเริ่มต้นเดิม)
+        result = run_lottery_sync()
+        if not app.testing and isinstance(result, dict) and result.get("ok") is False:
+            _api_sync_state["next_at"] = time.monotonic() + API_SYNC_FAILURE_BACKOFF_SECONDS
     except Exception:
         db.session.rollback()
         if not app.testing:
@@ -604,7 +622,7 @@ _STAFF_ENDPOINTS = {
     "lottery": (
         "admin_thai_lottery", "admin_periods", "admin_period_action", "admin_lottery_rooms", "admin_lottery_room_edit",
         "admin_add_lottery_room", "admin_delete_lottery_room", "admin_blocked_numbers", "admin_delete_blocked_number",
-        "admin_lottery_categories", "admin_rename_lottery_category", "admin_delete_lottery_category",
+        "admin_lottery_categories", "admin_rename_lottery_category", "admin_delete_lottery_category", "admin_lottery_api",
     ),
     "content": (
         "admin_announcements", "admin_toggle_announcement", "admin_delete_announcement", "admin_banners", "admin_delete_banner",
@@ -1596,6 +1614,7 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
         raise ValueError("กลุ่มหวยนี้ถูกปิดสำหรับบัญชีของคุณ กรุณาติดต่อเอเย่นต์")
     if rate_tier != 1 and not member_group_enabled(user, category, rate_tier):
         raise ValueError("อัตราจ่ายที่เลือกถูกปิดสำหรับบัญชีของคุณ")
+    disabled_types = room_disabled_types(period.room) if period.room_id else set()
     tier_set = get_rate_set(category, rate_tier)
     rates = user_lottery_rates(user, category, rate_tier)
     group_limits = member_group_limits(user, category)
@@ -1622,7 +1641,7 @@ def add_thai_lottery_bets(user, period, entries, rate_tier=1, remark=""):
         label = BET_TYPE_LABELS.get(bet_type, bet_type)
         if amount > MAX_BET_AMOUNT:
             raise ValueError(f"จำนวนเงินเดิมพันต่อรายการต้องไม่เกิน {MAX_BET_AMOUNT:,} เครดิต")
-        if float(rates.get(bet_type) or 0) <= 0:
+        if float(rates.get(bet_type) or 0) <= 0 or bet_type in disabled_types:
             raise ValueError(f"{label} ยังไม่เปิดรับแทงในห้องนี้")
         blocked_rate = blocked_map.get((bet_type, raw_number))
         if blocked_rate is not None and blocked_rate <= 0:
@@ -2035,20 +2054,19 @@ def lottery_rooms():
     now = app_now()
     room_schedules = {}
     room_groups = {}
+    # งวดที่เปิดรับอยู่/กำลังจะเปิดของทุกห้อง ดึงรวมสองคำสั่ง (ห้องหลักร้อยห้องต้องไม่ยิงฐานข้อมูลทีละห้อง)
+    current_periods, upcoming_periods = {}, {}
+    for candidate in ThaiLotteryPeriod.query.filter(
+        ThaiLotteryPeriod.is_open.is_(True), ThaiLotteryPeriod.close_time > now,
+        or_(ThaiLotteryPeriod.open_time.is_(None), ThaiLotteryPeriod.open_time <= now),
+    ).order_by(ThaiLotteryPeriod.id.desc()):
+        current_periods.setdefault(candidate.room_id, candidate)
+    for candidate in ThaiLotteryPeriod.query.filter(
+        ThaiLotteryPeriod.is_open.is_(True), ThaiLotteryPeriod.open_time > now, ThaiLotteryPeriod.close_time > now,
+    ).order_by(ThaiLotteryPeriod.open_time.asc()):
+        upcoming_periods.setdefault(candidate.room_id, candidate)
     for room in rooms:
-        period = ThaiLotteryPeriod.query.filter(
-            ThaiLotteryPeriod.room_id == room.id,
-            ThaiLotteryPeriod.is_open.is_(True),
-            ThaiLotteryPeriod.close_time > now,
-            or_(ThaiLotteryPeriod.open_time.is_(None), ThaiLotteryPeriod.open_time <= now),
-        ).order_by(ThaiLotteryPeriod.id.desc()).first()
-        if period is None:
-            period = ThaiLotteryPeriod.query.filter(
-                ThaiLotteryPeriod.room_id == room.id,
-                ThaiLotteryPeriod.is_open.is_(True),
-                ThaiLotteryPeriod.open_time > now,
-                ThaiLotteryPeriod.close_time > now,
-            ).order_by(ThaiLotteryPeriod.open_time.asc()).first()
+        period = current_periods.get(room.id) or upcoming_periods.get(room.id)
         room_schedules[room.id] = period
         category_name = room.category_ref.name if room.category_ref else (room.category or "อื่นๆ")
         room_groups.setdefault(category_name, []).append(room)
@@ -2202,6 +2220,10 @@ def lottery_thai():
     if group_blocked:
         active_period = None  # กลุ่มหวยนี้ถูกผู้ดูแลปิดไว้ — แสดงเหมือนไม่มีงวดเปิดรับ
     tier_tables = build_rate_tables(user, category, member_min, member_max, type_rules)
+    disabled_here = room_disabled_types(room)
+    if disabled_here:
+        for table in tier_tables:
+            table["rows"] = [row for row in table["rows"] if row["key"] not in disabled_here]
     my_rates = {row["key"]: row["rate"] for row in tier_tables[0]["rows"]}
 
     blocked_rates = {}  # {ชื่อประเภท: {เลข: อัตราจ่าย}} — 0 = ปิดรับ · รวมเลขอั้นของ Agent/Senior ที่สมาชิกคนนี้โดนจริง
@@ -5710,6 +5732,11 @@ def admin_lottery_room_edit(room_id):
         room.link_url = f"/lottery/thai?room_id={room.id}"
         room.bg_color = request.form.get("bg_color", "#ffffff")
         room.is_active = request.form.get("is_active") == "y"
+        room.disabled_bet_types = ",".join(
+            key for key in BET_TYPE_LABELS if key in request.form.getlist("disabled_types")
+        )
+        close_raw = request.form.get("close_minutes", "").strip()
+        room.close_minutes = max(0, min(720, int(close_raw))) if close_raw.isdigit() else None
 
         image_url = request.form.get("image_url", "").strip()
         if "image_file" in request.files:
@@ -5729,7 +5756,8 @@ def admin_lottery_room_edit(room_id):
         return redirect(url_for("admin"))
 
     categories = LotteryCategory.query.filter_by(is_active=True).order_by(LotteryCategory.sort_order.asc(), LotteryCategory.name.asc()).all()
-    return render_template("admin_lottery_room_edit.html", room=room, categories=categories)
+    return render_template("admin_lottery_room_edit.html", room=room, categories=categories,
+                           bet_type_labels=BET_TYPE_LABELS, disabled_types=room_disabled_types(room))
 
 
 @app.route("/admin/lottery-rooms/<int:room_id>/delete", methods=["POST"])
@@ -6176,7 +6204,20 @@ def seed_data():
             db.session.execute(text("ALTER TABLE lottery_rooms ADD COLUMN api_category VARCHAR(40)"))
             db.session.commit()
 
+        for column_name, ddl in (
+            ("disabled_bet_types", "VARCHAR(120) NOT NULL DEFAULT ''"),
+            ("draw_time", "VARCHAR(5)"),
+            ("draw_next_day", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("close_minutes", "INTEGER"),
+        ):
+            if column_name not in room_columns:
+                db.session.execute(text(f"ALTER TABLE lottery_rooms ADD COLUMN {column_name} {ddl}"))
+                db.session.commit()
+
         period_columns = [col["name"] for col in inspect(db.engine).get_columns("thai_lottery_periods")]
+        if "draw_time" not in period_columns:
+            db.session.execute(text("ALTER TABLE thai_lottery_periods ADD COLUMN draw_time DATETIME"))
+            db.session.commit()
         if "api_status" not in period_columns:
             db.session.execute(text("ALTER TABLE thai_lottery_periods ADD COLUMN api_status VARCHAR(20)"))
             db.session.commit()
@@ -6460,6 +6501,7 @@ def seed_data():
 
 import backoffice_reports  # noqa: E402,F401  (ดูของรวม/รายเลข/แพ้-ชนะ 3 ฝ่าย ของ Agent/Senior)
 import backoffice_settings  # noqa: E402,F401  (ลงทะเบียนหน้าตั้งค่ารายกลุ่มหวยของ Agent/Senior)
+import lottery_huayapp  # noqa: E402,F401  (ตัวรับผลหวยจาก huayapp + ตั้งค่า API ผลหวยในหลังบ้าน)
 import backoffice_admin  # noqa: E402,F401  (หลังบ้านแอดมิน: ผู้ใช้/บัญชีแอดมิน/ยกเลิกโพย/งวด/รายงาน/สายงาน)
 
 

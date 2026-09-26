@@ -779,6 +779,11 @@ class LotteryRoom(db.Model):
     sort_order = db.Column(db.Integer, default=0)
     api_key = db.Column(db.String(80), nullable=True, index=True)
     api_category = db.Column(db.String(40), nullable=True)
+    # ประเภทแทงที่ห้องนี้ไม่รับ (คั่นด้วย , เช่น "3down,2down") — ใช้กับหวยที่ผู้ให้บริการผลไม่ส่งเลขนั้นมา ตรวจโพยไม่ได้
+    disabled_bet_types = db.Column(db.String(120), nullable=False, default="", server_default="")
+    draw_time = db.Column(db.String(5), nullable=True)            # เวลาออกผลประจำวัน HH:MM (ผู้ให้บริการที่ไม่ส่งเวลาปิดรับมาให้)
+    draw_next_day = db.Column(db.Boolean, nullable=False, default=False, server_default="0")  # ออกผลหลังเที่ยงคืนของ "วันงวด" (เช่นดาวโจนส์)
+    close_minutes = db.Column(db.Integer, nullable=True)          # ปิดรับก่อนออกผลกี่นาที (ว่าง = ใช้ค่ากลาง)
     category_ref = db.relationship("LotteryCategory", backref=db.backref("rooms", lazy=True))
 
     # ความสัมพันธ์ไปยังเลขอั้นประจำห้อง (ลบห้อง เลขอั้นถูกลบตาม)
@@ -932,6 +937,7 @@ class ThaiLotteryPeriod(db.Model):
     is_checked = db.Column(db.Boolean, default=False)
     api_status = db.Column(db.String(20), nullable=True)
     api_key = db.Column(db.String(80), nullable=True, index=True)
+    draw_time = db.Column(db.DateTime, nullable=True)  # เวลาออกผลจริงที่คาดไว้ (ใช้กันไม่ให้ผลเก่ามาตรวจงวดใหม่)
 
     room = db.relationship('LotteryRoom', backref=db.backref('thai_periods', lazy=True))
 

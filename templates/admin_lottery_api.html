@@ -1,0 +1,94 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}ตั้งค่า API ผลหวย — mklotto{% endblock %}
+{% block content %}
+<style>
+  .la-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  .la-form { display: grid; gap: 10px; }
+  .la-form .form-input { width: 100%; }
+  .la-help { font-size: .82rem; opacity: .75; margin: 0; }
+  .la-ok { color: #4ade80; font-weight: 700; } .la-bad { color: #f87171; font-weight: 700; }
+  .la-cat { margin: 18px 0 6px; font-weight: 700; display: flex; gap: 10px; align-items: center; }
+  .la-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 14px; }
+  .la-rooms label { display: flex; gap: 6px; align-items: center; font-size: .85rem; }
+  .la-on { color: #4ade80; } .la-off { opacity: .55; }
+  code.la-url { word-break: break-all; display: block; padding: 8px 10px; background: rgba(255,255,255,.06); border-radius: 6px; }
+</style>
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">LOTTERY API</span><h1 class="page-title">ตั้งค่า API ผลหวย / เปิดห้อง</h1>
+      <p class="section-desc">เลือกผู้ให้บริการผลหวย ตั้งเวลาปิดรับ และเลือกเปิดห้องที่นำเข้าจาก huayapp (ห้องใหม่ปิดไว้ก่อนเสมอ)</p></div>
+  </header>
+
+  <div class="la-grid">
+    <article class="panel">
+      <h2 class="panel-title">การเชื่อมต่อ</h2>
+      <form method="post" class="la-form">
+        <input type="hidden" name="action" value="save">
+        <label class="form-label">ผู้ให้บริการผลหวย</label>
+        <select class="form-input" name="provider">
+          <option value="thailottoapi" {{ 'selected' if provider == 'thailottoapi' else '' }}>thailottoapi.com (เดิม · 36 หวย)</option>
+          <option value="huayapp" {{ 'selected' if provider == 'huayapp' else '' }}>huayapp.com (149 หวย · ต้องมี API key และ IP ที่ลงทะเบียน)</option>
+        </select>
+        <label class="form-label">huayapp API key {% if key_masked %}<small>(ที่บันทึกไว้: {{ key_masked }})</small>{% endif %}</label>
+        <input class="form-input" name="huayapp_api_key" autocomplete="off" placeholder="{{ 'เว้นว่างไว้ = ใช้ค่าเดิม' if key_masked else 'วาง API key' }}">
+        <label class="form-label">ปิดรับก่อนออกผล (นาที) — ค่ากลางของห้องจาก huayapp</label>
+        <input class="form-input" type="number" name="close_minutes" min="0" max="720" value="{{ close_minutes }}">
+        <p class="la-help">แก้เฉพาะห้องได้ที่หน้าแก้ไขห้องหวย · การสลับผู้ให้บริการไม่ลบห้อง/งวดเดิม แค่หยุดอัปเดตห้องของผู้ให้บริการอีกเจ้า</p>
+        <button class="btn btn-primary btn-xs" type="submit">บันทึก</button>
+      </form>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+        <form method="post"><input type="hidden" name="action" value="test"><button class="btn btn-ghost btn-xs" type="submit">ทดสอบเรียก huayapp</button></form>
+        <form method="post"><input type="hidden" name="action" value="sync"><button class="btn btn-ghost btn-xs" type="submit">ซิงก์ผลตอนนี้</button></form>
+        <a class="btn btn-ghost btn-xs" href="{{ url_for('admin_lottery_api', ip=1) }}">ดู IP ขาออกของเซิร์ฟเวอร์</a>
+      </div>
+      {% if outbound_ip %}<p class="la-help" style="margin-top:10px;">IP ที่ huayapp เห็นจากเซิร์ฟเวอร์นี้: <strong>{{ outbound_ip }}</strong> — ต้องตรงกับ IP ที่ลงทะเบียนไว้ (ถ้า Railway เปลี่ยน IP ให้กด "รีเซ็ต IP ด้วยตัวเอง" ที่ huayapp.com/developer)</p>{% endif %}
+    </article>
+
+    <article class="panel">
+      <h2 class="panel-title">สถานะการซิงก์ล่าสุด</h2>
+      {% if status %}
+        <p class="{{ 'la-ok' if status.ok else 'la-bad' }}">{{ 'สำเร็จ' if status.ok else 'มีปัญหา' }} · {{ status.at }}</p>
+        <p>{{ status.message }}</p>
+        {% if status.ok %}<p class="la-help">หวยในข้อมูล {{ status.items or 0 }} · สร้างห้องใหม่ {{ status.created or 0 }} · สร้างงวด {{ status.periods or 0 }} · ตรวจผลแล้ว {{ status.settled or 0 }} · ข้าม (หยุดออก) {{ status.dormant or 0 }}</p>{% endif %}
+      {% else %}<p class="la-help">ยังไม่เคยซิงก์ด้วย huayapp</p>{% endif %}
+      {% if stuck %}<p class="la-bad">มี {{ stuck }} งวดที่เลยเวลาออกผลเกิน 3 ชั่วโมงแล้วยังไม่มีผล — ตรวจที่หน้า <a href="{{ url_for('admin_periods', state='waiting') }}">จัดการงวด</a> (ตั้งผลเองหรือยกเลิกโพย)</p>{% endif %}
+      <h2 class="panel-title" style="margin-top:20px;">ตัวตั้งเวลาดึงผลทุกนาที</h2>
+      <p class="la-help">ระบบดึงผลเมื่อมีคนเปิดหน้าเว็บ ถ้าอยากให้ตรวจโพยทันทีแม้ไม่มีคนเข้า ให้ตั้ง cron ภายนอก (เช่น cron-job.org ฟรี) เรียกลิงก์นี้ทุก 1 นาที (ห้ามแชร์ลิงก์)</p>
+      <code class="la-url">{{ tick_url }}</code>
+      <form method="post" style="margin-top:8px;" onsubmit="return confirm('สร้างลิงก์ใหม่? ลิงก์เดิมจะใช้ไม่ได้');"><input type="hidden" name="action" value="token"><button class="btn btn-ghost btn-xs" type="submit">สร้างลิงก์ใหม่</button></form>
+    </article>
+  </div>
+
+  <article class="panel">
+    <h2 class="panel-title">ห้องที่นำเข้าจาก huayapp ({{ grouped.values()|map('length')|sum }} ห้อง · เปิดอยู่ {{ active_count }})</h2>
+    {% if not grouped %}<p class="la-help">ยังไม่มีห้อง — เลือก huayapp, ใส่ API key แล้วกด "ซิงก์ผลตอนนี้"</p>{% endif %}
+    <form method="post" id="la-rooms-form">
+      {% for category, rooms in grouped.items() %}
+      <div class="la-cat"><span>{{ category }} ({{ rooms|length }})</span>
+        <button type="button" class="btn btn-ghost btn-xs" data-toggle-cat="{{ loop.index }}">เลือกทั้งหมวด</button></div>
+      <div class="la-rooms" data-cat="{{ loop.index }}">
+        {% for room in rooms %}
+        <label class="{{ 'la-on' if room.is_active else 'la-off' }}"><input type="checkbox" name="room_id" value="{{ room.id }}"> {{ room.name }} <small>{{ room.draw_time }}{{ ' (ข้ามคืน)' if room.draw_next_day else '' }}{% if room.disabled_bet_types %} · ปิด {{ room.disabled_bet_types.split(',')|length }} ประเภท{% endif %}</small></label>
+        {% endfor %}
+      </div>
+      {% endfor %}
+      {% if grouped %}
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary btn-xs" type="submit" name="action" value="enable">เปิดห้องที่เลือก</button>
+        <button class="btn btn-ghost btn-xs" type="submit" name="action" value="disable">ปิดห้องที่เลือก</button>
+      </div>
+      <p class="la-help" style="margin-top:8px;">ตัวอักษรเขียว = เปิดอยู่ · จาง = ปิดอยู่ · ห้องที่เปิดจะได้งวดถัดไปทันที (ปิดรับก่อนออกผลตามที่ตั้ง) · 3 ตัวล่างถูกปิดรับให้ทุกห้องเพราะผู้ให้บริการไม่ส่งผล 3 ตัวล่างของหวยต่างประเทศ</p>
+      {% endif %}
+    </form>
+  </article>
+</div></section>
+<script>
+  document.querySelectorAll('[data-toggle-cat]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var boxes = document.querySelectorAll('.la-rooms[data-cat="' + btn.dataset.toggleCat + '"] input[type=checkbox]');
+      var all = Array.prototype.every.call(boxes, function (b) { return b.checked; });
+      boxes.forEach(function (b) { b.checked = !all; });
+    });
+  });
+</script>
+{% endblock %}
