@@ -75,18 +75,9 @@
                 {% endif %}
 
                 <div class="card-body p-4 d-flex flex-column position-relative" style="z-index: 1;">
-                    <!-- ส่วนหัวการ์ด: ไอคอนและสถานะ -->
-                    <div class="d-flex align-items-center mb-3">
-                        <div>
-                            <h4 class="fw-bold mb-0 text-dark">{{ room.name }}</h4>
-                            {% if can_bet %}
-                                <span class="badge bg-success bg-opacity-10 text-success mt-1">เปิดให้บริการ</span>
-                            {% elif is_upcoming %}
-                                <span class="badge bg-warning bg-opacity-10 text-warning mt-1">รอเปิดรับ</span>
-                            {% else %}
-                                <span class="badge bg-secondary bg-opacity-10 text-secondary mt-1">ปิดรับแทง</span>
-                            {% endif %}
-                        </div>
+                    <!-- ชื่อห้อง: อยู่กึ่งกลางใต้ไอคอน (สถานะเปิด/ปิดดูได้จากตัวนับเวลาและปุ่มด้านล่าง) -->
+                    <div class="room-name-row">
+                        <h4 class="room-name fw-bold mb-0 text-dark">{{ room.name }}</h4>
                     </div>
 
                     <!-- รายละเอียดห้อง -->
@@ -387,6 +378,14 @@
             margin-right: 0 !important;
         }
     }
+    /* ชื่อห้องหวย: ตัวใหญ่ อ่านง่าย อยู่กึ่งกลางการ์ด (ใช้ที่เดิมของป้าย "เปิดให้บริการ") — ไม่ขยายขนาดการ์ด */
+    .rooms-page .room-card .room-name-row { display: flex; justify-content: center; margin: 0 0 .55rem; }
+    .rooms-page .room-card h4.room-name {
+        width: 100%; text-align: center; font-size: 1.3rem !important; font-weight: 700; line-height: 1.25; letter-spacing: 0;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+    }
+    .rooms-page .room-card .room-name-row { margin-top: .35rem; }
+    .rooms-page .room-card p { text-align: center; line-height: 1.5 !important; max-height: 1.5em; overflow: hidden; flex-grow: 0 !important; }
 </style>
 <script>
 document.querySelectorAll('.room-card').forEach(function (card) {
