@@ -1,0 +1,80 @@
+{% extends "backoffice_shell.html" %}
+{% from '_admin_report_tabs.html' import money %}
+{% block title %}สายงาน {{ owner.username }} — mklotto{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">{{ 'SENIOR' if is_senior else 'AGENT' }} LINE</span><h1 class="page-title">{{ owner.username }}{% if owner.full_name %} · {{ owner.full_name }}{% endif %}</h1>
+      <p class="section-desc">{{ 'Senior' if is_senior else 'Agent' }} · {{ upline }} · รหัสแนะนำ {{ profile.invite_code if profile else '-' }}</p></div>
+    <div style="display:flex;gap:8px;">
+      <a href="{{ url_for('admin_user_detail', user_id=owner.id) }}" class="btn btn-ghost">จัดการบัญชี</a>
+      <a href="{{ url_for('admin_lines') }}" class="btn btn-ghost">กลับภาพรวมสายงาน</a>
+    </div>
+  </header>
+
+  <div class="ar-stats">
+    <div class="ar-stat"><span>คอมมิชชัน (อัตราของตัวเอง)</span><strong>{{ profile.commission_rate }}%</strong></div>
+    <div class="ar-stat"><span>คอมค้างจ่าย</span><strong>{{ '{:,.2f}'.format(profile.commission_balance) }}</strong></div>
+    <div class="ar-stat"><span>ยอดหุ้นสะสม</span><strong>{{ money(profile.stock_balance) }}</strong></div>
+    <div class="ar-stat"><span>คอมสะสมทั้งหมด / 30 วัน</span><strong>{{ '{:,.2f}'.format(ledger.commission_all) }} / {{ '{:,.2f}'.format(ledger.commission_30) }}</strong></div>
+    <div class="ar-stat"><span>หุ้นสะสมทั้งหมด / 30 วัน</span><strong>{{ money(ledger.stock_all) }} / {{ money(ledger.stock_30) }}</strong></div>
+    <div class="ar-stat"><span>เครดิต</span><strong>{{ '{:,.2f}'.format(owner.credit_balance) }}</strong></div>
+  </div>
+
+  <article class="panel">
+    <h2 class="panel-title">ปิดยอด</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+      <form method="post" action="{{ url_for('admin_line_settle', user_id=owner.id) }}" onsubmit="return confirm('บันทึกปิดยอดคอมมิชชัน {{ '{:,.2f}'.format(profile.commission_balance) }} ?');">
+        <input type="hidden" name="kind" value="commission"><button class="btn btn-primary btn-xs" type="submit">จ่าย/ปิดยอดคอมมิชชัน ({{ '{:,.2f}'.format(profile.commission_balance) }})</button></form>
+      <form method="post" action="{{ url_for('admin_line_settle', user_id=owner.id) }}" onsubmit="return confirm('บันทึกปิดยอดหุ้นสะสม {{ '{:,.2f}'.format(profile.stock_balance) }} ?');">
+        <input type="hidden" name="kind" value="stock"><button class="btn btn-ghost btn-xs" type="submit">เคลียร์ยอดหุ้นสะสม ({{ '{:,.2f}'.format(profile.stock_balance) }})</button></form>
+    </div>
+    <p class="ar-note">ปุ่มนี้ "บันทึกว่าจ่ายหรือเคลียร์แล้ว" ลงประวัติกระเป๋าและ audit log — ไม่ได้โอนเงินจริง ยอดคอมติดลบ (ต้องจ่ายส่วนต่างอัตราจ่าย) ก็ปิดได้ที่นี่</p>
+  </article>
+
+  <div class="dashboard-layout">
+    <article class="panel">
+      <h2 class="panel-title">% ถือหุ้น / ตั้งสู้ รายตลาด</h2>
+      <div class="table-wrap"><table class="data-table ar-table"><thead><tr><th>ตลาด</th><th>กลุ่ม</th><th>ถือหุ้น %</th><th>ตั้งสู้</th></tr></thead><tbody>
+        {% for r in room_rows %}<tr><td>{{ r.room.name }}</td><td>{{ r.group }}</td><td>{{ r.percent }}</td><td style="white-space:normal;">{% for label, amount in r.caps %}{{ label }} {{ '{:,.0f}'.format(amount) }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</td></tr>
+        {% else %}<tr><td colspan="4" class="empty-state-text">ยังไม่ได้ตั้งค่าถือหุ้น/ตั้งสู้</td></tr>{% endfor %}
+      </tbody></table></div>
+    </article>
+    <article class="panel">
+      <h2 class="panel-title">ผู้ช่วย ({{ assistants|length }})</h2>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>ผู้ช่วย</th><th>สถานะ</th><th>สิทธิ์</th></tr></thead><tbody>
+        {% for a in assistants %}<tr><td><a href="{{ url_for('admin_user_detail', user_id=a.assistant_user_id) }}">{{ a.assistant.username }}</a></td><td>{{ 'ใช้งาน' if a.is_active else 'ระงับ' }}</td><td style="white-space:normal;">{{ a.permissions or '-' }}</td></tr>
+        {% else %}<tr><td colspan="3" class="empty-state-text">ไม่มีผู้ช่วย</td></tr>{% endfor %}
+      </tbody></table></div>
+      <h2 class="panel-title" style="margin-top:18px;">ค่าที่ตั้งให้สมาชิกรายกลุ่มหวย</h2>
+      <p class="ar-note">อัตราจ่าย/ส่วนลด {{ setting_counts.rates }} · ขั้นต่ำ-สูงสุด {{ setting_counts.limits }} · เปิด-ปิดกลุ่ม {{ setting_counts.access }} · ถือหุ้นรายกลุ่ม {{ setting_counts.stock }} รายการ</p>
+    </article>
+  </div>
+
+  {% if group_rates %}
+  <article class="panel">
+    <h2 class="panel-title">อัตราจ่าย/ส่วนลดรายสมาชิกที่ตั้งไว้ ({{ group_rates|length }}{% if group_rates|length >= 300 %}+{% endif %})</h2>
+    <div class="table-wrap"><table class="data-table ar-table"><thead><tr><th>สมาชิก</th><th>กลุ่มหวย</th><th>ชุดอัตรา</th><th>ประเภท</th><th>อัตราจ่าย</th><th>ส่วนลด %</th></tr></thead><tbody>
+      {% for r in group_rates %}<tr><td>{{ named.get(r.member_id, r.member_id) }}</td><td>{{ r.category }}</td><td>{{ r.tier }}</td><td>{{ labels.get(r.bet_type, r.bet_type) }}</td><td>{{ r.payout_multiplier if r.payout_multiplier is not none else '-' }}</td><td>{{ r.discount_pct if r.discount_pct is not none else '-' }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </article>
+  {% endif %}
+
+  <div class="dashboard-layout">
+    <article class="panel">
+      <h2 class="panel-title">{{ 'Agent ในสาย' if is_senior else 'Agent ย่อย' }} ({{ downline|length }})</h2>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>ชื่อ</th><th>สถานะ</th></tr></thead><tbody>
+        {% for d in downline %}<tr><td><a href="{{ url_for('admin_line_detail', user_id=d.id) }}">{{ d.username }}</a><small class="table-subtext">{{ d.full_name or '-' }}</small></td><td>{{ 'ใช้งาน' if d.is_active else 'ระงับ' }}</td></tr>
+        {% else %}<tr><td colspan="2" class="empty-state-text">ไม่มี</td></tr>{% endfor %}
+      </tbody></table></div>
+    </article>
+    <article class="panel">
+      <h2 class="panel-title">สมาชิก ({{ members|length }}{% if members|length >= 300 %}+{% endif %})</h2>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>ชื่อ</th><th>เครดิต</th><th>สถานะ</th></tr></thead><tbody>
+        {% for m in members %}<tr><td><a href="{{ url_for('admin_user_detail', user_id=m.id) }}">{{ m.username }}</a><small class="table-subtext">{{ m.full_name or '-' }}</small></td><td>{{ '{:,.2f}'.format(m.credit_balance) }}</td><td>{{ 'ใช้งาน' if m.is_active else 'ระงับ' }}</td></tr>
+        {% else %}<tr><td colspan="3" class="empty-state-text">ไม่มีสมาชิก</td></tr>{% endfor %}
+      </tbody></table></div>
+    </article>
+  </div>
+</div></section>
+{% endblock %}

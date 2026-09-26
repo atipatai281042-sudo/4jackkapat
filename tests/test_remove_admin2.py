@@ -2,6 +2,7 @@ import pytest
 
 from app import (
     AdminAuditLog, SystemSetting, User, app, db, ensure_default_admin_accounts, get_setting, remove_admin2_once,
+    add_owner_admin_once,
 )
 
 
@@ -57,3 +58,15 @@ def test_removal_runs_once_and_admin2_is_not_recreated(ctx):
     add_admin("admin2")  # เจ้าของสร้างใหม่เองภายหลังต้องไม่ถูกลบซ้ำ
     remove_admin2_once()
     assert User.query.filter_by(username="admin2").first() is not None
+
+
+def test_owner_admin_adminmk_is_created_once_with_working_password(ctx):
+    add_admin("admin")
+    add_owner_admin_once()
+    user = User.query.filter_by(username="adminmk").first()
+    assert user is not None and user.role == "admin" and user.is_active
+    assert user.check_password("a12345")
+    user.set_password("changed-by-owner")
+    db.session.commit()
+    add_owner_admin_once()  # รันซ้ำต้องไม่ทับรหัสที่เจ้าของเปลี่ยนแล้ว
+    assert User.query.filter_by(username="adminmk").first().check_password("changed-by-owner")

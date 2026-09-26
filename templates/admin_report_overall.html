@@ -1,0 +1,51 @@
+{% extends "backoffice_shell.html" %}
+{% from '_admin_report_tabs.html' import tabs %}
+{% block title %}ดูของรวมทั้งระบบ — mklotto{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">EXPOSURE</span><h1 class="page-title">ดูของรวม / เลขเสี่ยง</h1>
+      <p class="section-desc">ยอดซื้อรวมของทั้งระบบต่อตลาด/งวด และยอดที่ต้องจ่ายสูงสุดถ้าเลขนั้นถูก — ใช้ดูเลขที่บริษัทเสี่ยง</p></div>
+    <div class="ar-stat"><span>รายการแทงในงวด</span><strong>{{ bet_count }}</strong></div>
+  </header>
+  {{ tabs('admin_report_overall') }}
+  <article class="panel">
+    <form method="get" class="ar-filter">
+      <select class="form-input" name="room_id" onchange="this.form.period_id.value='';this.form.submit()" aria-label="ตลาด">
+        {% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if room and r.id == room.id else '' }}>{{ r.name }}</option>{% endfor %}
+      </select>
+      <select class="form-input" name="period_id" onchange="this.form.submit()" aria-label="งวด">
+        {% for p in periods %}<option value="{{ p.id }}" {{ 'selected' if period and p.id == period.id else '' }}>{{ p.period_date }}{% if p.is_open %} (เปิดรับ){% endif %}{% if p.is_checked %} (ตรวจแล้ว){% endif %}</option>{% endfor %}
+      </select>
+      <select class="form-input" name="type" onchange="this.form.submit()" aria-label="ประเภท">
+        <option value="">ทุกประเภท</option>{% for t in types %}<option value="{{ t }}" {{ 'selected' if view_type == t else '' }}>{{ labels[t] }}</option>{% endfor %}
+      </select>
+      <select class="form-input" name="sort" onchange="this.form.submit()" aria-label="เรียง">
+        <option value="max" {{ 'selected' if sort == 'max' else '' }}>จ่ายสูงสุด มาก → น้อย</option>
+        <option value="stake" {{ 'selected' if sort == 'stake' else '' }}>ยอดซื้อ มาก → น้อย</option>
+        <option value="number" {{ 'selected' if sort == 'number' else '' }}>เรียงตามเลข</option>
+      </select>
+      <button class="btn btn-primary btn-xs" type="submit"><i class="fas fa-rotate"></i> รีเฟรช</button>
+    </form>
+    <h2 class="panel-title">สรุปตามประเภท</h2>
+    <div class="table-wrap"><table class="data-table ar-table">
+      <thead><tr><th>ประเภท</th><th>รายการ</th><th>ยอดซื้อ</th><th>ส่วนลด</th><th>จ่ายสูงสุด (ถ้าถูกทุกเลข)</th></tr></thead>
+      <tbody>
+        {% for t in types %}{% if t in by_type %}<tr><td>{{ labels[t] }}</td><td>{{ '{:,.0f}'.format(by_type[t].count) }}</td><td>{{ '{:,.2f}'.format(by_type[t].stake) }}</td><td>{{ '{:,.2f}'.format(by_type[t].discount) }}</td><td>{{ '{:,.2f}'.format(by_type[t].max) }}</td></tr>{% endif %}{% endfor %}
+        {% if by_type %}<tr style="font-weight:700;"><td>รวม</td><td>{{ '{:,.0f}'.format(total.count) }}</td><td>{{ '{:,.2f}'.format(total.stake) }}</td><td>{{ '{:,.2f}'.format(total.discount) }}</td><td>{{ '{:,.2f}'.format(total.max) }}</td></tr>
+        {% else %}<tr><td colspan="5" class="empty-state-text">ยังไม่มีรายการแทงในงวดนี้</td></tr>{% endif %}
+      </tbody>
+    </table></div>
+  </article>
+  <article class="panel">
+    <h2 class="panel-title">รายเลข ({{ rows|length }} เลข{% if rows|length >= 300 %} — แสดง 300 อันดับแรก{% endif %})</h2>
+    <div class="table-wrap"><table class="data-table ar-table">
+      <thead><tr><th>#</th><th>ประเภท</th><th>เลข</th><th>ยอดซื้อรวม</th><th>จ่ายสูงสุดถ้าถูก</th><th>จำนวนสมาชิก</th></tr></thead>
+      <tbody>
+        {% for r in rows %}<tr><td>{{ loop.index }}</td><td>{{ labels[r.type] }}</td><td><code class="code-chip">{{ r.number }}</code></td><td>{{ '{:,.2f}'.format(r.stake) }}</td><td>{{ '{:,.2f}'.format(r.max) }}</td><td>{{ r.members }}</td></tr>
+        {% else %}<tr><td colspan="6" class="empty-state-text">ยังไม่มีรายการแทงในงวดนี้</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </article>
+</div></section>
+{% endblock %}

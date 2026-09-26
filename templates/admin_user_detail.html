@@ -1,0 +1,147 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}{{ target.username }} — จัดการผู้ใช้{% endblock %}
+{% block content %}
+<style>
+  .ud-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .ud-kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 12px; }
+  .ud-kv dt { opacity: .7; font-weight: 400; } .ud-kv dd { margin: 0; }
+  .ud-off { color: #f87171; font-weight: 700; }
+  .ud-form { display: grid; gap: 8px; }
+  .ud-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ud-inline .form-input { width: auto; min-width: 130px; flex: 1; }
+  .ud-help { font-size: .82rem; opacity: .7; margin: 0; }
+  .ud-pos { color: #4ade80; } .ud-neg { color: #f87171; }
+</style>
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">USER</span><h1 class="page-title">{{ target.username }}{% if not target.is_active %} <span class="ud-off">· ถูกระงับ</span>{% endif %}</h1>
+      <p class="section-desc">{{ role_label }} · {{ upline }}{% if owner %} · ผู้ช่วยของ {{ owner.username }}{% endif %}</p></div>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-ghost">กลับรายชื่อผู้ใช้</a>
+  </header>
+
+  <div class="ud-grid">
+    <article class="panel">
+      <h2 class="panel-title">ข้อมูลบัญชี</h2>
+      <dl class="ud-kv">
+        <dt>เครดิต</dt><dd><strong>{{ '{:,.2f}'.format(target.credit_balance) }}</strong></dd>
+        {% if target.role == 'member' %}
+        <dt>จำนวนโพย</dt><dd>{{ stats.bet_count }} รายการ</dd>
+        <dt>ยอดแทงรวม</dt><dd>{{ '{:,.2f}'.format(stats.stake) }}</dd>
+        <dt>รับรางวัลรวม</dt><dd>{{ '{:,.2f}'.format(stats.won) }}</dd>
+        {% endif %}
+        {% if profile %}
+        <dt>รหัสแนะนำ</dt><dd><code class="code-chip">{{ profile.invite_code }}</code></dd>
+        <dt>คอมมิชชัน</dt><dd>{{ profile.commission_rate }}%</dd>
+        <dt>คอมค้างจ่าย</dt><dd>{{ '{:,.2f}'.format(profile.commission_balance) }}</dd>
+        <dt>ยอดหุ้นสะสม</dt><dd class="{{ 'ud-pos' if profile.stock_balance >= 0 else 'ud-neg' }}">{{ '{:,.2f}'.format(profile.stock_balance) }}</dd>
+        {% if not is_assistant %}<dt>สมาชิก / Agent ในสาย</dt><dd>{{ stats.members }} / {{ stats.agents }}</dd>{% endif %}
+        {% endif %}
+        <dt>สมัครเมื่อ</dt><dd>{{ (target.created_at + shift).strftime('%d/%m/%Y %H:%M') if target.created_at else '-' }}</dd>
+      </dl>
+      {% if profile and not is_assistant %}<a class="btn btn-ghost btn-xs" href="{{ url_for('admin_line_detail', user_id=target.id) }}"><i class="fas fa-sitemap"></i> ดูรายละเอียดสายงาน</a>{% endif %}
+      <form method="post" action="{{ url_for('admin_user_update', user_id=target.id) }}" class="ud-form" style="margin-top:14px;">
+        <label class="form-label">ชื่อ</label><input class="form-input" name="full_name" value="{{ target.full_name }}">
+        <label class="form-label">เบอร์โทรศัพท์</label><input class="form-input" name="phone" value="{{ target.phone }}">
+        <button class="btn btn-primary btn-xs" type="submit">บันทึกข้อมูล</button>
+      </form>
+    </article>
+
+    <article class="panel">
+      <h2 class="panel-title">ปรับเครดิต</h2>
+      <form method="post" action="{{ url_for('admin_user_credit', user_id=target.id) }}" class="ud-form">
+        <div class="ud-inline">
+          <select class="form-input" name="action"><option value="add">เพิ่มเครดิต</option><option value="sub">หักเครดิต</option></select>
+          <input class="form-input" type="number" name="amount" min="0.01" step="0.01" placeholder="จำนวน" required>
+        </div>
+        <input class="form-input" name="reason" placeholder="เหตุผล (บันทึกลงประวัติ)">
+        <button class="btn btn-primary btn-xs" type="submit">ยืนยัน</button>
+      </form>
+
+      <h2 class="panel-title" style="margin-top:22px;">รหัสผ่าน</h2>
+      {% if target.id == current_user.id %}
+        <p class="ud-help">นี่คือบัญชีของคุณ — เปลี่ยนรหัสผ่านที่ <a href="{{ url_for('admin_account') }}">บัญชีของฉัน</a></p>
+      {% else %}
+      <form method="post" action="{{ url_for('admin_user_password', user_id=target.id) }}" class="ud-form" onsubmit="return confirm('ตั้งรหัสผ่านใหม่ให้ {{ target.username }} ?');">
+        <input class="form-input" name="new_password" autocomplete="off" placeholder="รหัสผ่านใหม่ (ว่างไว้ = ให้ระบบสุ่ม)">
+        <button class="btn btn-primary btn-xs" type="submit"><i class="fas fa-key"></i> ตั้งรหัสผ่านใหม่</button>
+        <p class="ud-help">ระบบจะแสดงรหัสผ่านที่สุ่มให้เพียงครั้งเดียวหลังกดยืนยัน</p>
+      </form>
+      {% endif %}
+
+      <h2 class="panel-title" style="margin-top:22px;">สถานะ</h2>
+      {% if target.id == current_user.id %}<p class="ud-help">ระงับบัญชีตัวเองไม่ได้</p>{% else %}
+      <form method="post" action="{{ url_for('admin_user_status', user_id=target.id) }}" onsubmit="return confirm('{{ 'เปิดใช้งาน' if not target.is_active else 'ระงับ' }}บัญชีนี้ ?');">
+        <button class="btn {{ 'btn-primary' if not target.is_active else 'btn-danger' }} btn-xs" type="submit">{{ 'เปิดใช้งานบัญชี' if not target.is_active else 'ระงับบัญชี' }}</button>
+      </form>{% endif %}
+    </article>
+
+    {% if target.role == 'member' or (target.role == 'partner' and not is_assistant) %}
+    <article class="panel">
+      <h2 class="panel-title">ย้ายสังกัด</h2>
+      {% if target.role == 'member' %}
+      <form method="post" action="{{ url_for('admin_user_move', user_id=target.id) }}" class="ud-form">
+        <select class="form-input" name="agent_id">
+          <option value="">ไม่มีสังกัด</option>
+          {% for a in agents %}<option value="{{ a.id }}" {{ 'selected' if target.partner_id == a.id else '' }}>{{ a.username }}{% if a.full_name %} · {{ a.full_name }}{% endif %}</option>{% endfor %}
+        </select>
+        <button class="btn btn-primary btn-xs" type="submit">ย้ายสมาชิก</button>
+        <p class="ud-help">โพยเก่ายังคิดค่าคอม/หุ้นตามที่บันทึกไว้แล้ว โพยที่ยังรอผลและโพยใหม่หลังย้ายจะคิดกับสายใหม่ · ค่าเฉพาะสมาชิกที่ Agent เดิมตั้งไว้จะไม่ถูกใช้ต่อ</p>
+      </form>
+      {% else %}
+      <form method="post" action="{{ url_for('admin_user_move', user_id=target.id) }}" class="ud-form">
+        <label class="form-label">อยู่ใต้ Agent (เป็น Agent ย่อย)</label>
+        <select class="form-input" name="parent_agent_id">
+          <option value="">— ไม่มี (อยู่ใต้ Senior โดยตรง) —</option>
+          {% for a in parent_options %}<option value="{{ a.id }}" {{ 'selected' if target.partner_id == a.id else '' }}>{{ a.username }}</option>{% endfor %}
+        </select>
+        <label class="form-label">หรืออยู่ใต้ Senior (ใช้เมื่อไม่เลือก Agent ต้นสาย)</label>
+        <select class="form-input" name="senior_id">
+          {% for s in seniors %}<option value="{{ s.id }}" {{ 'selected' if target.senior_id == s.id else '' }}>{{ s.username }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-primary btn-xs" type="submit">ย้าย Agent</button>
+        <p class="ud-help">ถ้าเลือก Agent ต้นสาย ระบบจะใช้ Senior ของต้นสายนั้น · สมาชิกและ Agent ย่อยของคนนี้ย้ายตามไปด้วย</p>
+      </form>
+      {% endif %}
+    </article>
+    {% endif %}
+  </div>
+
+  {% if target.role == 'member' %}
+  <article class="panel">
+    <h2 class="panel-title">โพยล่าสุด (50 รายการ)</h2>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>เวลา</th><th>ตลาด / งวด</th><th>ประเภท</th><th>เลข</th><th>ยอดแทง</th><th>รางวัล</th><th>สถานะ</th><th></th></tr></thead>
+      <tbody>{% for b in bets %}
+        <tr><td>{{ (b.created_at + shift).strftime('%d/%m %H:%M') }}</td><td>{{ b.period.room.name if b.period and b.period.room else '-' }} · {{ b.period.period_date if b.period else '-' }}</td>
+          <td>{{ labels.get(b.bet_type, b.bet_type) }}</td><td><code class="code-chip">{{ b.number }}</code></td><td>{{ '{:,.2f}'.format(b.amount) }}</td><td>{{ '{:,.2f}'.format(b.reward_amount) }}</td>
+          <td>{{ status_labels.get(b.status, b.status) }}</td>
+          <td><a class="btn btn-ghost btn-xs" href="{{ url_for('admin_lottery_ticket', period_id=b.period_id, user_id=b.user_id, ticket_code=b.ticket_code) if b.ticket_code else url_for('admin_lottery_ticket', period_id=b.period_id, user_id=b.user_id) }}">ใบโพย</a></td></tr>
+      {% else %}<tr><td colspan="8" class="empty-state-text">ยังไม่มีโพย</td></tr>{% endfor %}</tbody></table></div>
+  </article>
+  {% endif %}
+
+  <div class="ud-grid">
+    <article class="panel" style="min-width: 0;">
+      <h2 class="panel-title">ประวัติเครดิต / กระเป๋า (50 รายการ)</h2>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>เวลา</th><th>กระเป๋า</th><th>เปลี่ยนแปลง</th><th>คงเหลือ</th><th>รายการ</th></tr></thead>
+        <tbody>{% for t in transactions %}
+          <tr><td>{{ (t.created_at + shift).strftime('%d/%m %H:%M') }}</td><td>{{ t.wallet_type }}</td>
+            <td class="{{ 'ud-pos' if t.change >= 0 else 'ud-neg' }}">{{ '{:+,.2f}'.format(t.change) }}</td><td>{{ '{:,.2f}'.format(t.balance_after) }}</td><td>{{ t.reason }}</td></tr>
+        {% else %}<tr><td colspan="5" class="empty-state-text">ยังไม่มีรายการ</td></tr>{% endfor %}</tbody></table></div>
+    </article>
+    <article class="panel" style="min-width: 0;">
+      <h2 class="panel-title">เข้าสู่ระบบล่าสุด</h2>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>เวลา</th><th>IP</th></tr></thead>
+        <tbody>{% for l in logins %}<tr><td>{{ (l.created_at + shift).strftime('%d/%m %H:%M') }}</td><td>{{ l.ip_address or '-' }}</td></tr>
+        {% else %}<tr><td colspan="2" class="empty-state-text">ยังไม่เคยเข้าสู่ระบบ</td></tr>{% endfor %}</tbody></table></div>
+      <h2 class="panel-title" style="margin-top:18px;">การกระทำของแอดมินกับบัญชีนี้</h2>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>เวลา</th><th>ทำอะไร</th></tr></thead>
+        <tbody>{% for g in logs %}<tr><td>{{ (g.created_at + shift).strftime('%d/%m %H:%M') }}</td><td>{{ g.action }}<small class="table-subtext">{{ g.details }} · {{ g.admin.username if g.admin else '-' }}</small></td></tr>
+        {% else %}<tr><td colspan="2" class="empty-state-text">ยังไม่มี</td></tr>{% endfor %}</tbody></table></div>
+    </article>
+  </div>
+</div></section>
+{% endblock %}

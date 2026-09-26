@@ -123,7 +123,9 @@ def current_user():
     uid = session.get("user_id")
     if not uid:
         return None
-    return db.session.get(User, uid)
+    user = db.session.get(User, uid)
+    # บัญชีที่ถูกระงับต้องหลุดจากระบบทันที แม้ล็อกอินค้างไว้ก่อนหน้า
+    return user if user is not None and user.is_active else None
 
 
 def app_now():
@@ -134,6 +136,8 @@ def app_now():
 def ensure_default_admin_accounts():
     """Keep the documented local admin accounts available after a DB reset."""
     changed = False
+    if User.query.filter_by(role="admin").first() is not None:
+        return  # มีแอดมินอยู่แล้ว (เจ้าของอาจเปลี่ยนรหัส/ชื่อไปแล้ว) ห้ามสร้างบัญชีรหัสเริ่มต้นซ้ำ
     accounts = (("admin", "ผู้ดูแลระบบ", "admin1234"),)
     for username, full_name, password in accounts:
         user = User.query.filter_by(username=username).first()
@@ -434,6 +438,65 @@ def settle_lottery_period(period, admin_user):
     audit_admin(admin_user, "settle_lottery_period", "lottery_period", period.id,
                 f"ผล 3บน={period.result_3up}, 2ล่าง={period.result_2down}")
     return settled
+
+
+def reverse_period_settlement(period, admin_user):
+    """ย้อนผลงวดที่ตรวจแล้วให้กลับเป็นรอผล — คืนทุกอย่างที่ settle_lottery_period ทำไว้:
+    รางวัลของสมาชิก + กำไร/ขาดทุนหุ้นของ Agent/Senior + ส่วนต่างอัตราจ่ายที่หักจากคอมมิชชัน
+    คืนค่าเป็น (สำเร็จ?, ข้อความ) ยังไม่ commit"""
+    bets = ThaiLotteryBet.query.filter(
+        ThaiLotteryBet.period_id == period.id, ThaiLotteryBet.status.in_(["win", "lose"])
+    ).all()
+    for bet in bets:
+        if bet.status == "win" and bet.user.credit_balance + 1e-9 < bet.reward_amount:
+            return False, f"ไม่สามารถย้อนผลได้: เครดิตของ {bet.user.username} ถูกใช้ไปแล้ว"
+    bet_ids = [bet.id for bet in bets]
+    reason_tail = f"ย้อนผลงวด {period.period_date}"
+    for stock_model, owner_field in ((PartnerStockLedger, "partner_id"), (SeniorStockLedger, "senior_id")):
+        entries = stock_model.query.filter(stock_model.bet_id.in_(bet_ids)).all() if bet_ids else []
+        for entry in entries:
+            owner = db.session.get(User, getattr(entry, owner_field))
+            profile = (owner.partner_profile if owner and owner.is_partner else owner.senior_profile) if owner else None
+            if profile is not None:
+                profile.stock_balance = round(profile.stock_balance - float(entry.pnl_amount), 2)
+                record_wallet_transaction(
+                    owner, "stock", -float(entry.pnl_amount), profile.stock_balance,
+                    f"คืนหุ้น {reason_tail}", reference_type="bet", reference_id=entry.bet_id, admin=admin_user,
+                )
+            db.session.delete(entry)
+    for commission_model, owner_field in ((CommissionLedger, "partner_id"), (SeniorCommissionLedger, "senior_id")):
+        entries = commission_model.query.filter(
+            commission_model.bet_id.in_(bet_ids), commission_model.commission_amount < 0,
+            commission_model.reason.like("ส่วนต่างอัตราจ่าย/ส่วนลด%"),
+        ).all() if bet_ids else []
+        for entry in entries:
+            owner = db.session.get(User, getattr(entry, owner_field))
+            profile = (owner.partner_profile if owner and owner.is_partner else owner.senior_profile) if owner else None
+            if profile is not None:
+                profile.commission_balance = round(profile.commission_balance - float(entry.commission_amount), 2)
+                record_wallet_transaction(
+                    owner, "commission", -float(entry.commission_amount), profile.commission_balance,
+                    f"คืนส่วนต่างอัตราจ่าย/ส่วนลด {reason_tail}", reference_type="bet", reference_id=entry.bet_id, admin=admin_user,
+                )
+            db.session.delete(entry)
+    for bet in bets:
+        if bet.status == "win":
+            adjust_credit(
+                bet.user, -bet.reward_amount,
+                f"ย้อนคืนรางวัลหวยงวด {period.period_date} ({bet.bet_type}: {bet.number})", admin=admin_user,
+            )
+            notify_user(
+                bet.user, "มีการย้อนผลหวย",
+                f"รางวัลเลข {bet.number} ถูกย้อนกลับเพื่อให้แอดมินตรวจผลใหม่", "system",
+            )
+        bet.status = "pending"
+    period.is_checked = False
+    period.result_3up = None
+    period.result_2down = None
+    period.result_3front = None
+    period.result_3back = None
+    audit_admin(admin_user, "reverse_lottery_period", "lottery_period", period.id, f"ย้อน {len(bets)} โพย")
+    return True, ""
 
 
 @app.before_request
@@ -1359,10 +1422,9 @@ def member_group_stock_percent(owner_id, member_id, category):
 def store_announcements_for(member):
     """ประกาศจากเอเย่นต์/ซีเนียร์ที่ดูแลสมาชิกคนนี้ (หน้าร้าน) — แสดง 3 รายการล่าสุด"""
     owners = member_setting_owner_ids(member) if member is not None else []
-    if not owners:
-        return []
     return Announcement.query.filter(
-        Announcement.owner_id.in_(owners), Announcement.is_active.is_(True)
+        Announcement.is_active.is_(True),
+        Announcement.owner_id.in_(owners) | (Announcement.owner_id.is_(None) & Announcement.audience.in_(["members", "all"])),
     ).order_by(Announcement.created_at.desc()).limit(3).all()
 
 
@@ -1552,8 +1614,10 @@ def adjust_points(user: User, change: int, reason: str, admin: User | None = Non
 
 def adjust_credit(user: User, change: float, reason: str, admin: User | None = None):
     """เพิ่ม/ลดเครดิตสำหรับการเดิมพัน แยกจากแต้มสะสม"""
-    user.credit_balance = max(0.0, float(user.credit_balance) + float(change))
-    record_wallet_transaction(user, "credit", change, user.credit_balance, reason, admin=admin)
+    before = float(user.credit_balance)
+    user.credit_balance = max(0.0, before + float(change))
+    # บันทึกสมุดด้วยยอดที่เปลี่ยนจริง (ถ้าถูกหักเกินยอดคงเหลือ จะไม่ติดลบและสมุดต้องไม่โอ้อวดเกินจริง)
+    record_wallet_transaction(user, "credit", user.credit_balance - before, user.credit_balance, reason, admin=admin)
     return user.credit_balance
 
 
@@ -2436,27 +2500,28 @@ def cancel_lottery_ticket(period_id, ticket_code):
 @admin_required
 def admin_lottery_tickets():
     period_id = request.args.get("period_id", type=int)
-    user_id = request.args.get("user_id", type=int)
+    q = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
-    query = ThaiLotteryBet.query.join(User).join(ThaiLotteryPeriod)
+    query = ThaiLotteryBet.query.join(User, ThaiLotteryBet.user_id == User.id).join(
+        ThaiLotteryPeriod, ThaiLotteryBet.period_id == ThaiLotteryPeriod.id
+    )
     if period_id:
         query = query.filter(ThaiLotteryBet.period_id == period_id)
-    if user_id:
-        query = query.filter(ThaiLotteryBet.user_id == user_id)
-    if status in {"pending", "win", "lose"}:
+    if q:
+        query = query.filter(User.username.ilike(f"%{q}%") | ThaiLotteryBet.ticket_code.ilike(f"%{q}%") | (ThaiLotteryBet.number == q))
+    if status in {"pending", "win", "lose", "cancelled"}:
         query = query.filter(ThaiLotteryBet.status == status)
 
     bets = query.order_by(ThaiLotteryBet.created_at.desc(), ThaiLotteryBet.id.desc()).limit(500).all()
-    periods = ThaiLotteryPeriod.query.order_by(ThaiLotteryPeriod.id.desc()).all()
-    users = User.query.filter(User.role != "admin").order_by(User.username.asc()).all()
+    periods = ThaiLotteryPeriod.query.order_by(ThaiLotteryPeriod.id.desc()).limit(300).all()
     return render_template(
         "admin_lottery_tickets.html",
         bets=bets,
         periods=periods,
-        users=users,
         selected_period_id=period_id,
-        selected_user_id=user_id,
+        q=q,
         selected_status=status,
+        shift=timedelta(hours=7),
     )
 
 
@@ -2474,15 +2539,19 @@ def admin_lottery_ticket(period_id, user_id, ticket_code=None):
     bets = query.order_by(ThaiLotteryBet.created_at.asc(), ThaiLotteryBet.id.asc()).all()
     if not bets:
         abort(404)
+    live = [bet for bet in bets if bet.status != "cancelled"]
     return render_template(
-        "lottery_ticket.html",
+        "admin_ticket.html",
         period=period,
         ticket_user=user,
+        ticket_code=ticket_code or "",
         bets=bets,
-        total_amount=sum(bet.amount for bet in bets),
-        total_discount=sum(bet.discount_amount for bet in bets),
+        total_amount=sum(bet.amount for bet in live),
+        total_discount=sum(bet.discount_amount for bet in live),
         total_reward=sum(bet.reward_amount for bet in bets if bet.status == "win"),
-        is_admin_view=True,
+        cancellable=(not period.is_checked) and any(bet.status == "pending" for bet in bets),
+        remark=next((bet.remark for bet in bets if bet.remark), ""),
+        shift=timedelta(hours=7),
     )
 
 
@@ -2747,6 +2816,10 @@ def admin_adjust_points(user_id):
     return redirect(url_for("admin"))
 
 
+def senior_assistant_ids_for_form():
+    return {row.assistant_user_id for row in SeniorAssistant.query.all()}
+
+
 @app.route("/admin/partners", methods=["GET", "POST"])
 @admin_required
 def admin_partners():
@@ -2765,9 +2838,11 @@ def admin_partners():
 
         if len(username) < 4 or len(password) < 6 or not full_name:
             flash("กรุณากรอกชื่อผู้ใช้ ชื่อ Agent และรหัสผ่านให้ถูกต้อง", "error")
+        elif not re.fullmatch(ACCOUNT_TEXT_PATTERN, username) or not re.fullmatch(ACCOUNT_TEXT_PATTERN, password):
+            flash("ชื่อผู้ใช้และรหัสผ่านต้องใช้ภาษาอังกฤษ ตัวเลข หรืออักขระพิเศษเท่านั้น (ไม่เช่นนั้นเข้าสู่ระบบไม่ได้)", "error")
         elif commission_rate < 0 or commission_rate > 100:
             flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
-        elif User.query.filter_by(username=username).first():
+        elif User.query.filter(func.lower(User.username) == username.lower()).first():
             flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
         elif invite_code and PartnerProfile.query.filter_by(invite_code=invite_code).first():
             flash("รหัสแนะนำนี้ถูกใช้แล้ว", "error")
@@ -2794,12 +2869,13 @@ def admin_partners():
             flash(f"สร้าง Agent {username} สำเร็จ รหัสแนะนำ: {invite_code}", "success")
         return redirect(url_for("admin_partners"))
 
-    partners = User.query.filter_by(role="partner").order_by(User.created_at.desc()).all()
+    assistant_ids = {row.assistant_user_id for row in PartnerAssistant.query.all()}
+    partners = [p for p in User.query.filter_by(role="partner").order_by(User.created_at.desc()).all() if p.id not in assistant_ids]
     partner_bank_accounts = {
         partner.id: UserBankAccount.query.filter_by(user_id=partner.id).order_by(UserBankAccount.created_at.asc()).all()
         for partner in partners
     }
-    seniors = User.query.filter_by(role="senior").order_by(User.username.asc()).all()
+    seniors = [s for s in User.query.filter_by(role="senior").order_by(User.username.asc()).all() if s.id not in senior_assistant_ids_for_form()]
     # แสดงผลว่าแต่ละ Agent อยู่ใต้ Senior โดยตรง หรือเป็น Agent ย่อยของ Agent อีกคน
     # (agent_upline_chain รองรับการซ้อนชั้นไม่จำกัด — ที่นี่แค่โชว์ผลลัพธ์ให้แอดมินดู)
     upline_labels = {}
@@ -2854,32 +2930,6 @@ def admin_delete_partner_bank_account(user_id, account_id):
         db.session.commit()
         flash("ลบบัญชีธนาคารแล้ว", "success")
     return redirect(url_for("admin_partners"))
-
-
-@app.route("/admin/reports")
-@admin_required
-def admin_reports():
-    total_bet_credit = db.session.query(db.func.coalesce(db.func.sum(ThaiLotteryBet.amount), 0)).scalar() or 0
-    total_prize_points = db.session.query(db.func.coalesce(db.func.sum(ThaiLotteryBet.reward_amount), 0)).filter(
-        ThaiLotteryBet.status == "win"
-    ).scalar() or 0
-    total_commission = db.session.query(db.func.coalesce(db.func.sum(CommissionLedger.commission_amount), 0)).scalar() or 0
-    total_redemptions = db.session.query(db.func.coalesce(db.func.sum(RedemptionHistory.points_used), 0)).scalar() or 0
-    room_rows = db.session.query(
-        LotteryRoom.name,
-        db.func.count(ThaiLotteryBet.id),
-        db.func.coalesce(db.func.sum(ThaiLotteryBet.amount), 0),
-    ).join(ThaiLotteryPeriod, ThaiLotteryPeriod.room_id == LotteryRoom.id).join(
-        ThaiLotteryBet, ThaiLotteryBet.period_id == ThaiLotteryPeriod.id
-    ).group_by(LotteryRoom.id).all()
-    return render_template(
-        "admin_reports.html",
-        total_bet_credit=total_bet_credit,
-        total_prize_points=total_prize_points,
-        total_commission=total_commission,
-        total_redemptions=total_redemptions,
-        room_rows=room_rows,
-    )
 
 
 @app.route("/admin/wallet")
@@ -3004,11 +3054,12 @@ def admin_update_partner(user_id):
         rate = float(request.form.get("commission_rate", partner.partner_profile.commission_rate))
     except ValueError:
         rate = -1
+    is_sub_agent = bool(partner.partner_id)  # Agent ย่อยสืบทอด Senior จากต้นสาย ไม่มี senior_id ของตัวเอง
     senior_id = request.form.get("senior_id", type=int)
     senior = db.session.get(User, senior_id) if senior_id else None
     if not 0 <= rate <= 100:
         flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
-    elif not senior or not senior.is_senior or not senior.senior_profile or senior.senior_profile.status != "active":
+    elif not is_sub_agent and (not senior or not senior.is_senior or not senior.senior_profile or senior.senior_profile.status != "active"):
         flash("กรุณาเลือก Senior ที่ใช้งานอยู่ให้ Agent นี้", "error")
     else:
         status = request.form.get("status", "active")
@@ -3016,9 +3067,10 @@ def admin_update_partner(user_id):
             status = "active"
         partner.partner_profile.commission_rate = rate
         partner.partner_profile.status = status
-        partner.senior_id = senior.id
+        if not is_sub_agent:
+            partner.senior_id = senior.id
         audit_admin(current_user(), "update_partner", "user", partner.id,
-                    f"rate={rate}, status={status}, senior_id={senior.id}")
+                    f"rate={rate}, status={status}, senior_id={partner.senior_id}")
         db.session.commit()
         flash(f"อัปเดต Agent {partner.username} แล้ว", "success")
     return redirect(url_for("admin_partners"))
@@ -3031,14 +3083,26 @@ def admin_partner_payout(user_id):
     if not partner or not partner.partner_profile:
         flash("ไม่พบ Agent", "error")
         return redirect(url_for("admin_partners"))
-    partner.partner_profile.commission_balance = 0.0
-    CommissionLedger.query.filter_by(partner_id=partner.id, status="approved").update(
-        {CommissionLedger.status: "paid"}, synchronize_session=False
+    return _settle_commission(partner, partner.partner_profile, CommissionLedger, CommissionLedger.partner_id, "admin_partners")
+
+
+def _settle_commission(user, profile, ledger_model, owner_column, back_endpoint):
+    """บันทึกการจ่ายคอมมิชชันที่ค้าง — ลงกระเป๋า/audit พร้อมยอดจริง (ยอดติดลบ = Agent เป็นหนี้ ต้องปิดที่หน้าสายงาน)"""
+    balance = float(profile.commission_balance)
+    if balance <= 0.004:
+        flash(f"{user.username} ไม่มียอดคอมมิชชันค้างจ่าย", "warning")
+        return redirect(url_for(back_endpoint))
+    profile.commission_balance = 0.0
+    ledger_model.query.filter(owner_column == user.id, ledger_model.status == "approved").update(
+        {ledger_model.status: "paid"}, synchronize_session=False
     )
-    audit_admin(current_user(), "payout_partner", "user", partner.id, "mark commission paid")
+    record_wallet_transaction(
+        user, "commission", -balance, 0.0, f"จ่ายคอมมิชชัน {balance:,.2f}", reference_type="payout", admin=current_user()
+    )
+    audit_admin(current_user(), "payout_commission", "user", user.id, f"{balance:,.2f}")
     db.session.commit()
-    flash(f"บันทึกการจ่ายคอมมิชชันของ {partner.username} แล้ว", "success")
-    return redirect(url_for("admin_partners"))
+    flash(f"บันทึกการจ่ายคอมมิชชัน {balance:,.2f} ของ {user.username} แล้ว", "success")
+    return redirect(url_for(back_endpoint))
 
 
 @app.route("/admin/seniors", methods=["GET", "POST"])
@@ -3057,9 +3121,11 @@ def admin_seniors():
 
         if len(username) < 4 or len(password) < 6 or not full_name:
             flash("กรุณากรอกชื่อผู้ใช้ ชื่อ Senior และรหัสผ่านให้ถูกต้อง", "error")
+        elif not re.fullmatch(ACCOUNT_TEXT_PATTERN, username) or not re.fullmatch(ACCOUNT_TEXT_PATTERN, password):
+            flash("ชื่อผู้ใช้และรหัสผ่านต้องใช้ภาษาอังกฤษ ตัวเลข หรืออักขระพิเศษเท่านั้น (ไม่เช่นนั้นเข้าสู่ระบบไม่ได้)", "error")
         elif commission_rate < 0 or commission_rate > 100:
             flash("เปอร์เซ็นต์คอมต้องอยู่ระหว่าง 0 ถึง 100", "error")
-        elif User.query.filter_by(username=username).first():
+        elif User.query.filter(func.lower(User.username) == username.lower()).first():
             flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว", "error")
         elif invite_code and SeniorProfile.query.filter_by(invite_code=invite_code).first():
             flash("รหัสแนะนำนี้ถูกใช้แล้ว", "error")
@@ -3083,7 +3149,8 @@ def admin_seniors():
             flash(f"สร้าง Senior {username} สำเร็จ รหัสแนะนำ: {invite_code}", "success")
         return redirect(url_for("admin_seniors"))
 
-    seniors = User.query.filter_by(role="senior").order_by(User.created_at.desc()).all()
+    senior_assistant_ids = {row.assistant_user_id for row in SeniorAssistant.query.all()}
+    seniors = [s for s in User.query.filter_by(role="senior").order_by(User.created_at.desc()).all() if s.id not in senior_assistant_ids]
     senior_bank_accounts = {
         senior.id: UserBankAccount.query.filter_by(user_id=senior.id).order_by(UserBankAccount.created_at.asc()).all()
         for senior in seniors
@@ -3164,14 +3231,7 @@ def admin_senior_payout(user_id):
     if not senior or not senior.senior_profile:
         flash("ไม่พบ Senior", "error")
         return redirect(url_for("admin_seniors"))
-    senior.senior_profile.commission_balance = 0.0
-    SeniorCommissionLedger.query.filter_by(senior_id=senior.id, status="approved").update(
-        {SeniorCommissionLedger.status: "paid"}, synchronize_session=False
-    )
-    audit_admin(current_user(), "payout_senior", "user", senior.id, "mark commission paid")
-    db.session.commit()
-    flash(f"บันทึกการจ่ายคอมมิชชันของ {senior.username} แล้ว", "success")
-    return redirect(url_for("admin_seniors"))
+    return _settle_commission(senior, senior.senior_profile, SeniorCommissionLedger, SeniorCommissionLedger.senior_id, "admin_seniors")
 
 
 @app.route("/partner")
@@ -5176,38 +5236,13 @@ def admin_thai_lottery():
             if not period or not period.is_checked:
                 flash("ไม่พบงวดที่ตรวจผลแล้วสำหรับการย้อนผล", "error")
                 return redirect(url_for("admin_thai_lottery"))
-
-            winning_bets = ThaiLotteryBet.query.filter_by(
-                period_id=period.id, status="win"
-            ).all()
-            for bet in winning_bets:
-                if bet.user.credit_balance < bet.reward_amount:
-                    flash(f"ไม่สามารถย้อนผลได้: เครดิตของ {bet.user.username} ถูกใช้ไปแล้ว", "error")
-                    return redirect(url_for("admin_thai_lottery"))
-
-            for bet in winning_bets:
-                adjust_credit(
-                    bet.user,
-                    -bet.reward_amount,
-                    f"ย้อนคืนรางวัลหวยงวด {period.period_date} ({bet.bet_type}: {bet.number})",
-                    admin=current_user(),
-                )
-                bet.status = "pending"
-                notify_user(
-                    bet.user,
-                    "มีการย้อนผลหวย",
-                    f"รางวัลเลข {bet.number} ถูกย้อนกลับเพื่อให้แอดมินตรวจสอบใหม่",
-                    "system",
-                )
-
-            period.is_checked = False
-            period.result_3up = None
-            period.result_2down = None
-            period.result_3front = None
-            period.result_3back = None
-            audit_admin(current_user(), "reverse_lottery_period", "lottery_period", period.id)
+            ok, message = reverse_period_settlement(period, current_user())
+            if not ok:
+                db.session.rollback()
+                flash(message, "error")
+                return redirect(url_for("admin_thai_lottery"))
             db.session.commit()
-            flash("ย้อนผลหวยและคืนโพยที่ถูกรางวัลเป็นสถานะรอตรวจสอบแล้ว", "success")
+            flash("ย้อนผลหวยและคืนโพยที่ถูกรางวัลเป็นสถานะรอตรวจแล้ว (รวมหุ้น/ส่วนต่างของสายงาน)", "success")
             return redirect(url_for("admin_thai_lottery"))
 
         if action == "set_rule":
@@ -5333,81 +5368,26 @@ def admin_thai_lottery():
                 flash("งวดนี้ถูกตรวจผลและจ่ายรางวัลไปแล้ว ไม่สามารถยืนยันซ้ำได้", "error")
                 return redirect(url_for("admin_thai_lottery"))
 
-            period.result_3up = request.form.get("result_3up", "").strip()
-            period.result_2down = request.form.get("result_2down", "").strip()
-            period.result_3front = request.form.get("result_3front", "").strip()
-            period.result_3back = request.form.get("result_3back", "").strip()
+            result_3up = request.form.get("result_3up", "").strip()
+            result_2down = request.form.get("result_2down", "").strip()
+            result_3front = request.form.get("result_3front", "").strip()
+            result_3back = request.form.get("result_3back", "").strip()
 
-            if not period.result_3up.isdigit() or len(period.result_3up) != 3:
+            if not result_3up.isdigit() or len(result_3up) != 3:
                 flash("ผล 3 ตัวบนต้องเป็นตัวเลข 3 หลัก", "error")
                 return redirect(url_for("admin_thai_lottery"))
-            if not period.result_2down.isdigit() or len(period.result_2down) != 2:
+            if not result_2down.isdigit() or len(result_2down) != 2:
                 flash("ผล 2 ตัวล่างต้องเป็นตัวเลข 2 หลัก", "error")
                 return redirect(url_for("admin_thai_lottery"))
-
-            for label, value in (("3 ตัวหน้า", period.result_3front), ("3 ตัวหลัง", period.result_3back)):
-                if value and any(not item.isdigit() or len(item) != 3 for item in value.split(",")):
+            for label, value in (("3 ตัวหน้า", result_3front), ("3 ตัวหลัง", result_3back)):
+                if value and any(not item.strip().isdigit() or len(item.strip()) != 3 for item in value.split(",")):
                     flash(f"ผล {label} ต้องเป็นเลข 3 หลัก คั่นหลายเลขด้วยเครื่องหมายจุลภาค", "error")
                     return redirect(url_for("admin_thai_lottery"))
 
-            period.is_open = False
-
-            res_3up = period.result_3up
-            res_2down = period.result_2down
-            res_3toad_list = set()
-            if len(res_3up) == 3:
-                res_3toad_list = {"".join(p) for p in itertools.permutations(res_3up)}
-
-            bets = ThaiLotteryBet.query.filter_by(period_id=period.id, status="pending").all()
-            
-            for bet in bets:
-                is_win = False
-                if bet.bet_type == "3up":
-                    if bet.number == res_3up:
-                        is_win = True
-                elif bet.bet_type == "3toad":
-                    if bet.number in res_3toad_list:
-                        is_win = True
-                elif bet.bet_type == "2up":
-                    if res_3up and bet.number == res_3up[-2:]:
-                        is_win = True
-                elif bet.bet_type == "2down":
-                    if bet.number == res_2down:
-                        is_win = True
-                elif bet.bet_type == "runup":
-                    if res_3up and bet.number in res_3up:
-                        is_win = True
-                elif bet.bet_type == "rundown":
-                    if res_2down and bet.number in res_2down:
-                        is_win = True
-                elif bet.bet_type == "3front":
-                    if bet.number in {item.strip() for item in period.result_3front.split(",") if item.strip()}:
-                        is_win = True
-                elif bet.bet_type == "3back":
-                    if bet.number in {item.strip() for item in period.result_3back.split(",") if item.strip()}:
-                        is_win = True
-                else:
-                    is_win = extra_bet_wins(bet.bet_type, bet.number, period)
-
-                if is_win:
-                    bet.status = "win"
-                    adjust_credit(
-                        bet.user, 
-                        bet.reward_amount, 
-                        f"ถูกรางวัลหวยรัฐบาล งวด {period.period_date} ({bet.bet_type}: {bet.number})"
-                    )
-                    notify_user(
-                        bet.user,
-                        "ยินดีด้วย คุณถูกรางวัล",
-                        f"ได้รับ {bet.reward_amount:,} เครดิตจากเลข {bet.number}",
-                        "win",
-                    )
-                else:
-                    bet.status = "lose"
-
-            period.is_checked = True
-            audit_admin(current_user(), "settle_lottery_period", "lottery_period", period.id,
-                        f"ผล 3บน={period.result_3up}, 2ล่าง={period.result_2down}")
+            period.result_3up, period.result_2down = result_3up, result_2down
+            period.result_3front, period.result_3back = result_3front, result_3back
+            # ใช้ตัวตรวจผลตัวเดียวกับผลจาก API เพื่อให้หุ้น/ส่วนต่างของ Agent-Senior คิดครบเหมือนกัน
+            settle_lottery_period(period, current_user())
             db.session.commit()
             flash(f"บันทึกผลรางวัลและตรวจโพยงวด '{period.period_date}' เรียบร้อยแล้ว", "success")
             return redirect(url_for("admin_thai_lottery"))
@@ -5811,7 +5791,10 @@ def admin_announcements():
         if not title:
             flash("กรุณากรอกหัวข้อประกาศ", "error")
         else:
-            db.session.add(Announcement(title=title, body=body, is_active=True))
+            audience = request.form.get("audience", "agents")
+            if audience not in ("agents", "members", "all"):
+                audience = "agents"
+            db.session.add(Announcement(title=title, body=body, is_active=True, audience=audience))
             db.session.commit()
             flash("เพิ่มประกาศสำเร็จ", "success")
         return redirect(url_for("admin_announcements"))
@@ -6021,6 +6004,20 @@ def remove_admin2_once():
     db.session.commit()
 
 
+def add_owner_admin_once():
+    """เจ้าของโปรเจกต์สั่งเพิ่มบัญชีแอดมิน adminmk — สร้างครั้งเดียว (ธงใน SystemSetting) เก็บเฉพาะ hash ของรหัสผ่านในโค้ด
+    ถ้ามีชื่อนี้อยู่แล้วจะไม่แตะรหัสผ่านเดิม ให้เจ้าของเปลี่ยนรหัสเองที่เมนู "บัญชีของฉัน" หลังเข้าสู่ระบบ"""
+    if get_setting("admin_adminmk_v1", ""):
+        return
+    if User.query.filter(func.lower(User.username) == "adminmk").first() is None:
+        user = User(username="adminmk", full_name="adminmk", role="admin", points=0, credit_balance=0.0)
+        user.password_hash = "scrypt:32768:8:1$QwjPJfIYZf2m0AYM$08db791d1480a26e6248f3f447e7c35236eaad2e7aa72bb28447a76f93a445215668e43f235f79fd456b7b1ff4c926ae17f55c8feb2a35eea696de0bb707cae8"
+        db.session.add(user)
+        print("admin adminmk created")
+    save_setting("admin_adminmk_v1", "1")
+    db.session.commit()
+
+
 def apply_reference_rates_once():
     """ตั้งอัตราจ่าย/ส่วนลด/ขั้นต่ำ-ขั้นสูง และชุดที่ 2 ของแต่ละหมวด ตามเว็บตัวอย่าง — ทำครั้งเดียวเท่านั้น
     (เก็บธงใน SystemSetting) หลังจากนั้นแอดมินแก้เองที่หน้าตั้งค่าหวยรัฐบาลได้ ไม่ถูกทับอีก"""
@@ -6132,6 +6129,9 @@ def seed_data():
         if "owner_id" not in announcement_columns:
             db.session.execute(text("ALTER TABLE announcements ADD COLUMN owner_id INTEGER"))
             db.session.commit()
+        if "audience" not in announcement_columns:
+            db.session.execute(text("ALTER TABLE announcements ADD COLUMN audience VARCHAR(20) NOT NULL DEFAULT 'agents'"))
+            db.session.commit()
         for column_name, ddl in (
             ("payout_grantor_id", "INTEGER"),
             ("payout_excess", "FLOAT NOT NULL DEFAULT 0.0"),
@@ -6183,12 +6183,13 @@ def seed_data():
                 user.credit_balance = float(user.points or 0)
         db.session.commit()
 
-        if not User.query.filter_by(username="admin").first():
+        if not User.query.filter_by(role="admin").first():
             admin_user = User(username="admin", full_name="ผู้ดูแลระบบ", role="admin", points=0, credit_balance=0.0)
             admin_user.set_password("admin1234")
             db.session.add(admin_user)
 
-        if not User.query.filter_by(username="somchai").first():
+        # บัญชีสาธิตสร้างเฉพาะฐานข้อมูลที่ยังไม่มีสมาชิกจริงเลย (กันรหัสสาธิตโผล่บนระบบที่ใช้งานจริง)
+        if not User.query.filter_by(username="somchai").first() and User.query.filter_by(role="member").count() == 0:
             demo = User(username="somchai", full_name="สมชาย ใจดี", phone="0812345678", points=1500, credit_balance=1500.0)
             demo.set_password("123456")
             db.session.add(demo)
@@ -6384,6 +6385,7 @@ def seed_data():
 
         db.session.commit()
         remove_admin2_once()
+        add_owner_admin_once()
         apply_reference_rates_once()
         grant_legacy_assistants_full_access_once()
         for user in User.query.all():
@@ -6393,6 +6395,7 @@ def seed_data():
 
 import backoffice_reports  # noqa: E402,F401  (ดูของรวม/รายเลข/แพ้-ชนะ 3 ฝ่าย ของ Agent/Senior)
 import backoffice_settings  # noqa: E402,F401  (ลงทะเบียนหน้าตั้งค่ารายกลุ่มหวยของ Agent/Senior)
+import backoffice_admin  # noqa: E402,F401  (หลังบ้านแอดมิน: ผู้ใช้/บัญชีแอดมิน/ยกเลิกโพย/งวด/รายงาน/สายงาน)
 
 
 if __name__ == "__main__":

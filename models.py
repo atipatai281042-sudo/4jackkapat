@@ -224,6 +224,8 @@ class Announcement(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     # ประกาศของ Agent/Senior ถึงสมาชิกในสาย (หน้าร้าน) — NULL = ประกาศของระบบที่แอดมินตั้ง
     owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    # ประกาศของระบบ (owner_id NULL) แสดงให้ใคร: agents = Agent/Senior ในหลังบ้าน, members = สมาชิกหน้าเลือกห้อง, all = ทั้งคู่
+    audience = db.Column(db.String(20), nullable=False, default="agents", server_default="agents")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 

@@ -1,3 +1,4 @@
+{% from '_bo_nav.html' import admin_nav %}
 <!DOCTYPE html>
 <html lang="th" data-bs-theme="dark">
 <head>
@@ -29,26 +30,7 @@
       <span class="bo-nav-label">ภาพรวม</span>
       <a class="is-active" href="{{ url_for('dashboard') }}"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
 
-      <span class="bo-nav-label">จัดการหลัก</span>
-      <a href="{{ main_app_url }}/admin#member-management"><i class="fas fa-users"></i><span>สมาชิกและเครดิต</span></a>
-      <a href="{{ main_app_url }}/admin/lottery-rooms"><i class="fas fa-ticket"></i><span>ห้องหวย</span></a>
-      <a href="{{ main_app_url }}/admin/lottery-tickets"><i class="fas fa-receipt"></i><span>โพยสมาชิก</span></a>
-      <a href="{{ main_app_url }}/admin/wallet"><i class="fas fa-wallet"></i><span>กระเป๋าเงิน</span></a>
-      <a href="{{ main_app_url }}/admin/reports"><i class="fas fa-chart-pie"></i><span>รายงาน</span></a>
-
-      <span class="bo-nav-label">ระบบหวย</span>
-      <a href="{{ main_app_url }}/admin/thai-lottery"><i class="fas fa-sliders"></i><span>อัตราจ่ายและผลหวย</span></a>
-      <a href="{{ main_app_url }}/admin/lottery-categories"><i class="fas fa-layer-group"></i><span>หมวดหวย</span></a>
-
-      <span class="bo-nav-label">ระบบและข้อมูล</span>
-      <a href="{{ main_app_url }}/admin/partners"><i class="fas fa-users-gear"></i><span>Agent</span></a>
-      <a href="{{ main_app_url }}/admin/audit"><i class="fas fa-shield-halved"></i><span>Audit log</span></a>
-      <a href="{{ main_app_url }}/admin/import-data"><i class="fas fa-file-import"></i><span>Import / Export</span></a>
-      <a href="{{ main_app_url }}/admin/media"><i class="fas fa-images"></i><span>คลังสื่อ</span></a>
-      <a href="{{ main_app_url }}/admin/contact"><i class="fas fa-headset"></i><span>ติดต่อเรา</span></a>
-      <a href="{{ main_app_url }}/admin/deposit-account"><i class="fas fa-building-columns"></i><span>บัญชีรับฝาก</span></a>
-      <a href="{{ main_app_url }}/admin/branding"><i class="fas fa-palette"></i><span>แบรนด์</span></a>
-      <a href="{{ main_app_url }}/admin/announcements"><i class="fas fa-bullhorn"></i><span>ประกาศถึง Agent</span></a>
+      {{ admin_nav(main_app_url, '/dashboard') }}
       <a class="bo-logout" href="{{ url_for('logout') }}"><i class="fas fa-power-off"></i><span>ออกจากระบบ</span></a>
     </nav>
   </aside>

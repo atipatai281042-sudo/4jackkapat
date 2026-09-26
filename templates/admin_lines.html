@@ -1,0 +1,47 @@
+{% extends "backoffice_shell.html" %}
+{% from '_admin_report_tabs.html' import money %}
+{% block title %}ภาพรวมสายงาน — mklotto{% endblock %}
+{% block content %}
+<style>
+  .ln-senior td { background: rgba(167,139,250,.10); font-weight: 600; }
+  .ln-agent td:first-child { padding-left: 32px; }
+  .ln-orphan td { background: rgba(248,113,113,.08); }
+</style>
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">LINES</span><h1 class="page-title">ภาพรวมสายงาน</h1>
+      <p class="section-desc">ทุก Senior และ Agent ในตารางเดียว: สมาชิก ยอดแทง 30 วัน ยอดคงเหลือ และผู้ช่วย · กดชื่อเพื่อดูอัตราจ่าย % ถือหุ้น ตั้งสู้ และปิดยอดคอม/หุ้น</p></div>
+    <a href="{{ url_for('admin_reports') }}" class="btn btn-ghost">รายงานทั้งระบบ</a>
+  </header>
+  <article class="panel">
+    <div class="table-wrap"><table class="data-table ar-table">
+      <thead><tr><th>ชื่อ</th><th>สถานะ</th><th>คอม %</th><th>สมาชิก</th><th>ออนไลน์</th><th>ผู้ช่วย</th><th>ยอดแทง 30 วัน</th><th>คอมค้างจ่าย</th><th>ยอดหุ้นสะสม</th><th>เครดิต</th></tr></thead>
+      <tbody>
+      {% for g in groups %}{% set s = g.senior %}
+        <tr class="ln-senior">
+          <td><a href="{{ url_for('admin_line_detail', user_id=s.id) }}">Senior · {{ s.username }}</a><small class="table-subtext">{{ s.full_name or '-' }} · Agent {{ g.agents|length }}</small></td>
+          <td>{{ 'ใช้งาน' if g.profile and g.profile.status == 'active' and s.is_active else 'พักใช้งาน' }}</td><td>{{ g.profile.commission_rate if g.profile else '-' }}</td>
+          <td>{{ g.members }}</td><td></td><td>{{ g.assistants }}</td><td>{{ '{:,.2f}'.format(g.turnover) }}</td>
+          <td>{{ '{:,.2f}'.format(g.profile.commission_balance) if g.profile else '-' }}</td><td>{{ money(g.profile.stock_balance) if g.profile else '-' }}</td><td>{{ '{:,.2f}'.format(s.credit_balance) }}</td>
+        </tr>
+        {% for a in g.agents %}{% set u = a.user %}
+        <tr class="ln-agent">
+          <td><a href="{{ url_for('admin_line_detail', user_id=u.id) }}">{{ u.username }}</a><small class="table-subtext">{{ u.full_name or '-' }} · {{ a.upline }}</small></td>
+          <td>{{ 'ใช้งาน' if a.profile and a.profile.status == 'active' and u.is_active else 'พักใช้งาน' }}</td><td>{{ a.profile.commission_rate if a.profile else '-' }}</td>
+          <td>{{ a.members }}</td><td>{{ a.online }}</td><td>{{ a.assistants }}</td><td>{{ '{:,.2f}'.format(a.turnover) }}</td>
+          <td>{{ '{:,.2f}'.format(a.profile.commission_balance) if a.profile else '-' }}</td><td>{{ money(a.profile.stock_balance) if a.profile else '-' }}</td><td>{{ '{:,.2f}'.format(u.credit_balance) }}</td>
+        </tr>
+        {% endfor %}
+      {% else %}<tr><td colspan="10" class="empty-state-text">ยังไม่มี Senior</td></tr>{% endfor %}
+      {% for a in orphans %}{% set u = a.user %}
+        <tr class="ln-orphan">
+          <td><a href="{{ url_for('admin_line_detail', user_id=u.id) }}">{{ u.username }}</a><small class="table-subtext">Agent ที่ยังไม่มี Senior — ย้ายสังกัดได้ที่หน้าผู้ใช้</small></td>
+          <td>{{ 'ใช้งาน' if a.profile and a.profile.status == 'active' and u.is_active else 'พักใช้งาน' }}</td><td>{{ a.profile.commission_rate if a.profile else '-' }}</td>
+          <td>{{ a.members }}</td><td>{{ a.online }}</td><td>{{ a.assistants }}</td><td>{{ '{:,.2f}'.format(a.turnover) }}</td>
+          <td>{{ '{:,.2f}'.format(a.profile.commission_balance) if a.profile else '-' }}</td><td>{{ money(a.profile.stock_balance) if a.profile else '-' }}</td><td>{{ '{:,.2f}'.format(u.credit_balance) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody></table></div>
+  </article>
+</div></section>
+{% endblock %}

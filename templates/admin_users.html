@@ -1,0 +1,67 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}ผู้ใช้ทั้งหมด — mklotto{% endblock %}
+{% block content %}
+<style>
+  .au-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .au-filter .form-input { width: auto; min-width: 150px; }
+  .au-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .au-chips a { padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(245,158,11,.45); color: #fbbf24; text-decoration: none; font-size: .85rem; }
+  .au-chips a.on { background: #f59e0b; color: #111; font-weight: 700; }
+  .au-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .75rem; background: rgba(148,163,184,.2); }
+  .au-badge.partner { background: rgba(56,189,248,.18); color: #7dd3fc; }
+  .au-badge.senior { background: rgba(167,139,250,.2); color: #c4b5fd; }
+  .au-badge.admin { background: rgba(245,158,11,.22); color: #fbbf24; }
+  .au-off { color: #f87171; }
+  .au-pager { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 14px; }
+</style>
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">USER CONTROL</span><h1 class="page-title">ผู้ใช้ทั้งหมด</h1>
+      <p class="section-desc">ค้นหาและจัดการทุกบัญชี: สมาชิก · Agent · Senior · ผู้ช่วย · แอดมิน</p></div>
+    <a href="{{ url_for('admin_user_new') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> เพิ่มสมาชิก</a>
+  </header>
+  <article class="panel">
+    <div class="au-chips">
+      <a href="{{ url_for('admin_users') }}" class="{{ '' if role else 'on' }}">ทั้งหมด</a>
+      {% for key, label in [('member','สมาชิก'),('partner','Agent'),('senior','Senior'),('assistant','ผู้ช่วย'),('admin','แอดมิน')] %}
+      <a href="{{ url_for('admin_users', role=key) }}" class="{{ 'on' if role == key else '' }}">{{ label }} ({{ counts[key] }})</a>
+      {% endfor %}
+    </div>
+    <form method="get" class="au-filter">
+      <input type="hidden" name="role" value="{{ role }}">
+      <input class="form-input" name="q" value="{{ q }}" placeholder="ค้นหา ชื่อผู้ใช้ / ชื่อ / เบอร์โทร">
+      <select class="form-input" name="agent_id" aria-label="Agent">
+        <option value="">ทุก Agent</option>
+        {% for a in agents %}<option value="{{ a.id }}" {{ 'selected' if agent_id == a.id else '' }}>{{ a.username }}{% if a.full_name %} · {{ a.full_name }}{% endif %}</option>{% endfor %}
+      </select>
+      <select class="form-input" name="status" aria-label="สถานะ">
+        <option value="">ทุกสถานะ</option>
+        <option value="active" {{ 'selected' if status == 'active' else '' }}>ใช้งานอยู่</option>
+        <option value="suspended" {{ 'selected' if status == 'suspended' else '' }}>ถูกระงับ</option>
+      </select>
+      <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i> ค้นหา</button>
+    </form>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>ผู้ใช้</th><th>ประเภท</th><th>สังกัด</th><th>เครดิต</th><th>สถานะ</th><th>เข้าระบบล่าสุด</th><th>สมัครเมื่อ</th><th></th></tr></thead>
+      <tbody>
+      {% for r in rows %}{% set u = r.user %}
+        <tr>
+          <td><strong>{{ u.username }}</strong><small class="table-subtext">{{ u.full_name or '-' }}{% if u.phone %} · {{ u.phone }}{% endif %}</small></td>
+          <td><span class="au-badge {{ u.role }}">{{ r.role_label }}</span></td>
+          <td>{{ r.upline }}</td>
+          <td>{{ '{:,.2f}'.format(u.credit_balance) }}</td>
+          <td>{% if u.is_active %}ใช้งาน{% else %}<span class="au-off">ระงับ</span>{% endif %}</td>
+          <td>{{ r.last_login }}</td>
+          <td>{{ r.created }}</td>
+          <td><a class="btn btn-ghost btn-xs" href="{{ url_for('admin_user_detail', user_id=u.id) }}">จัดการ</a></td>
+        </tr>
+      {% else %}<tr><td colspan="8" class="empty-state-text">ไม่พบผู้ใช้ตามเงื่อนไข</td></tr>{% endfor %}
+      </tbody></table></div>
+    <div class="au-pager">
+      {% if page > 1 %}<a class="btn btn-ghost btn-xs" href="{{ url_for('admin_users', q=q, role=role, status=status, agent_id=agent_id, page=page-1) }}">‹ ก่อนหน้า</a>{% endif %}
+      <span>หน้า {{ page }} / {{ pages }} · ทั้งหมด {{ total }} บัญชี</span>
+      {% if page < pages %}<a class="btn btn-ghost btn-xs" href="{{ url_for('admin_users', q=q, role=role, status=status, agent_id=agent_id, page=page+1) }}">ถัดไป ›</a>{% endif %}
+    </div>
+  </article>
+</div></section>
+{% endblock %}

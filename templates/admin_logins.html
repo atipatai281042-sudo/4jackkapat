@@ -1,0 +1,34 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}ออนไลน์ / ประวัติเข้าสู่ระบบ — mklotto{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">ACTIVITY</span><h1 class="page-title">ออนไลน์ / ประวัติเข้าสู่ระบบ</h1>
+      <p class="section-desc">สมาชิกที่ออนไลน์ใน 10 นาทีล่าสุด (เฉพาะสมาชิกที่มี Agent) และประวัติการเข้าสู่ระบบของทุกบัญชี</p></div>
+  </header>
+  <article class="panel">
+    <h2 class="panel-title">สมาชิกออนไลน์ ({{ online|length }})</h2>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>สมาชิก</th><th>Agent</th><th>ใช้งานล่าสุด</th></tr></thead><tbody>
+      {% for p in online %}<tr><td><a href="{{ url_for('admin_user_detail', user_id=p.member_id) }}">{{ p.member.username }}</a></td><td>{{ p.partner.username if p.partner else '-' }}</td><td>{{ (p.last_seen_at + shift).strftime('%H:%M:%S') }}</td></tr>
+      {% else %}<tr><td colspan="3" class="empty-state-text">ตอนนี้ไม่มีสมาชิกออนไลน์</td></tr>{% endfor %}
+    </tbody></table></div>
+  </article>
+  <article class="panel">
+    <h2 class="panel-title">ประวัติเข้าสู่ระบบ</h2>
+    <form method="get" class="ar-filter">
+      <input class="form-input" name="q" value="{{ q }}" placeholder="ชื่อผู้ใช้ / IP">
+      <select class="form-input" name="role" aria-label="ประเภทบัญชี"><option value="">ทุกประเภท</option>{% for k, label in role_labels.items() %}<option value="{{ k }}" {{ 'selected' if role == k else '' }}>{{ label }}</option>{% endfor %}</select>
+      <button class="btn btn-primary btn-xs" type="submit"><i class="fas fa-search"></i> ค้นหา</button>
+    </form>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>ประเภท</th><th>IP</th><th>อุปกรณ์</th></tr></thead><tbody>
+      {% for e in entries %}<tr><td>{{ (e.created_at + shift).strftime('%d/%m/%Y %H:%M:%S') }}</td><td><a href="{{ url_for('admin_user_detail', user_id=e.user_id) }}">{{ e.user.username }}</a></td><td>{{ role_labels.get(e.user.role, e.user.role) }}</td><td>{{ e.ip_address or '-' }}</td><td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ e.user_agent }}">{{ e.user_agent or '-' }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty-state-text">ไม่พบประวัติ</td></tr>{% endfor %}
+    </tbody></table></div>
+    <div class="au-pager">
+      {% if page > 1 %}<a class="btn btn-ghost btn-xs" href="{{ url_for('admin_logins', q=q, role=role, page=page-1) }}">‹ ก่อนหน้า</a>{% endif %}
+      <span>หน้า {{ page }} / {{ pages }} · ทั้งหมด {{ total }} รายการ</span>
+      {% if page < pages %}<a class="btn btn-ghost btn-xs" href="{{ url_for('admin_logins', q=q, role=role, page=page+1) }}">ถัดไป ›</a>{% endif %}
+    </div>
+  </article>
+</div></section>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}บัญชีแอดมิน — mklotto{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">ADMIN ACCOUNTS</span><h1 class="page-title">บัญชีแอดมิน</h1>
+      <p class="section-desc">เพิ่ม ระงับ หรือตั้งรหัสผ่านใหม่ให้แอดมิน — ต้องมีแอดมินที่ใช้งานได้อย่างน้อย 1 บัญชี</p></div>
+  </header>
+  <div class="dashboard-layout">
+    <article class="panel">
+      <h2 class="panel-title">เพิ่มแอดมิน</h2>
+      <form method="post" class="admin-form">
+        <div class="form-group"><label class="form-label">ชื่อผู้ใช้</label><input class="form-input" name="username" minlength="4" required autocomplete="off"></div>
+        <div class="form-group"><label class="form-label">ชื่อ</label><input class="form-input" name="full_name"></div>
+        <div class="form-group"><label class="form-label">รหัสผ่าน (อย่างน้อย 6 ตัว)</label><input class="form-input" name="password" minlength="6" required autocomplete="new-password"></div>
+        <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-user-shield"></i> สร้างแอดมิน</button>
+      </form>
+    </article>
+    <article class="panel">
+      <h2 class="panel-title">แอดมินทั้งหมด ({{ admins|length }})</h2>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>ผู้ใช้</th><th>สถานะ</th><th>เข้าระบบล่าสุด</th><th>จัดการ</th></tr></thead>
+        <tbody>{% for a in admins %}
+          <tr><td><strong>{{ a.username }}</strong>{% if a.id == current_user.id %} <small>(คุณ)</small>{% endif %}<small class="table-subtext">{{ a.full_name or '-' }}</small></td>
+            <td>{% if a.is_active %}ใช้งาน{% else %}<span style="color:#f87171">ระงับ</span>{% endif %}</td>
+            <td>{{ last_login.get(a.id, '-') }}</td>
+            <td style="min-width:260px;">
+              {% if a.id == current_user.id %}
+                <a class="btn btn-ghost btn-xs" href="{{ url_for('admin_account') }}">เปลี่ยนรหัสของฉัน</a>
+              {% else %}
+              <form method="post" action="{{ url_for('admin_user_password', user_id=a.id) }}" style="display:flex;gap:6px;margin-bottom:6px;" onsubmit="return confirm('ตั้งรหัสผ่านใหม่ให้ {{ a.username }} ?');">
+                <input type="hidden" name="next" value="/admin/admins">
+                <input class="form-input form-input-sm" name="new_password" placeholder="รหัสใหม่ (ว่าง = สุ่ม)" autocomplete="off">
+                <button class="btn btn-ghost btn-xs" type="submit">ตั้งรหัส</button>
+              </form>
+              <form method="post" action="{{ url_for('admin_user_status', user_id=a.id) }}" onsubmit="return confirm('{{ 'เปิดใช้งาน' if not a.is_active else 'ระงับ' }} {{ a.username }} ?');">
+                <input type="hidden" name="next" value="/admin/admins">
+                <button class="btn {{ 'btn-primary' if not a.is_active else 'btn-danger' }} btn-xs" type="submit">{{ 'เปิดใช้งาน' if not a.is_active else 'ระงับ' }}</button>
+              </form>
+              {% endif %}
+            </td></tr>
+        {% endfor %}</tbody></table></div>
+    </article>
+  </div>
+</div></section>
+{% endblock %}

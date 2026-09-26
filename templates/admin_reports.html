@@ -1,3 +1,47 @@
 {% extends "backoffice_shell.html" %}
-{% block title %}รายงานระบบ — สมบัติสี่จักรพรรดิ{% endblock %}
-{% block content %}<section class="admin-section"><div class="container"><header class="page-head"><div><span class="eyebrow">FLEET INTELLIGENCE</span><h1 class="page-title">รายงานระบบ</h1><p class="section-desc">ภาพรวมยอดเดิมพันและคอมมิชชัน</p></div><a href="{{ url_for('admin') }}" class="btn btn-ghost">กลับศูนย์ควบคุม</a></header><div class="stat-grid"><div class="stat-card"><span class="stat-label">เครดิตเดิมพันรวม</span><span class="stat-value">{{ "{:,.2f}".format(total_bet_credit) }}</span></div><div class="stat-card"><span class="stat-label">คอมมิชชันรวม</span><span class="stat-value">{{ "{:,.2f}".format(total_commission) }}</span></div></div><article class="panel"><h2 class="panel-title">สรุปตามห้องหวย</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>ห้อง</th><th>จำนวนโพย</th><th>เครดิตเดิมพัน</th></tr></thead><tbody>{% for name, count, amount in room_rows %}<tr><td>{{ name }}</td><td>{{ count }}</td><td>{{ "{:,.2f}".format(amount) }}</td></tr>{% else %}<tr><td colspan="3" class="empty-state-text">ยังไม่มีข้อมูลเดิมพัน</td></tr>{% endfor %}</tbody></table></div></article></div></section>{% endblock %}
+{% from '_admin_report_tabs.html' import tabs, money, range_picker %}
+{% block title %}รายงานทั้งระบบ — mklotto{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">SYSTEM REPORT</span><h1 class="page-title">รายงานทั้งระบบ</h1>
+      <p class="section-desc">ยอดแทง ยอดจ่าย ค่าคอม หุ้น และกำไรบริษัท ของช่วงวันที่ที่เลือก (นับเฉพาะโพยที่ยังไม่ถูกยกเลิก)</p></div>
+  </header>
+  {{ tabs('admin_reports') }}
+  <article class="panel">
+    {{ range_picker('admin_reports', range_key, start_day, end_day, {}) }}
+    <div class="ar-stats">
+      <div class="ar-stat"><span>โพยทั้งหมด</span><strong>{{ '{:,.0f}'.format(totals.get('count', 0)) }}</strong></div>
+      <div class="ar-stat"><span>ยอดแทงรวม</span><strong>{{ '{:,.2f}'.format(totals.get('stake', 0)) }}</strong></div>
+      <div class="ar-stat"><span>ส่วนลดที่ให้สมาชิก</span><strong>{{ '{:,.2f}'.format(totals.get('discount', 0)) }}</strong></div>
+      <div class="ar-stat"><span>ยอดรอผล</span><strong>{{ '{:,.2f}'.format(totals.get('pending_stake', 0)) }}</strong></div>
+      <div class="ar-stat"><span>จ่ายรางวัล</span><strong>{{ '{:,.2f}'.format(totals.get('win', 0)) }}</strong></div>
+      <div class="ar-stat"><span>สมาชิกได้/เสีย (ที่ออกผลแล้ว)</span><strong>{{ money(totals.get('member_net', 0)) }}</strong></div>
+      <div class="ar-stat"><span>ค่าคอมทุกสาย</span><strong>{{ '{:,.2f}'.format(totals.get('commission', 0)) }}</strong></div>
+      <div class="ar-stat"><span>กำไร/ขาดทุนหุ้นทุกสาย</span><strong>{{ money(totals.get('stock', 0)) }}</strong></div>
+      <div class="ar-stat"><span>บริษัทได้/เสีย</span><strong>{{ money(totals.get('company', 0)) }}</strong></div>
+    </div>
+    <p class="ar-note">บริษัทได้/เสีย = −(สมาชิกได้เสีย + ค่าคอมทุกสาย + กำไรหุ้นทุกสาย) คิดเฉพาะโพยที่ออกผลแล้ว — ดูแยกตามวัน/ตลาด/Agent/Senior ได้ที่แท็บ "แพ้-ชนะ 3 ฝ่าย"</p>
+  </article>
+
+  <div class="dashboard-layout">
+    <article class="panel">
+      <h2 class="panel-title">ยอดแทงตามตลาด</h2>
+      <div class="table-wrap"><table class="data-table ar-table"><thead><tr><th>ตลาด</th><th>โพย</th><th>ยอดแทง</th></tr></thead><tbody>
+        {% for name, count, amount in room_rows %}<tr><td>{{ name }}</td><td>{{ count }}</td><td>{{ '{:,.2f}'.format(amount) }}</td></tr>
+        {% else %}<tr><td colspan="3" class="empty-state-text">ไม่มีข้อมูลในช่วงนี้</td></tr>{% endfor %}
+      </tbody></table></div>
+    </article>
+    <article class="panel">
+      <h2 class="panel-title">ยอดค้างในระบบตอนนี้</h2>
+      <div class="ar-stats" style="grid-template-columns: 1fr 1fr;">
+        <div class="ar-stat"><span>เครดิตของผู้ใช้ทั้งหมด</span><strong>{{ '{:,.2f}'.format(system.credit) }}</strong></div>
+        <div class="ar-stat"><span>ค่าคอมค้างจ่าย (Agent+Senior)</span><strong>{{ '{:,.2f}'.format(system.commission_owed) }}</strong></div>
+        <div class="ar-stat"><span>ยอดหุ้นสะสม (Agent+Senior)</span><strong>{{ money(system.stock) }}</strong></div>
+        <div class="ar-stat"><span>ยอดแทงรอผลทั้งหมด</span><strong>{{ '{:,.2f}'.format(system.pending_all) }}</strong></div>
+      </div>
+      <p class="ar-note">ปิดยอดคอม/หุ้นรายคนได้ที่หน้า "ภาพรวมสายงาน"</p>
+    </article>
+  </div>
+</div></section>
+{% endblock %}

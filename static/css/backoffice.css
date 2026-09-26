@@ -178,3 +178,23 @@ body.bo-body {
 /* แถบตัวกรองของหน้าตั้งค่า/รายงาน Agent-Senior: ช่องกรอกไม่ต้องกว้างเต็มบรรทัด */
 .ov-bar .form-input, .tk-bar .form-input, .wn-bar .form-input, .tr-bar .form-input,
 .mg-search .form-input, .st-dates .form-input, .pl-dates .form-input { width: auto; min-width: 170px; flex: 0 1 auto; }
+
+/* ---- แอดมิน: รายงาน/สายงาน/ผู้ใช้ ---- */
+  .ar-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .ar-tabs a { padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(245,158,11,.5); color: #fbbf24; text-decoration: none; font-size: .88rem; }
+  .ar-tabs a.on { background: #f59e0b; color: #111; font-weight: 700; }
+  .ar-range { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .ar-range a { padding: 5px 12px; border-radius: 6px; border: 1px solid rgba(148,163,184,.4); color: #cbd5e1; text-decoration: none; font-size: .82rem; }
+  .ar-range a.on { background: #38bdf8; color: #06202b; }
+  .ar-dates { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .ar-dates .form-input { width: auto; min-width: 150px; }
+  .ar-table th, .ar-table td { text-align: right; white-space: nowrap; }
+  .ar-table th:first-child, .ar-table td:first-child { text-align: left; }
+  .ar-win { color: #4ade80; font-weight: 700; } .ar-lose { color: #f87171; font-weight: 700; }
+  .ar-note { opacity: .8; font-size: .85rem; margin-top: 10px; }
+.ar-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.ar-stat { padding: 14px 16px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(148,163,184,.2); }
+.ar-stat span { display: block; font-size: .8rem; opacity: .75; }
+.ar-stat strong { font-size: 1.25rem; }
+.ar-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.ar-filter .form-input { width: auto; min-width: 150px; }

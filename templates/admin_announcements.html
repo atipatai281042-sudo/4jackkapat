@@ -5,7 +5,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <span class="eyebrow">ANNOUNCEMENT CONTROL</span>
-            <h1 class="page-title">📢 ข้อความประกาศถึง Agent</h1>
+            <h1 class="page-title">📢 ประกาศระบบ (Agent / สมาชิก)</h1>
         </div>
         <a href="{{ url_for('admin') }}" class="btn btn-ghost btn-sm"><i class="fas fa-arrow-left"></i> กลับศูนย์ควบคุม</a>
     </div>
@@ -21,8 +21,16 @@
                             <input type="text" class="form-control" name="title" required maxlength="150">
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">แสดงให้</label>
+                            <select class="form-select" name="audience">
+                                <option value="agents">Agent / Senior (แสดงในหลังบ้าน)</option>
+                                <option value="members">สมาชิกทุกคน (แสดงหน้าเลือกห้องหวย)</option>
+                                <option value="all">ทั้ง Agent/Senior และสมาชิก</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">รายละเอียด</label>
-                            <textarea class="form-control" name="body" rows="5" placeholder="เนื้อหาประกาศถึง Agent ทุกคน"></textarea>
+                            <textarea class="form-control" name="body" rows="5" placeholder="เนื้อหาประกาศ"></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary w-100 py-2"><i class="fas fa-save me-1"></i>เผยแพร่ประกาศ</button>
                     </form>
@@ -35,11 +43,12 @@
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
-                            <thead><tr><th class="ps-3">หัวข้อ</th><th>วันที่</th><th>สถานะ</th><th class="text-end pe-3">จัดการ</th></tr></thead>
+                            <thead><tr><th class="ps-3">หัวข้อ</th><th>แสดงให้</th><th>วันที่</th><th>สถานะ</th><th class="text-end pe-3">จัดการ</th></tr></thead>
                             <tbody>
                                 {% for item in announcements %}
                                 <tr>
                                     <td class="ps-3"><div class="fw-bold">{{ item.title }}</div><small class="text-muted">{{ (item.body or '')[:80] }}</small></td>
+                                    <td>{{ {'agents': 'Agent/Senior', 'members': 'สมาชิก', 'all': 'ทุกคน'}.get(item.audience, 'Agent/Senior') }}</td>
                                     <td>{{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
                                     <td>
                                         {% if item.is_active %}<span class="badge bg-success">เผยแพร่</span>{% else %}<span class="badge bg-secondary">ซ่อน</span>{% endif %}
@@ -54,7 +63,7 @@
                                     </td>
                                 </tr>
                                 {% else %}
-                                <tr><td colspan="4" class="text-center text-muted py-4">ยังไม่มีประกาศ</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-4">ยังไม่มีประกาศ</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>

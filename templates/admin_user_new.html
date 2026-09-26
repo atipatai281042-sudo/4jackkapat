@@ -1,0 +1,26 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}เพิ่มสมาชิก — mklotto{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div><span class="eyebrow">NEW MEMBER</span><h1 class="page-title">เพิ่มสมาชิก</h1>
+      <p class="section-desc">สร้างบัญชีสมาชิกให้ลูกค้าโดยตรง เลือกสังกัด Agent และใส่เครดิตเริ่มต้นได้</p></div>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-ghost">กลับรายชื่อผู้ใช้</a>
+  </header>
+  <article class="panel" style="max-width: 640px;">
+    <form method="post" class="admin-form">
+      <div class="form-group"><label class="form-label">ชื่อผู้ใช้ (อังกฤษ/ตัวเลข อย่างน้อย 4 ตัว)</label><input class="form-input" name="username" minlength="4" required autocomplete="off"></div>
+      <div class="form-group"><label class="form-label">รหัสผ่าน (ว่างไว้ = ให้ระบบสุ่มให้)</label><input class="form-input" name="password" autocomplete="off" placeholder="อย่างน้อย 6 ตัว"></div>
+      <div class="form-group"><label class="form-label">ชื่อ</label><input class="form-input" name="full_name"></div>
+      <div class="form-group"><label class="form-label">เบอร์โทรศัพท์</label><input class="form-input" name="phone"></div>
+      <div class="form-group"><label class="form-label">สังกัด Agent</label>
+        <select class="form-input" name="agent_id">
+          <option value="">ไม่มีสังกัด</option>
+          {% for a in agents %}<option value="{{ a.id }}">{{ a.username }}{% if a.full_name %} · {{ a.full_name }}{% endif %}</option>{% endfor %}
+        </select></div>
+      <div class="form-group"><label class="form-label">เครดิตเริ่มต้น</label><input class="form-input" type="number" name="credit" min="0" step="0.01" value="0"></div>
+      <button class="btn btn-primary" type="submit"><i class="fas fa-user-plus"></i> สร้างสมาชิก</button>
+    </form>
+  </article>
+</div></section>
+{% endblock %}

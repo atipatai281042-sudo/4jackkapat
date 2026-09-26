@@ -97,3 +97,55 @@
     <a href="{{ base }}/senior/login-history" class="bo-nav-single {{ 'is-active' if current == '/senior/login-history' else '' }}"><i class="fas fa-clock-rotate-left"></i><span>ประวัติเข้าสู่ระบบ</span></a>
   {% endif %}
 {% endmacro %}
+
+{# เมนูหลังบ้านแอดมิน — ใช้ร่วมกันทั้งหน้าจอ shell (base = '') และหน้าภาพรวม (base = main_app_url)
+   path ตรงกับหน้าปัจจุบัน หรือเป็นหน้าย่อยของมัน (เช่น /admin/users/5 → /admin/users) จะเปิดกลุ่ม/ไฮไลต์ให้ #}
+{% macro admin_group(title, icon, items, base, current) %}
+  {% set ns = namespace(best='') %}
+  {% for path, label in items %}
+    {% if (current == path or (path != '/admin' and current.startswith(path ~ '/'))) and path|length > ns.best|length %}{% set ns.best = path %}{% endif %}
+  {% endfor %}
+  <details class="bo-nav-group" {{ 'open' if ns.best else '' }}>
+    <summary><i class="fas {{ icon }}"></i><span>{{ title }}</span><i class="fas fa-chevron-down bo-nav-caret"></i></summary>
+    {% for path, label in items %}<a href="{{ base }}{{ path }}" class="{{ 'is-active' if path == ns.best else '' }}"><span>{{ label }}</span></a>{% endfor %}
+  </details>
+{% endmacro %}
+
+{% macro admin_nav(base, current) %}
+  {{ admin_group('ผู้ใช้และสายงาน', 'fa-users', [
+    ('/admin/users', 'รายชื่อผู้ใช้ทั้งหมด'),
+    ('/admin/users/new', 'เพิ่มสมาชิก'),
+    ('/admin/lines', 'ภาพรวมสายงาน'),
+    ('/admin/seniors', 'จัดการ Senior'),
+    ('/admin/partners', 'จัดการ Agent'),
+    ('/admin/admins', 'บัญชีแอดมิน'),
+    ('/admin/logins', 'ออนไลน์ / ประวัติเข้าสู่ระบบ'),
+  ], base, current) }}
+  {{ admin_group('โพยและการเงิน', 'fa-receipt', [
+    ('/admin/lottery-tickets', 'โพยสมาชิก / ยกเลิกโพย'),
+    ('/admin/wallet', 'อนุมัติฝาก-ถอน'),
+    ('/admin/deposit-account', 'บัญชีรับฝาก'),
+    ('/admin', 'ปรับเครดิต / ของรางวัล'),
+  ], base, current) }}
+  {{ admin_group('รายงาน', 'fa-chart-pie', [
+    ('/admin/reports', 'ภาพรวมทั้งระบบ'),
+    ('/admin/reports/pnl', 'แพ้-ชนะ 3 ฝ่าย'),
+    ('/admin/reports/overall', 'ดูของรวม / เลขเสี่ยง'),
+    ('/admin/audit', 'Audit log'),
+  ], base, current) }}
+  {{ admin_group('ระบบหวย', 'fa-sliders', [
+    ('/admin/thai-lottery', 'อัตราจ่ายและผลหวย'),
+    ('/admin/periods', 'จัดการงวด'),
+    ('/admin/lottery-rooms', 'ห้องหวย / เลขอั้น'),
+    ('/admin/lottery-categories', 'หมวดหวย'),
+  ], base, current) }}
+  {{ admin_group('ประกาศและตั้งค่าเว็บ', 'fa-bullhorn', [
+    ('/admin/announcements', 'ประกาศระบบ'),
+    ('/admin/banners', 'แบนเนอร์'),
+    ('/admin/media', 'คลังสื่อ'),
+    ('/admin/contact', 'ติดต่อเรา'),
+    ('/admin/branding', 'แบรนด์'),
+    ('/admin/import-data', 'Import / Export'),
+  ], base, current) }}
+  <a href="{{ base }}/admin/account" class="bo-nav-single {{ 'is-active' if current == '/admin/account' else '' }}"><i class="fas fa-key"></i><span>บัญชีของฉัน</span></a>
+{% endmacro %}

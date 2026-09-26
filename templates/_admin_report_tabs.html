@@ -1,0 +1,23 @@
+{# แท็บรายงานหลังบ้านแอดมิน + ตัวเลือกช่วงวันที่ (ส่ง endpoint ปัจจุบันเข้ามาเป็น ep) #}
+{% macro tabs(ep) %}
+<div class="ar-tabs">
+  <a href="{{ url_for('admin_reports') }}" class="{{ 'on' if ep == 'admin_reports' else '' }}">ภาพรวม</a>
+  <a href="{{ url_for('admin_report_pnl') }}" class="{{ 'on' if ep == 'admin_report_pnl' else '' }}">แพ้-ชนะ 3 ฝ่าย</a>
+  <a href="{{ url_for('admin_report_overall') }}" class="{{ 'on' if ep == 'admin_report_overall' else '' }}">ดูของรวม / เลขเสี่ยง</a>
+  <a href="{{ url_for('admin_lines') }}">สายงาน</a>
+</div>
+{% endmacro %}
+{% macro money(v) %}<span class="{{ 'ar-win' if v > 0.004 else ('ar-lose' if v < -0.004 else '') }}">{{ '{:,.2f}'.format(v) }}</span>{% endmacro %}
+{% macro range_picker(ep, range_key, start_day, end_day, extra) %}
+<div class="ar-range">
+  {% for key, label in [('today','วันนี้'),('yesterday','เมื่อวาน'),('week','สัปดาห์นี้'),('lastweek','สัปดาห์ที่แล้ว'),('month','เดือนนี้')] %}
+  <a href="{{ url_for(ep, range=key, **extra) }}" class="{{ 'on' if range_key == key else '' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+<form method="get" class="ar-dates">
+  {% for k, v in extra.items() %}{% if v not in (None, '') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  <label>ตั้งแต่ <input class="form-input" type="date" name="start" value="{{ start_day.isoformat() }}"></label>
+  <label>ถึง <input class="form-input" type="date" name="end" value="{{ end_day.isoformat() }}"></label>
+  <button class="btn btn-primary btn-xs" type="submit"><i class="fas fa-search"></i> ดูรายงาน</button>
+</form>
+{% endmacro %}

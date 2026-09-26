@@ -1,0 +1,50 @@
+{% extends "backoffice_shell.html" %}
+{% block title %}ใบโพย {{ ticket_code or period.period_date }} — mklotto{% endblock %}
+{% block content %}
+<section class="admin-section"><div class="container">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">LOTTERY TICKET</span>
+      <h1 class="page-title">ใบโพย {{ ticket_code or '(ไม่มีรหัส)' }}</h1>
+      <p class="section-desc">{{ period.room.name if period.room else '-' }} · งวด {{ period.period_date }} · สมาชิก <a href="{{ url_for('admin_user_detail', user_id=ticket_user.id) }}">{{ ticket_user.username }}</a>{% if remark %} · หมายเหตุ: {{ remark }}{% endif %}</p>
+    </div>
+    <a href="{{ url_for('admin_lottery_tickets') }}" class="btn btn-ghost">กลับรายการโพย</a>
+  </header>
+
+  <div class="ar-stats">
+    <div class="ar-stat"><span>ยอดแทงรวม</span><strong>{{ '{:,.2f}'.format(total_amount) }}</strong></div>
+    <div class="ar-stat"><span>ส่วนลด</span><strong>{{ '{:,.2f}'.format(total_discount) }}</strong></div>
+    <div class="ar-stat"><span>รางวัลที่ได้รับ</span><strong>{{ '{:,.2f}'.format(total_reward) }}</strong></div>
+    <div class="ar-stat"><span>สถานะงวด</span><strong>{% if period.is_checked %}ตรวจผลแล้ว{% elif period.is_open and period.close_time > now %}เปิดรับ{% else %}ปิดรับ · รอผล{% endif %}</strong></div>
+  </div>
+
+  <article class="panel">
+    <h2 class="panel-title">รายการในโพย</h2>
+    {% if cancellable %}
+    <form method="post" action="{{ url_for('admin_cancel_ticket', period_id=period.id, user_id=ticket_user.id) }}" onsubmit="return confirm('ยกเลิกโพยนี้และคืนเครดิต/ค่าคอมทั้งหมด ?');" style="margin-bottom:12px;">
+      <input type="hidden" name="ticket_code" value="{{ ticket_code }}">
+      <button type="submit" class="btn btn-danger btn-xs"><i class="fas fa-ban"></i> ยกเลิกโพยนี้ (คืนเครดิต)</button>
+    </form>
+    {% endif %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>เวลา</th><th>ประเภท</th><th>เลข</th><th>ยอดแทง</th><th>ส่วนลด</th><th>อัตราจ่าย</th><th>รางวัล</th><th>สถานะ</th></tr></thead>
+        <tbody>
+          {% for bet in bets %}
+          <tr>
+            <td>{{ (bet.created_at + shift).strftime('%d/%m %H:%M') }}</td>
+            <td>{{ bet.bet_type }}</td>
+            <td><code class="code-chip">{{ bet.number }}</code></td>
+            <td>{{ '{:,.2f}'.format(bet.amount) }}</td>
+            <td>{{ '{:,.2f}'.format(bet.discount_amount) }}</td>
+            <td>{{ '{:,.2f}'.format(bet.rate) }}x</td>
+            <td>{{ '{:,.2f}'.format(bet.reward_amount) }}</td>
+            <td><span class="status status-{{ bet.status }}">{{ {'pending': 'รอตรวจ', 'win': 'ถูกรางวัล', 'lose': 'ไม่ถูก', 'cancelled': 'ยกเลิก'}.get(bet.status, bet.status) }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div></section>
+{% endblock %}

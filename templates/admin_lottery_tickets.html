@@ -1,5 +1,5 @@
 {% extends "backoffice_shell.html" %}
-{% block title %}โพยหวยสมาชิก — สมบัติสี่จักรพรรดิ{% endblock %}
+{% block title %}โพยหวยสมาชิก — mklotto{% endblock %}
 {% block content %}
 <section class="admin-section">
   <div class="container">
@@ -7,62 +7,43 @@
       <div>
         <span class="eyebrow">LOTTERY CONTROL</span>
         <h1 class="page-title">โพยหวยสมาชิก</h1>
-        <p class="section-desc">ตรวจสอบสมาชิก เลขที่แทง ยอดเดิมพัน และสถานะผลรางวัล</p>
+        <p class="section-desc">ค้นหาโพยทั้งระบบ ดูใบโพย และยกเลิกโพยที่ยังรอผล (คืนเครดิตและค่าคอมให้อัตโนมัติ)</p>
       </div>
-      <a href="{{ url_for('admin') }}" class="btn btn-ghost">กลับศูนย์ควบคุม</a>
     </header>
 
     <article class="panel">
-      <form method="get" class="form-row">
-        <div class="form-group" style="flex:1; min-width:180px;">
-          <label class="form-label">งวด</label>
-          <select name="period_id" class="form-input">
-            <option value="">ทุกงวด</option>
-            {% for period in periods %}
-            <option value="{{ period.id }}" {% if selected_period_id == period.id %}selected{% endif %}>{{ period.room.name if period.room else '-' }} · {{ period.period_date }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-group" style="flex:1; min-width:180px;">
-          <label class="form-label">สมาชิก</label>
-          <select name="user_id" class="form-input">
-            <option value="">สมาชิกทั้งหมด</option>
-            {% for user in users %}
-            <option value="{{ user.id }}" {% if selected_user_id == user.id %}selected{% endif %}>{{ user.username }}{% if user.full_name %} · {{ user.full_name }}{% endif %}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-group" style="flex:1; min-width:150px;">
-          <label class="form-label">สถานะ</label>
-          <select name="status" class="form-input">
-            <option value="">ทุกสถานะ</option>
-            <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>รอตรวจ</option>
-            <option value="win" {% if selected_status == 'win' %}selected{% endif %}>ถูกรางวัล</option>
-            <option value="lose" {% if selected_status == 'lose' %}selected{% endif %}>ไม่ถูกรางวัล</option>
-          </select>
-        </div>
-        <div class="form-group" style="display:flex; align-items:flex-end;">
-          <button type="submit" class="btn btn-primary">ค้นหา</button>
-        </div>
+      <form method="get" class="ar-filter">
+        <select name="period_id" class="form-input" aria-label="งวด">
+          <option value="">ทุกงวด</option>
+          {% for period in periods %}
+          <option value="{{ period.id }}" {% if selected_period_id == period.id %}selected{% endif %}>{{ period.room.name if period.room else '-' }} · {{ period.period_date }}</option>
+          {% endfor %}
+        </select>
+        <input class="form-input" name="q" value="{{ q }}" placeholder="ชื่อผู้ใช้ / รหัสโพย / เลข">
+        <select name="status" class="form-input" aria-label="สถานะ">
+          <option value="">ทุกสถานะ</option>
+          <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>รอตรวจ</option>
+          <option value="win" {% if selected_status == 'win' %}selected{% endif %}>ถูกรางวัล</option>
+          <option value="lose" {% if selected_status == 'lose' %}selected{% endif %}>ไม่ถูกรางวัล</option>
+          <option value="cancelled" {% if selected_status == 'cancelled' %}selected{% endif %}>ยกเลิกแล้ว</option>
+        </select>
+        <button type="submit" class="btn btn-primary btn-xs"><i class="fas fa-search"></i> ค้นหา</button>
       </form>
-    </article>
-
-    <article class="panel">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>เวลา</th><th>สมาชิก</th><th>งวด</th><th>ประเภท</th><th>เลข</th><th>ยอดแทง</th><th>รางวัล</th><th>สถานะ</th><th></th></tr></thead>
+          <thead><tr><th>เวลา</th><th>สมาชิก</th><th>ตลาด / งวด</th><th>ประเภท</th><th>เลข</th><th>ยอดแทง</th><th>รางวัล</th><th>สถานะ</th><th></th></tr></thead>
           <tbody>
             {% for bet in bets %}
             <tr>
-              <td class="text-muted">{{ bet.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
-              <td><strong>{{ bet.user.username }}</strong><small class="table-subtext">{{ bet.user.full_name or '-' }}</small></td>
-              <td>{{ bet.period.period_date }}</td>
+              <td class="text-muted">{{ (bet.created_at + shift).strftime('%d/%m/%Y %H:%M') }}</td>
+              <td><a href="{{ url_for('admin_user_detail', user_id=bet.user_id) }}"><strong>{{ bet.user.username }}</strong></a><small class="table-subtext">{{ bet.user.full_name or '-' }}</small></td>
+              <td>{{ bet.period.room.name if bet.period.room else '-' }} · {{ bet.period.period_date }}<small class="table-subtext">{{ bet.ticket_code or '-' }}</small></td>
               <td>{{ bet.bet_type }}</td>
               <td><code class="code-chip">{{ bet.number }}</code></td>
               <td>{{ "{:,.2f}".format(bet.amount) }}</td>
               <td>{{ "{:,.2f}".format(bet.reward_amount) }}</td>
-              <td><span class="status status-{{ bet.status }}">{{ bet.status }}</span></td>
-              <td><a class="btn btn-ghost btn-xs" href="{{ url_for('admin_lottery_ticket', period_id=bet.period_id, user_id=bet.user_id) }}">ดูใบโพย</a></td>
+              <td><span class="status status-{{ bet.status }}">{{ {'pending': 'รอตรวจ', 'win': 'ถูกรางวัล', 'lose': 'ไม่ถูก', 'cancelled': 'ยกเลิก'}.get(bet.status, bet.status) }}</span></td>
+              <td><a class="btn btn-ghost btn-xs" href="{{ url_for('admin_lottery_ticket', period_id=bet.period_id, user_id=bet.user_id, ticket_code=bet.ticket_code) if bet.ticket_code else url_for('admin_lottery_ticket', period_id=bet.period_id, user_id=bet.user_id) }}">ดูใบโพย</a></td>
             </tr>
             {% else %}
             <tr><td colspan="9" class="empty-state-text">ยังไม่มีโพยตามเงื่อนไขที่เลือก</td></tr>

@@ -45,7 +45,19 @@ with backoffice_app.app_context():
 
 def logged_user():
     user_id = session.get("user_id")
-    return db.session.get(User, user_id) if user_id else None
+    user = db.session.get(User, user_id) if user_id else None
+    return user if user is not None and user.is_active else None  # บัญชีที่ถูกระงับหลุดทันที
+
+
+def status_blocked(user):
+    """Agent/Senior ที่ถูกพักการใช้งานหลังจากล็อกอินไว้แล้ว ต้องเข้าหลังบ้านต่อไม่ได้"""
+    partner_profile = getattr(user, "partner_profile", None)
+    senior_profile = getattr(user, "senior_profile", None)
+    if user.is_partner and partner_profile and partner_profile.status != "active":
+        return True
+    if getattr(user, "is_senior", False) and senior_profile and senior_profile.status != "active":
+        return True
+    return False
 
 
 @backoffice_app.context_processor
@@ -107,6 +119,9 @@ def main_app_proxy(path):
         return redirect(url_for("login"))
     if not user.is_admin and not user.is_partner and not user.is_senior:
         return "Forbidden", 403
+    if status_blocked(user):
+        session.pop("user_id", None)
+        return redirect(url_for("login"))
     is_admin_path = path == "admin" or path.startswith("admin/")
     if is_admin_path and not user.is_admin:
         return "Forbidden", 403
@@ -166,6 +181,9 @@ def dashboard():
         return redirect(url_for("login"))
     if not user.is_admin and not user.is_partner and not user.is_senior:
         return "Forbidden", 403
+    if status_blocked(user):
+        session.pop("user_id", None)
+        return redirect(url_for("login"))
     if user.is_senior:
         agent_ids = senior_agent_ids(user)
         agents = User.query.filter(User.id.in_(agent_ids)).order_by(User.created_at.desc()).all() if agent_ids else []
@@ -208,7 +226,7 @@ def dashboard():
         transactions = WalletTransaction.query.filter_by(user_id=user.id).order_by(
             WalletTransaction.created_at.desc()
         ).limit(8).all()
-        announcements = Announcement.query.filter_by(is_active=True, owner_id=None).order_by(
+        announcements = Announcement.query.filter(Announcement.is_active.is_(True), Announcement.owner_id.is_(None), Announcement.audience.in_(['agents', 'all'])).order_by(
             Announcement.created_at.desc()
         ).limit(5).all()
         return render_template(
